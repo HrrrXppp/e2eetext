@@ -1,0 +1,71 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AuthCallback } from "@/app/AuthCallback";
+import { makeToken } from "@/test/makeToken";
+
+const storeAuthSession = vi.fn();
+
+vi.mock("@/lib/auth", () => ({
+  storeAuthSession: (...args: unknown[]) => storeAuthSession(...args),
+}));
+
+describe("AuthCallback", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    storeAuthSession.mockReset();
+  });
+
+  it("stores session and redirects when id token is present", async () => {
+    const replace = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      hash: "#id_token=test-id-token&access_token=access&refresh_token=refresh",
+      replace,
+    });
+
+    render(<AuthCallback />);
+
+    await waitFor(() => {
+      expect(storeAuthSession).toHaveBeenCalledWith({
+        idToken: "test-id-token",
+        accessToken: "access",
+        refreshToken: "refresh",
+      });
+    });
+    expect(replace).toHaveBeenCalledWith("/chats");
+  });
+
+  it("shows error when id token is missing", async () => {
+    vi.stubGlobal("location", {
+      ...window.location,
+      hash: "#access_token=access",
+      replace: vi.fn(),
+    });
+
+    render(<AuthCallback />);
+
+    expect(await screen.findByText("Missing ID token in callback.")).toBeInTheDocument();
+    expect(storeAuthSession).not.toHaveBeenCalled();
+  });
+
+  it("accepts a real jwt-shaped id token in the hash", async () => {
+    const idToken = makeToken({
+      sub: "google-subject-1",
+      iss: "https://accounts.google.com",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const replace = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      hash: `#id_token=${encodeURIComponent(idToken)}`,
+      replace,
+    });
+
+    render(<AuthCallback />);
+
+    await waitFor(() => {
+      expect(storeAuthSession).toHaveBeenCalled();
+    });
+    expect(replace).toHaveBeenCalledWith("/chats");
+  });
+});
