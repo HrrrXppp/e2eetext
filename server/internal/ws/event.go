@@ -3,8 +3,10 @@ package ws
 import "time"
 
 const (
-	EventTypeChatUnread = "chat.unread"
-	EventTypeChatAdded  = "chat.added"
+	EventTypeChatUnread   = "chat.unread"
+	EventTypeChatAdded    = "chat.added"
+	EventTypeHeartbeat    = "heartbeat"
+	EventTypeHeartbeatAck = "heartbeat.ack"
 )
 
 type ChatUnreadItem struct {
