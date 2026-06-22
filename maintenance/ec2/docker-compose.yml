@@ -1,0 +1,44 @@
+# Single EC2: server + client. Path routing and TLS are handled by AWS ALB.
+# PostgreSQL runs outside EC2 (e.g. AWS RDS).
+# Images are pulled from AWS ECR (build locally with maintenance/ecr/build-and-push.sh).
+#
+# Expose two host ports for ALB target groups:
+#   - 8080 → client (default listener rule)
+#   - 8081 → server (API / WebSocket paths)
+#
+# From repo root:
+#   cp maintenance/ec2/.env.example maintenance/ec2/.env
+#   cp maintenance/ec2/config/config.example.json maintenance/ec2/config/config.json
+#   cp maintenance/ec2/config/instance.production.example.json maintenance/ec2/config/instance.json
+#   # on dev EC2 use instance.development.example.json instead
+#   bash maintenance/ec2/deploy.sh
+
+services:
+  server:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/e2eetext-server:${IMAGE_TAG}
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      SERVER_ADDR: ":8080"
+      DATABASE_URL: ${DATABASE_URL}
+      CONFIG_PATH: /config/config.json
+    volumes:
+      - ./config:/config:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  client:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/e2eetext-client:${IMAGE_TAG}
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/instance.json:/public/instance.json:ro
+    depends_on:
+      server:
+        condition: service_started

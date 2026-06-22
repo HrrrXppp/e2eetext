@@ -1,0 +1,10 @@
+# EC2 #2 (frontend): client only. ALB routes API paths to the backend EC2 target group.
+
+services:
+  client:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/e2eetext-client:${IMAGE_TAG}
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/instance.json:/public/instance.json:ro
