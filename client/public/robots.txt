@@ -1,8 +1,6 @@
 User-agent: *
 Allow: /
 
-Disallow: /oauth/
 Disallow: /api/
-Disallow: /auth/
-Disallow: /user/
+Disallow: /oauth/
 Disallow: /health/
