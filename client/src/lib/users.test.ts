@@ -8,7 +8,7 @@ import {
   updateUserName,
   userDisplayName,
   userIdFallbackLabel,
-  messageAuthorLabel,
+  userLabel,
 } from "@/lib/users";
 
 const sampleUser = {
@@ -57,14 +57,14 @@ describe("userIdFallbackLabel", () => {
   });
 });
 
-describe("messageAuthorLabel", () => {
+describe("userLabel", () => {
   it("prefers the user name when present", () => {
-    expect(messageAuthorLabel("Alice", "node/local")).toBe("Alice");
+    expect(userLabel("Alice", "node/local")).toBe("Alice");
   });
 
   it("falls back to the scoped user id", () => {
     expect(
-      messageAuthorLabel(undefined, "99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111"),
+      userLabel(undefined, "99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111"),
     ).toBe("99999999...111111111111");
   });
 });

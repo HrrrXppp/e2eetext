@@ -37,7 +37,7 @@ function idTrailingSegment(id: string): string {
   return parts[parts.length - 1] || id;
 }
 
-export function messageAuthorLabel(userName: string | undefined, userId: string): string {
+export function userLabel(userName: string | undefined, userId: string): string {
   const trimmed = userName?.trim();
   if (trimmed) {
     return trimmed;
