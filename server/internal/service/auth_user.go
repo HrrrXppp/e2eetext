@@ -52,3 +52,20 @@ func requireCurrentUserMatches(
 	}
 	return nil
 }
+
+func requireUserBelongsToChat(
+	ctx context.Context,
+	chatRepo repository.ChatRepository,
+	chatID string,
+	userID string,
+	accessDenied error,
+) error {
+	belongs, err := chatRepo.UserBelongsToChat(ctx, chatID, userID)
+	if err != nil {
+		return err
+	}
+	if !belongs {
+		return accessDenied
+	}
+	return nil
+}
