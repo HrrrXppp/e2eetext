@@ -254,6 +254,47 @@ func TestUserRepository_Search_ByName(t *testing.T) {
 	}
 }
 
+func TestUserRepository_Search_ByScopedID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	repo := NewUserRepository(db)
+	createdAt := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	nodeID := "99999999-9999-9999-9999-999999999999"
+
+	rows := sqlmock.NewRows([]string{"id", "oidc_provider_id", "subject", "name", "created_at", "updated_at"}).
+		AddRow(
+			"11111111-1111-1111-1111-111111111111",
+			"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+			"google-subject-1",
+			"Alice",
+			createdAt,
+			createdAt,
+		)
+
+	mock.ExpectQuery(`SELECT id, oidc_provider_id, subject, name, created_at, updated_at\s+FROM users WHERE \(\(id::text ILIKE \$1 OR \(\$2 \|\| '/' \|\| id::text\) ILIKE \$1\)\) ORDER BY name NULLS LAST, created_at DESC LIMIT \$3`).
+		WithArgs("%1111%", nodeID, 20).
+		WillReturnRows(rows)
+
+	users, err := repo.Search(context.Background(), repository.UserSearchFilter{
+		UserIDQuery: "1111",
+		Limit:       20,
+	}, nodeID)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("Search() len = %d, want 1", len(users))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
 func TestUserRepository_Search_CyrillicName(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
