@@ -1,0 +1,35 @@
+# Go
+server/bin/
+server/tmp/
+*.exe
+*.test
+*.out
+
+# Node / React
+client/node_modules/
+client/dist/
+client/.env
+client/.env.local
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# Server secrets
+server/config.json
+
+# EC2 deployment env (secrets)
+maintenance/ec2/.env
+maintenance/ec2/config/config.json
+
+# ECR build env
+maintenance/ecr/.env
+
+maintenance/alb/create-alb.sh
+
