@@ -16,6 +16,7 @@ Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **Message 
 ```
 messenger/
 ├── VERSION          # release version (server + client)
+├── CHANGELOG.md     # release notes
 ├── client/          # React SPA
 ├── server/          # Go API
 │   ├── cmd/messenger/
@@ -142,7 +143,7 @@ The release version lives in the repo-root `VERSION` file (currently semver, e.g
 - **Server** — `GET /health` returns `version`; Docker builds stamp it via `-ldflags`.
 - **Client** — Vite injects `VITE_APP_VERSION` from `VERSION`; the header shows `version: {version}`.
 
-Keep `client/package.json` `version` in sync with `VERSION` for npm metadata.
+Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Record user-facing release notes in [`CHANGELOG.md`](./CHANGELOG.md). On feature branches, use a **`NEXT RELEASE`** section until the change is merged to `main` and versioned.
 
 ## API
 
