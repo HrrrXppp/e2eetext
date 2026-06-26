@@ -21,11 +21,11 @@ SERVER_IMAGE="${ECR_REGISTRY}/e2eetext-server:${IMAGE_TAG}"
 CLIENT_IMAGE="${ECR_REGISTRY}/e2eetext-client:${IMAGE_TAG}"
 
 echo "Building server -> $SERVER_IMAGE"
-docker build "${BUILD_ARGS[@]}" -t "$SERVER_IMAGE" "$ROOT_DIR/server"
+docker build "${BUILD_ARGS[@]}" -f "$ROOT_DIR/server/Dockerfile" -t "$SERVER_IMAGE" "$ROOT_DIR"
 docker push "$SERVER_IMAGE"
 
 echo "Building client -> $CLIENT_IMAGE"
-docker build "${BUILD_ARGS[@]}" -t "$CLIENT_IMAGE" "$ROOT_DIR/client"
+docker build "${BUILD_ARGS[@]}" -f "$ROOT_DIR/client/Dockerfile" -t "$CLIENT_IMAGE" "$ROOT_DIR"
 docker push "$CLIENT_IMAGE"
 
 echo ""

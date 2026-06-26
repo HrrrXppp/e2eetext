@@ -2,6 +2,7 @@ import { useState } from "react";
 import { EditNameDialog } from "@/components/auth/EditNameDialog";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { appVersion } from "@/lib/version";
 import { userDisplayName } from "@/lib/users";
 
 export function SiteHeader() {
@@ -29,6 +30,9 @@ export function SiteHeader() {
               </svg>
             </span>
             <p className="site-head__brand">E2EE Text</p>
+            <span className="site-head__version" title="Application version">
+              version: {appVersion}
+            </span>
           </a>
           {loading ? (
             <span className="site-head__sign-in site-head__sign-in--loading">Loading...</span>

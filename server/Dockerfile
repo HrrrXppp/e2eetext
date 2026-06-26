@@ -4,12 +4,15 @@ RUN apk add --no-cache ca-certificates git
 
 WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY server/go.mod server/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY server/ .
+COPY VERSION ./VERSION
 
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/messenger ./cmd/messenger
+RUN VERSION=$(cat VERSION) && CGO_ENABLED=0 GOOS=linux go build -trimpath \
+	-ldflags="-s -w -X github.com/ekhrunov/messenger/server/internal/version.Version=${VERSION}" \
+	-o /out/messenger ./cmd/messenger
 
 FROM alpine:3.21
 

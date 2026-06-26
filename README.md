@@ -15,6 +15,7 @@ Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **Message 
 
 ```
 messenger/
+├── VERSION          # release version (server + client)
 ├── client/          # React SPA
 ├── server/          # Go API
 │   ├── cmd/messenger/
@@ -134,6 +135,15 @@ Open **http://localhost:5173**.
 
 OAuth client credentials live in `server/config.json` under `oauth_credentials`, keyed by provider slug (e.g. `google`).
 
+## Versioning
+
+The release version lives in the repo-root `VERSION` file (currently semver, e.g. `0.1.0`). Bump it when cutting a release:
+
+- **Server** — `GET /health` returns `version`; Docker builds stamp it via `-ldflags`.
+- **Client** — Vite injects `VITE_APP_VERSION` from `VERSION`; the header shows `version: {version}`.
+
+Keep `client/package.json` `version` in sync with `VERSION` for npm metadata.
+
 ## API
 
 All JSON and WebSocket endpoints are versioned under `/api/v1`. `/health` is unversioned.
@@ -142,7 +152,7 @@ All JSON and WebSocket endpoints are versioned under `/api/v1`. `/health` is unv
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Health check (`status`, `version`) |
 | `GET` | `/api/v1/auth/providers` | List OIDC providers |
 | `GET` | `/api/v1/auth/{provider}/login` | Start OIDC login (e.g. `google`) |
 | `GET` | `/api/v1/auth/{provider}/callback` | OAuth callback; redirects to client with tokens |

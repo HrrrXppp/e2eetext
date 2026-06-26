@@ -2,10 +2,12 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY client/package.json client/package-lock.json ./
 RUN npm ci
 
-COPY . .
+COPY client/ .
+COPY VERSION /VERSION
+
 RUN npm run build
 
 # Serve static SPA only — no Node.js in the final image (~18 MB vs ~177 MB).

@@ -18,8 +18,8 @@ services:
 
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     image: e2eetext-server
     environment:
       SERVER_ADDR: ":8080"
@@ -41,8 +41,8 @@ services:
 
   client:
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: client/Dockerfile
     image: e2eetext-client
     ports:
       - "5173:8080"

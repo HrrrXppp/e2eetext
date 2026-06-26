@@ -9,6 +9,20 @@ vi.mock("@/hooks/useAuth", () => ({
 import { useAuth } from "@/hooks/useAuth";
 
 describe("SiteHeader OIDC providers", () => {
+  it("shows the application version in the header", () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+    });
+
+    render(<SiteHeader />);
+
+    expect(screen.getByTitle("Application version")).toHaveTextContent(/^version: \d+\.\d+\.\d+/);
+  });
+
   it("shows a Chats link when the user is signed in", () => {
     vi.mocked(useAuth).mockReturnValue({
       user: {
