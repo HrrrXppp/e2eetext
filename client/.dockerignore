@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.gitignore
+*.md
+.env
+.env.*
+coverage
+tsconfig.tsbuildinfo
+**/*.test.ts
+**/*.test.tsx
+src/test
