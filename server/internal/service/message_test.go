@@ -36,7 +36,7 @@ func (s *messageChatRepoStub) List(_ context.Context, _ repository.ChatFilter) (
 	return nil, nil
 }
 
-func (s *messageChatRepoStub) Create(_ context.Context, _ string, _ []string) (domain.Chat, error) {
+func (s *messageChatRepoStub) Create(_ context.Context, _ string, _ string, _ []byte, _ []repository.ChatMemberKey) (domain.Chat, error) {
 	return domain.Chat{}, nil
 }
 
@@ -157,6 +157,15 @@ func TestMessageService_Create_Validation(t *testing.T) {
 	if err == nil || err.Error() != "user_id is required" {
 		t.Fatalf("Create() error = %v", err)
 	}
+
+	_, err = svc.Create(context.Background(), CreateMessageInput{
+		ChatID: "11111111-1111-1111-1111-111111111111",
+		UserID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+		Data:   "hello",
+	}, TokenUser{})
+	if err == nil || err.Error() != "kem_ciphertext is required" {
+		t.Fatalf("Create() error = %v", err)
+	}
 }
 
 func TestMessageService_Create_DeniesOtherChat(t *testing.T) {
@@ -183,9 +192,10 @@ func TestMessageService_Create_DeniesOtherChat(t *testing.T) {
 	})
 
 	_, err := svc.Create(context.Background(), CreateMessageInput{
-		ChatID: chatID,
-		UserID: userID,
-		Data:   "hello",
+		ChatID:        chatID,
+		UserID:        userID,
+		Data:          "hello",
+		KemCiphertext: []byte("message-kem-ciphertext"),
 	}, TokenUser{
 		Subject:  "google-subject-1",
 		Provider: "google",
@@ -350,9 +360,10 @@ func TestMessageService_Create_EnrichesUserName(t *testing.T) {
 	})
 
 	message, err := svc.Create(context.Background(), CreateMessageInput{
-		ChatID: chatID,
-		UserID: userID,
-		Data:   "hello",
+		ChatID:        chatID,
+		UserID:        userID,
+		Data:          "hello",
+		KemCiphertext: []byte("message-kem-ciphertext"),
 	}, TokenUser{
 		Subject:  "google-subject-1",
 		Provider: "google",

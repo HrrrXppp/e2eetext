@@ -103,6 +103,14 @@ func TestUserService_Create_Validation(t *testing.T) {
 	if err == nil || err.Error() != "oidc_provider_id is required" {
 		t.Fatalf("Create() error = %v", err)
 	}
+
+	_, err = svc.Create(context.Background(), CreateUserInput{
+		Subject:        "subject-only",
+		OIDCProviderID: "provider-id",
+	})
+	if err == nil || err.Error() != "kem_public_key is required" {
+		t.Fatalf("Create() error = %v", err)
+	}
 }
 
 func TestUserService_Create_Duplicate(t *testing.T) {
@@ -115,6 +123,7 @@ func TestUserService_Create_Duplicate(t *testing.T) {
 	_, err := svc.Create(context.Background(), CreateUserInput{
 		Subject:        "subject",
 		OIDCProviderID: "provider-id",
+		KemPublicKey:   []byte("user-kem-public-key"),
 	})
 	if err == nil {
 		t.Fatal("Create() error = nil, want duplicate error")
@@ -135,7 +144,7 @@ func TestUserService_CreateFromToken(t *testing.T) {
 		Subject:  "google-subject-1",
 		Name:     "Alice",
 		Provider: "google",
-	}, false)
+	}, false, []byte("user-kem-public-key"))
 	if err != nil {
 		t.Fatalf("CreateFromToken() error = %v", err)
 	}
@@ -158,7 +167,7 @@ func TestUserService_CreateFromToken_SkipProfile(t *testing.T) {
 		Subject:  "google-subject-1",
 		Name:     "Alice",
 		Provider: "google",
-	}, true)
+	}, true, []byte("user-kem-public-key"))
 	if err != nil {
 		t.Fatalf("CreateFromToken() error = %v", err)
 	}

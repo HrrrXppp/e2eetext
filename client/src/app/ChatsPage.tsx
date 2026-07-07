@@ -2,15 +2,70 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { NewChatDialog } from "@/components/chat/NewChatDialog";
+import { KeyBackupDialog } from "@/components/auth/KeyBackupDialog";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
+import { decodeBase64, encodeBase64 } from "@/lib/bytes";
 import { fetchChats, type Chat } from "@/lib/chats";
+import { decryptMessage, encryptMessage, unwrapChatPrivateKey } from "@/lib/crypto";
+import { loadChatPrivateKey, loadOwnKeyPair, saveChatPrivateKey } from "@/lib/keyStore";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
 
+// Unwraps and caches a chat's private key on demand, using the chat's own
+// wrap data (always present on any Chat the caller belongs to) rather than
+// depending on a separate prefetch step having already completed — avoids a
+// race between chat-list loading and message decryption.
+async function getOrUnwrapChatPrivateKey(userId: string, chat: Chat): Promise<Uint8Array | null> {
+  const cached = await loadChatPrivateKey(userId, chat.id);
+  if (cached) {
+    return cached;
+  }
+
+  const ownKeyPair = await loadOwnKeyPair(userId);
+  if (!ownKeyPair) {
+    return null;
+  }
+
+  try {
+    const chatPrivateKey = await unwrapChatPrivateKey(
+      decodeBase64(chat.kemCiphertext),
+      decodeBase64(chat.wrappedChatPrivateKey),
+      ownKeyPair.secretKey,
+    );
+    await saveChatPrivateKey(userId, chat.id, chatPrivateKey);
+    return chatPrivateKey;
+  } catch {
+    return null;
+  }
+}
+
+async function decryptMessages(userId: string, chat: Chat, items: Message[]): Promise<Message[]> {
+  const chatPrivateKey = await getOrUnwrapChatPrivateKey(userId, chat);
+  if (!chatPrivateKey) {
+    return items;
+  }
+
+  return Promise.all(
+    items.map(async (message) => {
+      try {
+        const plaintext = await decryptMessage(
+          decodeBase64(message.kemCiphertext),
+          decodeBase64(message.data),
+          chatPrivateKey,
+        );
+        return { ...message, plaintext };
+      } catch {
+        return message;
+      }
+    }),
+  );
+}
+
 export function ChatsPage() {
   const { user, loading: authLoading } = useAuth();
+  const [ownKeyState, setOwnKeyState] = useState<"checking" | "ready" | "missing">("checking");
   const [chats, setChats] = useState<Chat[]>([]);
   const [chatsLoading, setChatsLoading] = useState(true);
   const [chatsError, setChatsError] = useState<string | null>(null);
@@ -21,13 +76,39 @@ export function ChatsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [keyBackupOpen, setKeyBackupOpen] = useState(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  // Bumped on every loadMessages call and every successful send, so a slow
+  // in-flight fetch (e.g. waiting on chat-key decryption) can't clobber a
+  // message the user already sent locally in the meantime.
+  const messagesRequestIdRef = useRef(0);
 
   const selectedChat = useMemo(
     () => chats.find((chat) => chat.id === selectedChatId) ?? null,
     [chats, selectedChatId],
   );
+
+  useEffect(() => {
+    let active = true;
+
+    if (!user) {
+      setOwnKeyState("checking");
+      return;
+    }
+
+    void loadOwnKeyPair(user.id).then((keyPair) => {
+      if (active) {
+        setOwnKeyState(keyPair ? "ready" : "missing");
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const loadChats = useCallback(async (userId: string, options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -44,6 +125,10 @@ export function ChatsPage() {
         }
         return items[0]?.id ?? null;
       });
+
+      // Warm the cache so decryption doesn't wait on this later; not required
+      // for correctness since loadMessages unwraps on demand too.
+      void Promise.all(items.map((chat) => getOrUnwrapChatPrivateKey(userId, chat)));
     } catch {
       setChatsError("Could not load your chats. Try again later.");
     } finally {
@@ -53,23 +138,35 @@ export function ChatsPage() {
     }
   }, []);
 
-  const loadMessages = useCallback(async (chatId: string) => {
-    setMessagesLoading(true);
-    setMessagesError(null);
+  const loadMessages = useCallback(
+    async (chatId: string) => {
+      const requestId = ++messagesRequestIdRef.current;
+      setMessagesLoading(true);
+      setMessagesError(null);
 
-    try {
-      const items = await fetchMessages(chatId);
-      setMessages(items);
-    } catch {
-      setMessagesError("Could not load messages. Try again later.");
-      setMessages([]);
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, []);
+      try {
+        const items = await fetchMessages(chatId);
+        const chat = chatsRef.current.find((candidate) => candidate.id === chatId);
+        const decrypted = user && chat ? await decryptMessages(user.id, chat, items) : items;
+        if (requestId === messagesRequestIdRef.current) {
+          setMessages(decrypted);
+        }
+      } catch {
+        if (requestId === messagesRequestIdRef.current) {
+          setMessagesError("Could not load messages. Try again later.");
+          setMessages([]);
+        }
+      } finally {
+        if (requestId === messagesRequestIdRef.current) {
+          setMessagesLoading(false);
+        }
+      }
+    },
+    [user],
+  );
 
   useEffect(() => {
-    if (authLoading) {
+    if (authLoading || ownKeyState !== "ready") {
       return;
     }
 
@@ -79,7 +176,7 @@ export function ChatsPage() {
     }
 
     void loadChats(user.id);
-  }, [authLoading, user, loadChats]);
+  }, [authLoading, ownKeyState, user, loadChats]);
 
   useEffect(() => {
     if (!selectedChatId) {
@@ -177,7 +274,7 @@ export function ChatsPage() {
   );
 
   async function handleSendMessage(data: string) {
-    if (!user || !selectedChatId) {
+    if (!user || !selectedChatId || !selectedChat) {
       return;
     }
 
@@ -185,12 +282,17 @@ export function ChatsPage() {
     setSendError(null);
 
     try {
+      const { kemCiphertext, data: ciphertext } = await encryptMessage(
+        decodeBase64(selectedChat.kemPublicKey),
+        data,
+      );
       const message = await createMessage({
         chatId: selectedChatId,
         userId: user.id,
-        data,
+        data: encodeBase64(ciphertext),
+        kemCiphertext: encodeBase64(kemCiphertext),
       });
-      setMessages((current) => [...current, message]);
+      setMessages((current) => [...current, { ...message, plaintext: data }]);
       setChats((current) =>
         [...current]
           .map((chat) =>
@@ -224,7 +326,7 @@ export function ChatsPage() {
     [loadChats, user?.id],
   );
 
-  const canManageChats = Boolean(user) && !authLoading;
+  const canManageChats = Boolean(user) && !authLoading && ownKeyState === "ready";
   useChatSocket(canManageChats, handleChatUnread, handleChatAdded);
 
   return (
@@ -238,6 +340,22 @@ export function ChatsPage() {
             <p className="chats-page__status chats-page__status--centered">
               Sign in to view your chats.
             </p>
+          ) : ownKeyState === "checking" ? (
+            <p className="chats-page__status chats-page__status--centered">Loading...</p>
+          ) : ownKeyState === "missing" ? (
+            <div className="chats-page__status chats-page__status--centered">
+              <p>
+                This device doesn&rsquo;t have your encryption private key. Without it, your
+                chats can&rsquo;t be decrypted here &mdash; restore it from a backup to continue.
+              </p>
+              <button
+                type="button"
+                className="site-head__sign-in"
+                onClick={() => setKeyBackupOpen(true)}
+              >
+                Restore from backup
+              </button>
+            </div>
           ) : (
             <div className="chats-page__layout">
               <ChatSidebar
@@ -267,8 +385,17 @@ export function ChatsPage() {
       {createOpen && canManageChats && user ? (
         <NewChatDialog
           currentUserId={user.id}
+          currentUserKemPublicKey={user.kemPublicKey}
           onClose={() => setCreateOpen(false)}
           onCreated={handleChatCreated}
+        />
+      ) : null}
+
+      {keyBackupOpen && user ? (
+        <KeyBackupDialog
+          userId={user.id}
+          onClose={() => setKeyBackupOpen(false)}
+          onRestored={() => setOwnKeyState("ready")}
         />
       ) : null}
     </>

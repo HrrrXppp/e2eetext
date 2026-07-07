@@ -13,27 +13,33 @@ type apiUser struct {
 	OIDCProviderID string    `json:"oidcProviderId"`
 	Subject        string    `json:"subject"`
 	Name           string    `json:"name,omitempty"`
+	KemPublicKey   []byte    `json:"kemPublicKey"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type apiChat struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
-	UnreadMessageCount int       `json:"unreadMessageCount"`
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name,omitempty"`
+	AdminUserID           string    `json:"adminUserId"`
+	KemPublicKey          []byte    `json:"kemPublicKey"`
+	WrappedChatPrivateKey []byte    `json:"wrappedChatPrivateKey"`
+	KemCiphertext         []byte    `json:"kemCiphertext"`
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
+	UnreadMessageCount    int       `json:"unreadMessageCount"`
 }
 
 type apiMessage struct {
-	ID        string    `json:"id"`
-	ChatID    string    `json:"chatId"`
-	UserID    string    `json:"userId"`
-	UserName  string    `json:"userName,omitempty"`
-	Data      string    `json:"data"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Unread    bool      `json:"unread,omitempty"`
+	ID            string    `json:"id"`
+	ChatID        string    `json:"chatId"`
+	UserID        string    `json:"userId"`
+	UserName      string    `json:"userName,omitempty"`
+	Data          string    `json:"data"`
+	KemCiphertext []byte    `json:"kemCiphertext"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	Unread        bool      `json:"unread,omitempty"`
 }
 
 func toAPIUser(n node.Registry, user domain.User) apiUser {
@@ -42,6 +48,7 @@ func toAPIUser(n node.Registry, user domain.User) apiUser {
 		OIDCProviderID: n.ScopeID(user.OIDCProviderID),
 		Subject:        user.Subject,
 		Name:           user.Name,
+		KemPublicKey:   user.KemPublicKey,
 		CreatedAt:      user.CreatedAt,
 		UpdatedAt:      user.UpdatedAt,
 	}
@@ -61,11 +68,15 @@ func toAPIUsers(n node.Registry, users []domain.User) []apiUser {
 
 func toAPIChat(n node.Registry, chat domain.Chat) apiChat {
 	return apiChat{
-		ID:                 n.ScopeID(chat.ID),
-		Name:               chat.Name,
-		CreatedAt:          chat.CreatedAt,
-		UpdatedAt:          chat.UpdatedAt,
-		UnreadMessageCount: chat.UnreadMessageCount,
+		ID:                    n.ScopeID(chat.ID),
+		Name:                  chat.Name,
+		AdminUserID:           n.ScopeID(chat.AdminUserID),
+		KemPublicKey:          chat.KemPublicKey,
+		WrappedChatPrivateKey: chat.WrappedChatPrivateKey,
+		KemCiphertext:         chat.KemCiphertext,
+		CreatedAt:             chat.CreatedAt,
+		UpdatedAt:             chat.UpdatedAt,
+		UnreadMessageCount:    chat.UnreadMessageCount,
 	}
 }
 
@@ -83,14 +94,15 @@ func toAPIChats(n node.Registry, chats []domain.Chat) []apiChat {
 
 func toAPIMessage(n node.Registry, message domain.Message) apiMessage {
 	return apiMessage{
-		ID:        n.ScopeID(message.ID),
-		ChatID:    n.ScopeID(message.ChatID),
-		UserID:    n.ScopeID(message.UserID),
-		UserName:  message.UserName,
-		Data:      message.Data,
-		CreatedAt: message.CreatedAt,
-		UpdatedAt: message.UpdatedAt,
-		Unread:    message.Unread,
+		ID:            n.ScopeID(message.ID),
+		ChatID:        n.ScopeID(message.ChatID),
+		UserID:        n.ScopeID(message.UserID),
+		UserName:      message.UserName,
+		Data:          message.Data,
+		KemCiphertext: message.KemCiphertext,
+		CreatedAt:     message.CreatedAt,
+		UpdatedAt:     message.UpdatedAt,
+		Unread:        message.Unread,
 	}
 }
 
@@ -121,16 +133,4 @@ func toAPIProviderViews(n node.Registry, providers []service.ProviderView) []ser
 		out[i] = toAPIProviderView(n, provider)
 	}
 	return out
-}
-
-func localIDs(n node.Registry, ids []string) ([]string, error) {
-	out := make([]string, 0, len(ids))
-	for _, id := range ids {
-		localID, err := n.LocalID(id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, localID)
-	}
-	return out, nil
 }

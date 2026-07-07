@@ -141,7 +141,9 @@ export function ChatMessagesPanel({
                     <p className="chats-page__message-author">
                       {userLabel(message.userName, message.userId)}
                     </p>
-                    <p className="chats-page__message-text">{message.data}</p>
+                    <p className="chats-page__message-text">
+                      {message.plaintext ?? "[unable to decrypt message]"}
+                    </p>
                     <time className="chats-page__message-time" dateTime={message.createdAt}>
                       {formatMessageTime(message.createdAt)}
                     </time>

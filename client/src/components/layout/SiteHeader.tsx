@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EditNameDialog } from "@/components/auth/EditNameDialog";
+import { KeyBackupDialog } from "@/components/auth/KeyBackupDialog";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { appVersion } from "@/lib/version";
@@ -9,6 +10,7 @@ export function SiteHeader() {
   const { user, providers, loading, signOut, setDisplayName } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
+  const [keyBackupOpen, setKeyBackupOpen] = useState(false);
   const [skipProfile, setSkipProfile] = useState(false);
   const onChatsPage =
     window.location.pathname === "/chats" || window.location.pathname.startsWith("/chats/");
@@ -58,6 +60,13 @@ export function SiteHeader() {
               >
                 Chats
               </a>
+              <button
+                type="button"
+                className="site-head__sign-in"
+                onClick={() => setKeyBackupOpen(true)}
+              >
+                Backup keys
+              </button>
               <button type="button" className="site-head__sign-in" onClick={signOut}>
                 Sign out
               </button>
@@ -97,6 +106,10 @@ export function SiteHeader() {
             setEditNameOpen(false);
           }}
         />
+      ) : null}
+
+      {keyBackupOpen && user ? (
+        <KeyBackupDialog userId={user.id} onClose={() => setKeyBackupOpen(false)} />
       ) : null}
     </>
   );

@@ -54,9 +54,10 @@ func (s *MessageService) List(ctx context.Context, filter repository.MessageFilt
 }
 
 type CreateMessageInput struct {
-	ChatID string
-	UserID string
-	Data   string
+	ChatID        string
+	UserID        string
+	Data          string
+	KemCiphertext []byte
 }
 
 func (s *MessageService) Create(ctx context.Context, input CreateMessageInput, tokenUser TokenUser) (domain.Message, error) {
@@ -69,6 +70,9 @@ func (s *MessageService) Create(ctx context.Context, input CreateMessageInput, t
 	if input.Data == "" {
 		return domain.Message{}, fmt.Errorf("data is required")
 	}
+	if len(input.KemCiphertext) == 0 {
+		return domain.Message{}, fmt.Errorf("kem_ciphertext is required")
+	}
 
 	if err := requireCurrentUserMatches(ctx, tokenUser, input.UserID, s.userRepo, s.oidcProviderRepo, ErrMessageAccessDenied); err != nil {
 		return domain.Message{}, err
@@ -79,9 +83,10 @@ func (s *MessageService) Create(ctx context.Context, input CreateMessageInput, t
 	}
 
 	created, err := s.repo.Create(ctx, domain.Message{
-		ChatID: input.ChatID,
-		UserID: input.UserID,
-		Data:   input.Data,
+		ChatID:        input.ChatID,
+		UserID:        input.UserID,
+		Data:          input.Data,
+		KemCiphertext: input.KemCiphertext,
 	})
 	if err != nil {
 		return domain.Message{}, err

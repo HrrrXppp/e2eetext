@@ -19,6 +19,7 @@ export type AuthUser = {
   name?: string;
   provider: string;
   oidcProviderId: string;
+  kemPublicKey: string;
 };
 
 export type OIDCProvider = {
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: dbUser.name?.trim() || undefined,
           provider: tokenUser.provider,
           oidcProviderId: dbUser.oidcProviderId,
+          kemPublicKey: dbUser.kemPublicKey,
         });
       } catch {
         if (active) {

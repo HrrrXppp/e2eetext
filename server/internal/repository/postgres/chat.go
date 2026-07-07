@@ -23,13 +23,17 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT c.id,
 			uc.name,
+			c.admin_user_id,
+			c.kem_public_key,
+			uc.wrapped_chat_private_key,
+			uc.kem_ciphertext,
 			c.created_at,
 			c.updated_at,
 			COUNT(um.message_id)::int AS unread_message_count
 		FROM chats c
 		INNER JOIN user_chats uc ON uc.chat_id = c.id AND uc.user_id = $1
 		LEFT JOIN unread_messages um ON um.chat_id = c.id AND um.user_id = $1
-		GROUP BY c.id, uc.name, c.created_at, c.updated_at
+		GROUP BY c.id, uc.name, c.admin_user_id, c.kem_public_key, uc.wrapped_chat_private_key, uc.kem_ciphertext, c.created_at, c.updated_at
 		ORDER BY c.updated_at DESC`, filter.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("list chats: %w", err)
@@ -51,7 +55,7 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 	return chats, nil
 }
 
-func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []string) (domain.Chat, error) {
+func (r *ChatRepository) Create(ctx context.Context, name string, adminUserID string, kemPublicKey []byte, members []repository.ChatMemberKey) (domain.Chat, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.Chat{}, fmt.Errorf("begin create chat tx: %w", err)
@@ -60,20 +64,28 @@ func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []stri
 
 	var chat domain.Chat
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO chats DEFAULT VALUES
-		RETURNING id, created_at, updated_at`)
+		INSERT INTO chats (admin_user_id, kem_public_key)
+		VALUES ($1, $2)
+		RETURNING id, admin_user_id, kem_public_key, created_at, updated_at`,
+		adminUserID, kemPublicKey)
 
-	if err := row.Scan(&chat.ID, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
+	if err := row.Scan(&chat.ID, &chat.AdminUserID, &chat.KemPublicKey, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
 		return domain.Chat{}, fmt.Errorf("insert chat: %w", err)
 	}
 
 	chat.Name = name
 
-	for _, userID := range userIDs {
+	for _, member := range members {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_chats (chat_id, user_id, name)
-			VALUES ($1, $2, $3)`, chat.ID, userID, nullString(name)); err != nil {
+			INSERT INTO user_chats (chat_id, user_id, name, wrapped_chat_private_key, kem_ciphertext)
+			VALUES ($1, $2, $3, $4, $5)`,
+			chat.ID, member.UserID, nullString(name), member.WrappedChatPrivateKey, member.KemCiphertext); err != nil {
 			return domain.Chat{}, fmt.Errorf("insert user_chat: %w", err)
+		}
+
+		if member.UserID == adminUserID {
+			chat.WrappedChatPrivateKey = member.WrappedChatPrivateKey
+			chat.KemCiphertext = member.KemCiphertext
 		}
 	}
 
@@ -162,7 +174,17 @@ func scanChat(row chatRow) (domain.Chat, error) {
 	var chat domain.Chat
 	var name sql.NullString
 
-	if err := row.Scan(&chat.ID, &name, &chat.CreatedAt, &chat.UpdatedAt, &chat.UnreadMessageCount); err != nil {
+	if err := row.Scan(
+		&chat.ID,
+		&name,
+		&chat.AdminUserID,
+		&chat.KemPublicKey,
+		&chat.WrappedChatPrivateKey,
+		&chat.KemCiphertext,
+		&chat.CreatedAt,
+		&chat.UpdatedAt,
+		&chat.UnreadMessageCount,
+	); err != nil {
 		return domain.Chat{}, fmt.Errorf("scan chat: %w", err)
 	}
 

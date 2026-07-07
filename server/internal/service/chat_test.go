@@ -16,8 +16,8 @@ func (s *chatRepoStub) List(_ context.Context, _ repository.ChatFilter) ([]domai
 	return nil, nil
 }
 
-func (s *chatRepoStub) Create(_ context.Context, _ string, _ []string) (domain.Chat, error) {
-	return domain.Chat{}, nil
+func (s *chatRepoStub) Create(_ context.Context, _ string, adminUserID string, kemPublicKey []byte, members []repository.ChatMemberKey) (domain.Chat, error) {
+	return domain.Chat{AdminUserID: adminUserID, KemPublicKey: kemPublicKey}, nil
 }
 
 func (s *chatRepoStub) UserBelongsToChat(_ context.Context, _, _ string) (bool, error) {
@@ -87,7 +87,10 @@ func TestChatService_Create_Validation(t *testing.T) {
 	svc := NewChatService(&chatRepoStub{}, &chatUserRepoStub{}, &chatOIDCProviderRepoStub{})
 
 	_, err := svc.Create(context.Background(), CreateChatInput{
-		UsersUIDs: []string{"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+		KemPublicKey: []byte("chat-kem-public-key"),
+		Members: []ChatMemberKeyInput{
+			{UserID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", WrappedChatPrivateKey: []byte("wrapped"), KemCiphertext: []byte("ct")},
+		},
 	}, TokenUser{})
 	if err == nil || err.Error() != "name is required" {
 		t.Fatalf("Create() error = %v", err)
@@ -95,8 +98,41 @@ func TestChatService_Create_Validation(t *testing.T) {
 
 	_, err = svc.Create(context.Background(), CreateChatInput{
 		Name: "Project Chat",
+		Members: []ChatMemberKeyInput{
+			{UserID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", WrappedChatPrivateKey: []byte("wrapped"), KemCiphertext: []byte("ct")},
+		},
 	}, TokenUser{})
-	if err == nil || err.Error() != "users_uids is required" {
+	if err == nil || err.Error() != "kem_public_key is required" {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	_, err = svc.Create(context.Background(), CreateChatInput{
+		Name:         "Project Chat",
+		KemPublicKey: []byte("chat-kem-public-key"),
+	}, TokenUser{})
+	if err == nil || err.Error() != "members is required" {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	_, err = svc.Create(context.Background(), CreateChatInput{
+		Name:         "Project Chat",
+		KemPublicKey: []byte("chat-kem-public-key"),
+		Members: []ChatMemberKeyInput{
+			{UserID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", KemCiphertext: []byte("ct")},
+		},
+	}, TokenUser{})
+	if err == nil || !strings.Contains(err.Error(), "wrapped_chat_private_key is required") {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	_, err = svc.Create(context.Background(), CreateChatInput{
+		Name:         "Project Chat",
+		KemPublicKey: []byte("chat-kem-public-key"),
+		Members: []ChatMemberKeyInput{
+			{UserID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", WrappedChatPrivateKey: []byte("wrapped")},
+		},
+	}, TokenUser{})
+	if err == nil || !strings.Contains(err.Error(), "kem_ciphertext is required") {
 		t.Fatalf("Create() error = %v", err)
 	}
 }
@@ -123,8 +159,11 @@ func TestChatService_Create_DeniesWhenCurrentUserNotInMembers(t *testing.T) {
 	})
 
 	_, err := svc.Create(context.Background(), CreateChatInput{
-		Name:      "Project Chat",
-		UsersUIDs: []string{otherUserID},
+		Name:         "Project Chat",
+		KemPublicKey: []byte("chat-kem-public-key"),
+		Members: []ChatMemberKeyInput{
+			{UserID: otherUserID, WrappedChatPrivateKey: []byte("wrapped"), KemCiphertext: []byte("ct")},
+		},
 	}, TokenUser{
 		Subject:  "google-subject-1",
 		Provider: "google",

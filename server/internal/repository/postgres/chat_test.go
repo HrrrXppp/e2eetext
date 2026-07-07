@@ -19,12 +19,16 @@ func TestChatRepository_List_ByUserID(t *testing.T) {
 	repo := NewChatRepository(db)
 	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	adminUserID := "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	kemPublicKey := []byte("chat-kem-public-key")
+	wrappedKey := []byte("wrapped-chat-private-key")
+	kemCiphertext := []byte("kem-ciphertext")
 
-	rows := sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at", "unread_message_count"}).
-		AddRow("11111111-1111-1111-1111-111111111111", "General", createdAt, createdAt, 3).
-		AddRow("22222222-2222-2222-2222-222222222222", "Random", createdAt, createdAt, 0)
+	rows := sqlmock.NewRows([]string{"id", "name", "admin_user_id", "kem_public_key", "wrapped_chat_private_key", "kem_ciphertext", "created_at", "updated_at", "unread_message_count"}).
+		AddRow("11111111-1111-1111-1111-111111111111", "General", adminUserID, kemPublicKey, wrappedKey, kemCiphertext, createdAt, createdAt, 3).
+		AddRow("22222222-2222-2222-2222-222222222222", "Random", adminUserID, kemPublicKey, wrappedKey, kemCiphertext, createdAt, createdAt, 0)
 
-	mock.ExpectQuery(`SELECT c\.id, uc\.name, c\.created_at,[\s\S]+ORDER BY c\.updated_at DESC`).
+	mock.ExpectQuery(`SELECT c\.id,[\s\S]+ORDER BY c\.updated_at DESC`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
@@ -65,22 +69,31 @@ func TestChatRepository_Create(t *testing.T) {
 	chatID := "11111111-1111-1111-1111-111111111111"
 	userID1 := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	userID2 := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	kemPublicKey := []byte("chat-kem-public-key")
+	wrappedKey1 := []byte("wrapped-for-user1")
+	kemCiphertext1 := []byte("kem-ciphertext-for-user1")
+	wrappedKey2 := []byte("wrapped-for-user2")
+	kemCiphertext2 := []byte("kem-ciphertext-for-user2")
 
-	rows := sqlmock.NewRows([]string{"id", "created_at", "updated_at"}).
-		AddRow(chatID, createdAt, createdAt)
+	rows := sqlmock.NewRows([]string{"id", "admin_user_id", "kem_public_key", "created_at", "updated_at"}).
+		AddRow(chatID, userID1, kemPublicKey, createdAt, createdAt)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO chats DEFAULT VALUES\s+RETURNING id, created_at, updated_at`).
+	mock.ExpectQuery(`INSERT INTO chats \(admin_user_id, kem_public_key\)\s+VALUES \(\$1, \$2\)\s+RETURNING id, admin_user_id, kem_public_key, created_at, updated_at`).
+		WithArgs(userID1, kemPublicKey).
 		WillReturnRows(rows)
-	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name\)\s+VALUES \(\$1, \$2, \$3\)`).
-		WithArgs(chatID, userID1, "Project Chat").
+	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name, wrapped_chat_private_key, kem_ciphertext\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+		WithArgs(chatID, userID1, "Project Chat", wrappedKey1, kemCiphertext1).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name\)\s+VALUES \(\$1, \$2, \$3\)`).
-		WithArgs(chatID, userID2, "Project Chat").
+	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name, wrapped_chat_private_key, kem_ciphertext\)\s+VALUES \(\$1, \$2, \$3, \$4, \$5\)`).
+		WithArgs(chatID, userID2, "Project Chat", wrappedKey2, kemCiphertext2).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	chat, err := repo.Create(context.Background(), "Project Chat", []string{userID1, userID2})
+	chat, err := repo.Create(context.Background(), "Project Chat", userID1, kemPublicKey, []repository.ChatMemberKey{
+		{UserID: userID1, WrappedChatPrivateKey: wrappedKey1, KemCiphertext: kemCiphertext1},
+		{UserID: userID2, WrappedChatPrivateKey: wrappedKey2, KemCiphertext: kemCiphertext2},
+	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -89,6 +102,15 @@ func TestChatRepository_Create(t *testing.T) {
 	}
 	if chat.Name != "Project Chat" {
 		t.Errorf("Name = %q", chat.Name)
+	}
+	if chat.AdminUserID != userID1 {
+		t.Errorf("AdminUserID = %q", chat.AdminUserID)
+	}
+	if string(chat.WrappedChatPrivateKey) != string(wrappedKey1) {
+		t.Errorf("WrappedChatPrivateKey = %q, want %q", chat.WrappedChatPrivateKey, wrappedKey1)
+	}
+	if string(chat.KemCiphertext) != string(kemCiphertext1) {
+		t.Errorf("KemCiphertext = %q, want %q", chat.KemCiphertext, kemCiphertext1)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

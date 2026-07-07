@@ -142,7 +142,7 @@ describe("updateUserName", () => {
 });
 
 describe("createUser", () => {
-  it("creates a user from the auth token without a request body", async () => {
+  it("sends the public key in the request body", async () => {
     localStorage.setItem("messenger_id_token", "token");
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -150,13 +150,15 @@ describe("createUser", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(createUser()).resolves.toEqual(sampleUser);
+    await expect(createUser({ kemPublicKey: "test-public-key" })).resolves.toEqual(sampleUser);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/user", {
       method: "POST",
       headers: {
         Authorization: "Bearer token",
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ kem_public_key: "test-public-key" }),
     });
   });
 
@@ -168,7 +170,7 @@ describe("createUser", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await createUser({ skipProfile: true });
+    await createUser({ skipProfile: true, kemPublicKey: "test-public-key" });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/user", {
       method: "POST",
@@ -176,7 +178,7 @@ describe("createUser", () => {
         Authorization: "Bearer token",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ skip_profile: true }),
+      body: JSON.stringify({ kem_public_key: "test-public-key", skip_profile: true }),
     });
   });
 });
@@ -219,14 +221,13 @@ describe("ensureUserRegistered", () => {
       }),
     ).resolves.toEqual({ ...sampleUser, name: undefined });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/user", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer token",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ skip_profile: true }),
-    });
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe("/api/v1/user");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body as string);
+    expect(body.skip_profile).toBe(true);
+    expect(typeof body.kem_public_key).toBe("string");
+    expect(body.kem_public_key.length).toBeGreaterThan(0);
   });
 
   it("creates user when not found", async () => {

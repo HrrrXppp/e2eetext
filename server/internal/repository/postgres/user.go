@@ -25,7 +25,7 @@ var _ repository.UserRepository = (*UserRepository)(nil)
 func (r *UserRepository) List(ctx context.Context, filter repository.UserFilter) ([]domain.User, error) {
 	query := strings.Builder{}
 	query.WriteString(`
-		SELECT id, oidc_provider_id, subject, name, created_at, updated_at
+		SELECT id, oidc_provider_id, subject, name, kem_public_key, created_at, updated_at
 		FROM users
 		WHERE 1=1`)
 
@@ -69,7 +69,7 @@ func (r *UserRepository) List(ctx context.Context, filter repository.UserFilter)
 func (r *UserRepository) Search(ctx context.Context, filter repository.UserSearchFilter, nodeID string) ([]domain.User, error) {
 	query := strings.Builder{}
 	query.WriteString(`
-		SELECT id, oidc_provider_id, subject, name, created_at, updated_at
+		SELECT id, oidc_provider_id, subject, name, kem_public_key, created_at, updated_at
 		FROM users`)
 
 	args := make([]any, 0, 4)
@@ -130,12 +130,13 @@ func (r *UserRepository) Search(ctx context.Context, filter repository.UserSearc
 
 func (r *UserRepository) Create(ctx context.Context, user domain.User) (domain.User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		INSERT INTO users (oidc_provider_id, subject, name)
-		VALUES ($1, $2, $3)
-		RETURNING id, oidc_provider_id, subject, name, created_at, updated_at`,
+		INSERT INTO users (oidc_provider_id, subject, name, kem_public_key)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, oidc_provider_id, subject, name, kem_public_key, created_at, updated_at`,
 		user.OIDCProviderID,
 		user.Subject,
 		nullString(user.Name),
+		user.KemPublicKey,
 	)
 
 	created, err := scanUser(row)
@@ -151,7 +152,7 @@ func (r *UserRepository) Create(ctx context.Context, user domain.User) (domain.U
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (domain.User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, oidc_provider_id, subject, name, created_at, updated_at
+		SELECT id, oidc_provider_id, subject, name, kem_public_key, created_at, updated_at
 		FROM users
 		WHERE id = $1`, id)
 
@@ -168,7 +169,7 @@ func (r *UserRepository) UpdateName(ctx context.Context, id string, name string)
 		UPDATE users
 		SET name = $1, updated_at = NOW()
 		WHERE id = $2
-		RETURNING id, oidc_provider_id, subject, name, created_at, updated_at`,
+		RETURNING id, oidc_provider_id, subject, name, kem_public_key, created_at, updated_at`,
 		nullString(name),
 		id,
 	)
@@ -194,6 +195,7 @@ func scanUser(row userRow) (domain.User, error) {
 		&user.OIDCProviderID,
 		&user.Subject,
 		&name,
+		&user.KemPublicKey,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	); err != nil {

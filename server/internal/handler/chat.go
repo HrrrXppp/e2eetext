@@ -56,9 +56,16 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAPIChats(h.node, chats))
 }
 
+type chatMemberRequest struct {
+	UserID                string `json:"user_id"`
+	WrappedChatPrivateKey []byte `json:"wrapped_chat_private_key"`
+	KemCiphertext         []byte `json:"kem_ciphertext"`
+}
+
 type createChatRequest struct {
-	UsersUIDs []string `json:"users_uids"`
-	Name      string   `json:"name"`
+	Name         string              `json:"name"`
+	KemPublicKey []byte              `json:"kem_public_key"`
+	Members      []chatMemberRequest `json:"members"`
 }
 
 func (h *ChatHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -74,15 +81,26 @@ func (h *ChatHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userIDs, err := localIDs(h.node, req.UsersUIDs)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+	members := make([]service.ChatMemberKeyInput, 0, len(req.Members))
+	userIDs := make([]string, 0, len(req.Members))
+	for _, member := range req.Members {
+		userID, err := h.node.LocalID(member.UserID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		userIDs = append(userIDs, userID)
+		members = append(members, service.ChatMemberKeyInput{
+			UserID:                userID,
+			WrappedChatPrivateKey: member.WrappedChatPrivateKey,
+			KemCiphertext:         member.KemCiphertext,
+		})
 	}
 
 	chat, err := h.service.Create(r.Context(), service.CreateChatInput{
-		Name:      req.Name,
-		UsersUIDs: userIDs,
+		Name:         req.Name,
+		KemPublicKey: req.KemPublicKey,
+		Members:      members,
 	}, tokenUser)
 	if err != nil {
 		if errors.Is(err, service.ErrChatAccessDenied) {

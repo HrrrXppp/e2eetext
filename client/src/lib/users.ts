@@ -1,12 +1,16 @@
 import { API_V1 } from "@/lib/api";
 import { authHeaders } from "@/lib/auth";
+import { encodeBase64 } from "@/lib/bytes";
+import { generateKemKeyPair } from "@/lib/crypto";
 import type { IdTokenClaims } from "@/lib/idToken";
+import { saveOwnKeyPair } from "@/lib/keyStore";
 
 export type User = {
   id: string;
   oidcProviderId: string;
   subject: string;
   name?: string;
+  kemPublicKey: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -83,6 +87,7 @@ type UserFilter = {
 
 type CreateUserOptions = {
   skipProfile?: boolean;
+  kemPublicKey: string;
 };
 
 export async function fetchUsers(filter: UserFilter): Promise<User[]> {
@@ -123,22 +128,20 @@ export async function updateUserName(userId: string, name: string): Promise<User
   return response.json() as Promise<User>;
 }
 
-export async function createUser(options?: CreateUserOptions): Promise<User> {
-  const headers = authHeaders();
-  const init: RequestInit = {
-    method: "POST",
-    headers,
-  };
-
-  if (options?.skipProfile) {
-    init.headers = {
-      ...headers,
-      "Content-Type": "application/json",
-    };
-    init.body = JSON.stringify({ skip_profile: true });
+export async function createUser(options: CreateUserOptions): Promise<User> {
+  const body: Record<string, unknown> = { kem_public_key: options.kemPublicKey };
+  if (options.skipProfile) {
+    body.skip_profile = true;
   }
 
-  const response = await fetch(`${API_V1}/user`, init);
+  const response = await fetch(`${API_V1}/user`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 
   if (response.status === 409) {
     throw new Error("user already exists");
@@ -198,8 +201,15 @@ async function ensureUserRegisteredOnce(
     return users[0];
   }
 
+  const keyPair = generateKemKeyPair();
+
   try {
-    return await createUser({ skipProfile: options?.skipProfile });
+    const created = await createUser({
+      skipProfile: options?.skipProfile,
+      kemPublicKey: encodeBase64(keyPair.publicKey),
+    });
+    await saveOwnKeyPair(created.id, keyPair);
+    return created;
   } catch (error) {
     if (error instanceof Error && error.message === "user already exists") {
       const existingUsers = await fetchUsers(filter);

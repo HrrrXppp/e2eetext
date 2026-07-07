@@ -9,7 +9,8 @@ const sampleMessage = {
   id: `${testNodeId}/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`,
   chatId: scopedChatId,
   userId: scopedUserId,
-  data: "hello",
+  data: "ciphertext-base64",
+  kemCiphertext: "kem-ciphertext-base64",
   createdAt: "2026-06-11T12:00:00.000Z",
   updatedAt: "2026-06-11T12:00:00.000Z",
 };
@@ -52,7 +53,8 @@ describe("createMessage", () => {
       createMessage({
         chatId: scopedChatId,
         userId: scopedUserId,
-        data: "hello",
+        data: "ciphertext-base64",
+        kemCiphertext: "kem-ciphertext-base64",
       }),
     ).resolves.toEqual(sampleMessage);
 
@@ -65,7 +67,8 @@ describe("createMessage", () => {
       body: JSON.stringify({
         chat_id: scopedChatId,
         user_id: scopedUserId,
-        data: "hello",
+        data: "ciphertext-base64",
+        kem_ciphertext: "kem-ciphertext-base64",
       }),
     });
   });

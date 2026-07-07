@@ -5,6 +5,10 @@ import { scopeResourceIds } from "@/lib/scopedId";
 export type Chat = {
   id: string;
   name?: string;
+  adminUserId: string;
+  kemPublicKey: string;
+  wrappedChatPrivateKey: string;
+  kemCiphertext: string;
   createdAt: string;
   updatedAt: string;
   unreadMessageCount?: number;
@@ -33,13 +37,20 @@ export async function fetchChats(userId: string): Promise<Chat[]> {
   return response.json() as Promise<Chat[]>;
 }
 
+export type ChatMemberInput = {
+  userId: string;
+  wrappedChatPrivateKey: string;
+  kemCiphertext: string;
+};
+
 type CreateChatInput = {
   name: string;
-  usersUids: string[];
+  kemPublicKey: string;
+  members: ChatMemberInput[];
 };
 
 export async function createChat(input: CreateChatInput): Promise<Chat> {
-  const usersUids = scopeResourceIds(input.usersUids);
+  const scopedUserIds = scopeResourceIds(input.members.map((member) => member.userId));
 
   const response = await fetch(`${API_V1}/chat`, {
     method: "POST",
@@ -49,7 +60,12 @@ export async function createChat(input: CreateChatInput): Promise<Chat> {
     },
     body: JSON.stringify({
       name: input.name,
-      users_uids: usersUids,
+      kem_public_key: input.kemPublicKey,
+      members: input.members.map((member, index) => ({
+        user_id: scopedUserIds[index],
+        wrapped_chat_private_key: member.wrappedChatPrivateKey,
+        kem_ciphertext: member.kemCiphertext,
+      })),
     }),
   });
 

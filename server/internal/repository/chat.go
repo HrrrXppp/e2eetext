@@ -22,9 +22,15 @@ type UserChatUnread struct {
 	UpdatedAt time.Time
 }
 
+type ChatMemberKey struct {
+	UserID                string
+	WrappedChatPrivateKey []byte
+	KemCiphertext         []byte
+}
+
 type ChatRepository interface {
 	List(ctx context.Context, filter ChatFilter) ([]domain.Chat, error)
-	Create(ctx context.Context, name string, userIDs []string) (domain.Chat, error)
+	Create(ctx context.Context, name string, adminUserID string, kemPublicKey []byte, members []ChatMemberKey) (domain.Chat, error)
 	UserBelongsToChat(ctx context.Context, chatID, userID string) (bool, error)
 	UnreadCountsForChat(ctx context.Context, chatID string) ([]ChatUnreadCount, error)
 	ListUnreadChatsForUser(ctx context.Context, userID string) ([]UserChatUnread, error)

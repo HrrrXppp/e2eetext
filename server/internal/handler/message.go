@@ -69,9 +69,10 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type createMessageRequest struct {
-	ChatID string `json:"chat_id"`
-	UserID string `json:"user_id"`
-	Data   string `json:"data"`
+	ChatID        string `json:"chat_id"`
+	UserID        string `json:"user_id"`
+	Data          string `json:"data"`
+	KemCiphertext []byte `json:"kem_ciphertext"`
 }
 
 func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -99,9 +100,10 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	message, err := h.service.Create(r.Context(), service.CreateMessageInput{
-		ChatID: chatID,
-		UserID: userID,
-		Data:   strings.TrimSpace(req.Data),
+		ChatID:        chatID,
+		UserID:        userID,
+		Data:          strings.TrimSpace(req.Data),
+		KemCiphertext: req.KemCiphertext,
 	}, tokenUser)
 	if err != nil {
 		if errors.Is(err, service.ErrMessageAccessDenied) || errors.Is(err, service.ErrChatAccessDenied) {

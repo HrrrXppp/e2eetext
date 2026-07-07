@@ -7,6 +7,7 @@ type User struct {
 	OIDCProviderID string    `json:"oidcProviderId"`
 	Subject        string    `json:"subject"`
 	Name           string    `json:"name,omitempty"`
+	KemPublicKey   []byte    `json:"kemPublicKey"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }

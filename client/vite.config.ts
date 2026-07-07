@@ -68,5 +68,10 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
     globals: true,
+    // Several suites exercise real ML-KEM crypto + IndexedDB (no mocking).
+    // Running all test files fully in parallel makes that CPU-bound work
+    // contend across processes and can spuriously time out; run files
+    // sequentially instead for reliability, at a modest cost to wall time.
+    fileParallelism: false,
   },
 }));

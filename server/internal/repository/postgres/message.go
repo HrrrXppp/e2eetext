@@ -26,6 +26,7 @@ func (r *MessageRepository) List(ctx context.Context, filter repository.MessageF
 			m.chat_id,
 			m.user_id,
 			m.data,
+			m.kem_ciphertext,
 			m.created_at,
 			m.updated_at,
 			COALESCE(u.name, '') AS user_name,
@@ -66,12 +67,13 @@ func (r *MessageRepository) Create(ctx context.Context, message domain.Message) 
 	defer tx.Rollback()
 
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO messages (chat_id, user_id, data)
-		VALUES ($1, $2, $3)
-		RETURNING id, chat_id, user_id, data, created_at, updated_at`,
+		INSERT INTO messages (chat_id, user_id, data, kem_ciphertext)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, chat_id, user_id, data, kem_ciphertext, created_at, updated_at`,
 		message.ChatID,
 		message.UserID,
 		message.Data,
+		message.KemCiphertext,
 	)
 
 	created, err := scanMessage(row)
@@ -107,7 +109,7 @@ func (r *MessageRepository) Create(ctx context.Context, message domain.Message) 
 
 func (r *MessageRepository) GetByID(ctx context.Context, id string) (domain.Message, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT m.id, m.chat_id, m.user_id, m.data, m.created_at, m.updated_at, COALESCE(u.name, '')
+		SELECT m.id, m.chat_id, m.user_id, m.data, m.kem_ciphertext, m.created_at, m.updated_at, COALESCE(u.name, '')
 		FROM messages m
 		INNER JOIN users u ON u.id = m.user_id
 		WHERE m.id = $1`, id)
@@ -142,6 +144,7 @@ func scanMessage(row messageRow) (domain.Message, error) {
 		&message.ChatID,
 		&message.UserID,
 		&message.Data,
+		&message.KemCiphertext,
 		&message.CreatedAt,
 		&message.UpdatedAt,
 	); err != nil {
@@ -157,6 +160,7 @@ func scanMessageWithUnread(row messageRow) (domain.Message, error) {
 		&message.ChatID,
 		&message.UserID,
 		&message.Data,
+		&message.KemCiphertext,
 		&message.CreatedAt,
 		&message.UpdatedAt,
 		&message.UserName,
@@ -174,6 +178,7 @@ func scanMessageWithUserName(row messageRow) (domain.Message, error) {
 		&message.ChatID,
 		&message.UserID,
 		&message.Data,
+		&message.KemCiphertext,
 		&message.CreatedAt,
 		&message.UpdatedAt,
 		&message.UserName,

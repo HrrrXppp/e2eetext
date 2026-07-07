@@ -22,12 +22,13 @@ func TestMessageRepository_List_ByChatID(t *testing.T) {
 	chatID := "11111111-1111-1111-1111-111111111111"
 	userID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
-	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "created_at", "updated_at", "user_name", "unread"}).
+	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "kem_ciphertext", "created_at", "updated_at", "user_name", "unread"}).
 		AddRow(
 			"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
 			chatID,
 			userID,
 			"hello",
+			[]byte("message-kem-ciphertext"),
 			createdAt,
 			createdAt,
 			"Alice",
@@ -76,19 +77,20 @@ func TestMessageRepository_Create(t *testing.T) {
 	userID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 	messageID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
-	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "created_at", "updated_at"}).
+	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "kem_ciphertext", "created_at", "updated_at"}).
 		AddRow(
 			messageID,
 			chatID,
 			userID,
 			"hello world",
+			[]byte("message-kem-ciphertext"),
 			createdAt,
 			createdAt,
 		)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO messages \(chat_id, user_id, data\)\s+VALUES \(\$1, \$2, \$3\)\s+RETURNING id, chat_id, user_id, data, created_at, updated_at`).
-		WithArgs(chatID, userID, "hello world").
+	mock.ExpectQuery(`INSERT INTO messages \(chat_id, user_id, data, kem_ciphertext\)\s+VALUES \(\$1, \$2, \$3, \$4\)\s+RETURNING id, chat_id, user_id, data, kem_ciphertext, created_at, updated_at`).
+		WithArgs(chatID, userID, "hello world", []byte("message-kem-ciphertext")).
 		WillReturnRows(rows)
 	mock.ExpectExec(`INSERT INTO unread_messages \(message_id, user_id, chat_id\)\s+SELECT \$1, uc\.user_id, \$2\s+FROM user_chats uc\s+WHERE uc\.chat_id = \$2 AND uc\.user_id != \$3`).
 		WithArgs(messageID, chatID, userID).
@@ -99,9 +101,10 @@ func TestMessageRepository_Create(t *testing.T) {
 	mock.ExpectCommit()
 
 	message, err := repo.Create(context.Background(), domain.Message{
-		ChatID: chatID,
-		UserID: userID,
-		Data:   "hello world",
+		ChatID:        chatID,
+		UserID:        userID,
+		Data:          "hello world",
+		KemCiphertext: []byte("message-kem-ciphertext"),
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -131,10 +134,10 @@ func TestMessageRepository_GetByID(t *testing.T) {
 	chatID := "11111111-1111-1111-1111-111111111111"
 	userID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
-	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "created_at", "updated_at", "user_name"}).
-		AddRow(messageID, chatID, userID, "hello", createdAt, createdAt, "Alice")
+	rows := sqlmock.NewRows([]string{"id", "chat_id", "user_id", "data", "kem_ciphertext", "created_at", "updated_at", "user_name"}).
+		AddRow(messageID, chatID, userID, "hello", []byte("message-kem-ciphertext"), createdAt, createdAt, "Alice")
 
-	mock.ExpectQuery(`SELECT m\.id, m\.chat_id, m\.user_id, m\.data, m\.created_at, m\.updated_at, COALESCE\(u\.name, ''\)\s+FROM messages m\s+INNER JOIN users u ON u\.id = m\.user_id\s+WHERE m\.id = \$1`).
+	mock.ExpectQuery(`SELECT m\.id, m\.chat_id, m\.user_id, m\.data, m\.kem_ciphertext, m\.created_at, m\.updated_at, COALESCE\(u\.name, ''\)\s+FROM messages m\s+INNER JOIN users u ON u\.id = m\.user_id\s+WHERE m\.id = \$1`).
 		WithArgs(messageID).
 		WillReturnRows(rows)
 

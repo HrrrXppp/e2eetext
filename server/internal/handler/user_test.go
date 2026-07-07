@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -325,7 +326,8 @@ func TestUserHandler_Create(t *testing.T) {
 	repo := &stubUserRepo{}
 	handler := newUserHandler(repo, testOIDCProviderRepo())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", nil)
+	body := []byte(`{"kem_public_key":"` + base64.StdEncoding.EncodeToString([]byte("user-kem-public-key")) + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader(body))
 	req = requestWithTokenUser(req, service.TokenUser{
 		Subject:  "google-subject-1",
 		Name:     "Test User",
@@ -402,7 +404,7 @@ func TestUserHandler_Create_SkipProfile(t *testing.T) {
 	repo := &stubUserRepo{}
 	handler := newUserHandler(repo, testOIDCProviderRepo())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader([]byte(`{"skip_profile":true}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader([]byte(`{"skip_profile":true,"kem_public_key":"`+base64.StdEncoding.EncodeToString([]byte("user-kem-public-key"))+`"}`)))
 	req = requestWithTokenUser(req, service.TokenUser{
 		Subject:  "google-subject-1",
 		Name:     "Test User",
@@ -437,7 +439,8 @@ func TestUserHandler_Create_Conflict(t *testing.T) {
 	}
 	handler := newUserHandler(repo, testOIDCProviderRepo())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", nil)
+	body := []byte(`{"kem_public_key":"` + base64.StdEncoding.EncodeToString([]byte("user-kem-public-key")) + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader(body))
 	req = requestWithTokenUser(req, service.TokenUser{
 		Subject:  "google-subject-1",
 		Provider: "google",

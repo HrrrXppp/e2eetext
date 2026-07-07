@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -49,16 +50,21 @@ func (s *stubChatRepo) ListUnreadChatsForUser(_ context.Context, _ string) ([]re
 	return nil, nil
 }
 
-func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string) (domain.Chat, error) {
+func (s *stubChatRepo) Create(_ context.Context, name string, adminUserID string, kemPublicKey []byte, members []repository.ChatMemberKey) (domain.Chat, error) {
 	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	chat := domain.Chat{
-		ID:        "33333333-3333-3333-3333-333333333333",
-		Name:      name,
-		CreatedAt: createdAt,
-		UpdatedAt: createdAt,
+		ID:           "33333333-3333-3333-3333-333333333333",
+		Name:         name,
+		AdminUserID:  adminUserID,
+		KemPublicKey: kemPublicKey,
+		CreatedAt:    createdAt,
+		UpdatedAt:    createdAt,
 	}
-	for _, userID := range userIDs {
-		s.chatsByUserID[userID] = append(s.chatsByUserID[userID], chat)
+	for _, member := range members {
+		memberChat := chat
+		memberChat.WrappedChatPrivateKey = member.WrappedChatPrivateKey
+		memberChat.KemCiphertext = member.KemCiphertext
+		s.chatsByUserID[member.UserID] = append(s.chatsByUserID[member.UserID], memberChat)
 	}
 	return chat, nil
 }
@@ -251,9 +257,10 @@ func TestChatHandler_Create(t *testing.T) {
 
 	body := []byte(`{
 		"name": "Project Chat",
-		"users_uids": [
-			"` + currentUserID + `",
-			"` + otherUserID + `"
+		"kem_public_key": "` + base64.StdEncoding.EncodeToString([]byte("chat-kem-public-key")) + `",
+		"members": [
+			{"user_id": "` + currentUserID + `", "wrapped_chat_private_key": "` + base64.StdEncoding.EncodeToString([]byte("wrapped-1")) + `", "kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("ct-1")) + `"},
+			{"user_id": "` + otherUserID + `", "wrapped_chat_private_key": "` + base64.StdEncoding.EncodeToString([]byte("wrapped-2")) + `", "kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("ct-2")) + `"}
 		]
 	}`)
 	req := requestWithTokenUser(
@@ -304,9 +311,10 @@ func TestChatHandler_Create_ForbiddenWhenCurrentUserNotInMembers(t *testing.T) {
 
 	body := []byte(`{
 		"name": "Project Chat",
-		"users_uids": [
-			"` + otherUserID + `",
-			"` + thirdUserID + `"
+		"kem_public_key": "` + base64.StdEncoding.EncodeToString([]byte("chat-kem-public-key")) + `",
+		"members": [
+			{"user_id": "` + otherUserID + `", "wrapped_chat_private_key": "` + base64.StdEncoding.EncodeToString([]byte("wrapped-1")) + `", "kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("ct-1")) + `"},
+			{"user_id": "` + thirdUserID + `", "wrapped_chat_private_key": "` + base64.StdEncoding.EncodeToString([]byte("wrapped-2")) + `", "kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("ct-2")) + `"}
 		]
 	}`)
 	req := requestWithTokenUser(

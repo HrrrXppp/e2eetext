@@ -60,7 +60,8 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 type createUserRequest struct {
-	SkipProfile bool `json:"skip_profile"`
+	SkipProfile  bool   `json:"skip_profile"`
+	KemPublicKey []byte `json:"kem_public_key"`
 }
 
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -70,13 +71,13 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	skipProfile, err := decodeCreateUserRequest(r)
+	req, err := decodeCreateUserRequest(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	user, err := h.service.CreateFromToken(r.Context(), tokenUser, skipProfile)
+	user, err := h.service.CreateFromToken(r.Context(), tokenUser, req.SkipProfile, req.KemPublicKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "is required") || strings.Contains(err.Error(), "oidc provider not found") {
 			writeError(w, http.StatusBadRequest, err)
@@ -153,9 +154,9 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAPIUser(h.node, user))
 }
 
-func decodeCreateUserRequest(r *http.Request) (bool, error) {
+func decodeCreateUserRequest(r *http.Request) (createUserRequest, error) {
 	if r.Body == nil || r.Body == http.NoBody {
-		return false, nil
+		return createUserRequest{}, nil
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -164,17 +165,17 @@ func decodeCreateUserRequest(r *http.Request) (bool, error) {
 	var req createUserRequest
 	if err := decoder.Decode(&req); err != nil {
 		if errors.Is(err, io.EOF) {
-			return false, nil
+			return createUserRequest{}, nil
 		}
-		return false, err
+		return createUserRequest{}, err
 	}
 
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return false, errors.New("request body must contain a single JSON object")
+			return createUserRequest{}, errors.New("request body must contain a single JSON object")
 		}
-		return false, err
+		return createUserRequest{}, err
 	}
 
-	return req.SkipProfile, nil
+	return req, nil
 }

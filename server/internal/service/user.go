@@ -26,6 +26,7 @@ type CreateUserInput struct {
 	Subject        string
 	OIDCProviderID string
 	Name           string
+	KemPublicKey   []byte
 }
 
 func (s *UserService) List(ctx context.Context, filter repository.UserFilter) ([]domain.User, error) {
@@ -68,11 +69,15 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (domain
 	if input.OIDCProviderID == "" {
 		return domain.User{}, fmt.Errorf("oidc_provider_id is required")
 	}
+	if len(input.KemPublicKey) == 0 {
+		return domain.User{}, fmt.Errorf("kem_public_key is required")
+	}
 
 	user, err := s.repo.Create(ctx, domain.User{
 		OIDCProviderID: input.OIDCProviderID,
 		Subject:        input.Subject,
 		Name:           input.Name,
+		KemPublicKey:   input.KemPublicKey,
 	})
 	if errors.Is(err, repository.ErrDuplicateUser) {
 		return domain.User{}, repository.ErrDuplicateUser
@@ -84,7 +89,7 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (domain
 	return user, nil
 }
 
-func (s *UserService) CreateFromToken(ctx context.Context, tokenUser TokenUser, skipProfile bool) (domain.User, error) {
+func (s *UserService) CreateFromToken(ctx context.Context, tokenUser TokenUser, skipProfile bool, kemPublicKey []byte) (domain.User, error) {
 	if tokenUser.Subject == "" {
 		return domain.User{}, fmt.Errorf("subject is required")
 	}
@@ -106,6 +111,7 @@ func (s *UserService) CreateFromToken(ctx context.Context, tokenUser TokenUser, 
 		Subject:        tokenUser.Subject,
 		OIDCProviderID: provider.ID,
 		Name:           name,
+		KemPublicKey:   kemPublicKey,
 	})
 }
 

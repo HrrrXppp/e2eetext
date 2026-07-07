@@ -1,17 +1,26 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { NewChatMemberSearch } from "@/components/chat/NewChatMemberSearch";
+import { decodeBase64, encodeBase64 } from "@/lib/bytes";
 import { createChat, type Chat } from "@/lib/chats";
+import { generateKemKeyPair, wrapChatPrivateKeyForMember } from "@/lib/crypto";
+import { saveChatPrivateKey } from "@/lib/keyStore";
 import { userLabel, type User } from "@/lib/users";
 
 type NewChatDialogProps = {
   currentUserId: string;
+  currentUserKemPublicKey: string;
   onClose: () => void;
   onCreated: (chat: Chat) => void;
 };
 
 type DialogView = "form" | "search";
 
-export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDialogProps) {
+export function NewChatDialog({
+  currentUserId,
+  currentUserKemPublicKey,
+  onClose,
+  onCreated,
+}: NewChatDialogProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<DialogView>("form");
@@ -69,10 +78,34 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
     setError(null);
 
     try {
+      const chatKeyPair = generateKemKeyPair();
+      const allMembers = [
+        { id: currentUserId, kemPublicKey: currentUserKemPublicKey },
+        ...members.map((member) => ({ id: member.id, kemPublicKey: member.kemPublicKey })),
+      ];
+
+      const memberInputs = await Promise.all(
+        allMembers.map(async (member) => {
+          const { kemCiphertext, wrappedChatPrivateKey } = await wrapChatPrivateKeyForMember(
+            chatKeyPair.secretKey,
+            decodeBase64(member.kemPublicKey),
+          );
+          return {
+            userId: member.id,
+            wrappedChatPrivateKey: encodeBase64(wrappedChatPrivateKey),
+            kemCiphertext: encodeBase64(kemCiphertext),
+          };
+        }),
+      );
+
       const chat = await createChat({
         name: trimmedName,
-        usersUids: [currentUserId, ...members.map((member) => member.id)],
+        kemPublicKey: encodeBase64(chatKeyPair.publicKey),
+        members: memberInputs,
       });
+
+      await saveChatPrivateKey(currentUserId, chat.id, chatKeyPair.secretKey);
+
       onCreated(chat);
       onClose();
     } catch {

@@ -7,9 +7,12 @@ export type Message = {
   userId: string;
   userName?: string;
   data: string;
+  kemCiphertext: string;
   createdAt: string;
   updatedAt: string;
   unread?: boolean;
+  /** Client-side only: populated after decrypting `data`. Absent if decryption failed. */
+  plaintext?: string;
 };
 
 export async function fetchMessages(chatId: string): Promise<Message[]> {
@@ -30,6 +33,7 @@ type CreateMessageInput = {
   chatId: string;
   userId: string;
   data: string;
+  kemCiphertext: string;
 };
 
 export async function createMessage(input: CreateMessageInput): Promise<Message> {
@@ -43,6 +47,7 @@ export async function createMessage(input: CreateMessageInput): Promise<Message>
       chat_id: input.chatId,
       user_id: input.userId,
       data: input.data,
+      kem_ciphertext: input.kemCiphertext,
     }),
   });
 

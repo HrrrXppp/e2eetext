@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -60,7 +61,7 @@ func (s *stubMessageChatRepo) List(_ context.Context, _ repository.ChatFilter) (
 	return nil, nil
 }
 
-func (s *stubMessageChatRepo) Create(_ context.Context, _ string, _ []string) (domain.Chat, error) {
+func (s *stubMessageChatRepo) Create(_ context.Context, _ string, _ string, _ []byte, _ []repository.ChatMemberKey) (domain.Chat, error) {
 	return domain.Chat{}, nil
 }
 
@@ -319,7 +320,8 @@ func TestMessageHandler_Create(t *testing.T) {
 	body := []byte(`{
 		"chat_id": "` + scopedID(chatID) + `",
 		"user_id": "` + scopedID(userID) + `",
-		"data": "hello world"
+		"data": "hello world",
+		"kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("message-kem-ciphertext")) + `"
 	}`)
 	req := requestWithTokenUser(
 		httptest.NewRequest(http.MethodPost, "/api/v1/message", bytes.NewReader(body)),
@@ -377,7 +379,8 @@ func TestMessageHandler_Create_ForbiddenForOtherChat(t *testing.T) {
 	body := []byte(`{
 		"chat_id": "` + scopedID(chatID) + `",
 		"user_id": "` + scopedID(userID) + `",
-		"data": "hello world"
+		"data": "hello world",
+		"kem_ciphertext": "` + base64.StdEncoding.EncodeToString([]byte("message-kem-ciphertext")) + `"
 	}`)
 	req := requestWithTokenUser(
 		httptest.NewRequest(http.MethodPost, "/api/v1/message", bytes.NewReader(body)),
