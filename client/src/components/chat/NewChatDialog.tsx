@@ -98,6 +98,7 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
     view === "search"
       ? "Find people to add to this chat."
       : "Create a conversation and add members.";
+  const disappearDays = DEFAULT_DISAPPEAR_AFTER_MINUTES / (24 * 60);
 
   return (
     <div className="new-chat-dialog__backdrop" onClick={onClose}>
@@ -143,6 +144,10 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
                 autoComplete="off"
               />
             </label>
+
+            <p className="new-chat-dialog__hint">
+              Messages in this chat disappear after {disappearDays} days.
+            </p>
 
             <div className="new-chat-dialog__members">
               <span className="new-chat-dialog__members-label">Members</span>

@@ -101,6 +101,14 @@ describe("NewChatDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("shows that messages disappear after 60 days", () => {
+    render(
+      <NewChatDialog currentUserId="user-1" onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/Messages in this chat disappear after 60 days/i)).toBeInTheDocument();
+  });
+
   it("returns from search view on escape", () => {
     render(
       <NewChatDialog currentUserId="user-1" onClose={vi.fn()} onCreated={vi.fn()} />,
