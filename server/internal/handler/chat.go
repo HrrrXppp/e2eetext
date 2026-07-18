@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ekhrunov/messenger/server/internal/domain"
 	"github.com/ekhrunov/messenger/server/internal/node"
 	"github.com/ekhrunov/messenger/server/internal/repository"
 	"github.com/ekhrunov/messenger/server/internal/service"
@@ -63,9 +64,10 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 type createChatRequest struct {
-	UsersUIDs []string          `json:"users_uids"`
-	Name      string            `json:"name"`
-	E2EE      *createChatE2EE   `json:"e2ee,omitempty"`
+	UsersUIDs             []string        `json:"users_uids"`
+	Name                  string          `json:"name"`
+	DisappearAfterMinutes *int            `json:"disappear_after_minutes,omitempty"`
+	E2EE                  *createChatE2EE `json:"e2ee,omitempty"`
 }
 
 type createChatE2EE struct {
@@ -125,11 +127,21 @@ func (h *ChatHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	disappearAfterMinutes := domain.DefaultDisappearAfterMinutes
+	if req.DisappearAfterMinutes != nil {
+		disappearAfterMinutes = *req.DisappearAfterMinutes
+	}
+	if disappearAfterMinutes < 1 {
+		writeError(w, http.StatusBadRequest, errors.New("disappear_after_minutes must be positive"))
+		return
+	}
+
 	chat, err := h.e2eeService.CreateChat(r.Context(), service.CreateE2EEChatInput{
-		Name:      req.Name,
-		UsersUIDs: userIDs,
-		KeyID:     keyID,
-		Wraps:     wraps,
+		Name:                  req.Name,
+		UsersUIDs:             userIDs,
+		KeyID:                 keyID,
+		Wraps:                 wraps,
+		DisappearAfterMinutes: disappearAfterMinutes,
 	}, tokenUser)
 	if err != nil {
 		if errors.Is(err, service.ErrChatAccessDenied) {

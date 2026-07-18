@@ -62,6 +62,7 @@ func (r *E2EERepository) CreateChatWithKeys(
 	userIDs []string,
 	keyID, createdBy string,
 	wraps map[string]json.RawMessage,
+	disappearAfterMinutes int,
 ) (domain.Chat, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -71,9 +72,10 @@ func (r *E2EERepository) CreateChatWithKeys(
 
 	var chat domain.Chat
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO chats DEFAULT VALUES
-		RETURNING id, created_at, updated_at`)
-	if err := row.Scan(&chat.ID, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
+		INSERT INTO chats (disappear_after_minutes)
+		VALUES ($1)
+		RETURNING id, disappear_after_minutes, created_at, updated_at`, disappearAfterMinutes)
+	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
 		return domain.Chat{}, fmt.Errorf("insert chat: %w", err)
 	}
 	chat.Name = name

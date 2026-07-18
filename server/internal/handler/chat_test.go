@@ -49,13 +49,17 @@ func (s *stubChatRepo) ListUnreadChatsForUser(_ context.Context, _ string) ([]re
 	return nil, nil
 }
 
-func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string) (domain.Chat, error) {
+func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string, disappearAfterMinutes int) (domain.Chat, error) {
+	if disappearAfterMinutes == 0 {
+		disappearAfterMinutes = domain.DefaultDisappearAfterMinutes
+	}
 	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	chat := domain.Chat{
-		ID:        "33333333-3333-3333-3333-333333333333",
-		Name:      name,
-		CreatedAt: createdAt,
-		UpdatedAt: createdAt,
+		ID:                    "33333333-3333-3333-3333-333333333333",
+		Name:                  name,
+		DisappearAfterMinutes: disappearAfterMinutes,
+		CreatedAt:             createdAt,
+		UpdatedAt:             createdAt,
 	}
 	for _, userID := range userIDs {
 		s.chatsByUserID[userID] = append(s.chatsByUserID[userID], chat)
@@ -126,8 +130,8 @@ func (s *stubE2EERepo) GetIdentityKey(context.Context, string) (domain.UserIdent
 	return domain.UserIdentityKey{}, errors.New("identity key not found")
 }
 
-func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, userIDs []string, _, _ string, _ map[string]json.RawMessage) (domain.Chat, error) {
-	return s.chatRepo.Create(ctx, name, userIDs)
+func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, userIDs []string, _, _ string, _ map[string]json.RawMessage, disappearAfterMinutes int) (domain.Chat, error) {
+	return s.chatRepo.Create(ctx, name, userIDs, disappearAfterMinutes)
 }
 
 func (s *stubE2EERepo) ListKeyWrapsForUser(context.Context, string, string) ([]domain.UserChatKeyWrap, error) {

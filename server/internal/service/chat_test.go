@@ -16,7 +16,7 @@ func (s *chatRepoStub) List(_ context.Context, _ repository.ChatFilter) ([]domai
 	return nil, nil
 }
 
-func (s *chatRepoStub) Create(_ context.Context, _ string, _ []string) (domain.Chat, error) {
+func (s *chatRepoStub) Create(_ context.Context, _ string, _ []string, _ int) (domain.Chat, error) {
 	return domain.Chat{}, nil
 }
 

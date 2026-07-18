@@ -17,6 +17,7 @@ type E2EERepository interface {
 		userIDs []string,
 		keyID, createdBy string,
 		wraps map[string]json.RawMessage,
+		disappearAfterMinutes int,
 	) (domain.Chat, error)
 
 	ListKeyWrapsForUser(ctx context.Context, chatID, userID string) ([]domain.UserChatKeyWrap, error)
