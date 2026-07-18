@@ -9,6 +9,7 @@
 - Rotate user keys
 - Sign message by user key
 - XSS
+- Disappearing messages (chat TTL) — ensure RDS allows `pg_cron` before migrate
 
 # Client
 
