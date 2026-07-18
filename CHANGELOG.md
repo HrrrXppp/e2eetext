@@ -11,7 +11,7 @@ On branches that are not yet merged to `main`, use **`NEXT RELEASE`** as the cha
 
 ## [NEXT RELEASE]
 
-Pre-MVP alpha. Message payloads are stored in PostgreSQL as plaintext; end-to-end encryption is not implemented yet.
+Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end encryption; the server stores only opaque ciphertext and key wraps.
 
 ### Added
 
@@ -24,6 +24,7 @@ Pre-MVP alpha. Message payloads are stored in PostgreSQL as plaintext; end-to-en
 - Chats, messages, unread tracking, and a WebSocket event hub
 - WebSocket endpoint and application route wiring
 - `GET /health` returns `status` and `version`
+- E2EE identity-key and chat key-wrap APIs; chat create requires per-member wraps
 
 #### Client
 
@@ -32,11 +33,14 @@ Pre-MVP alpha. Message payloads are stored in PostgreSQL as plaintext; end-to-en
 - Chats UI, messaging, and real-time WebSocket updates
 - Deploy-time dev instance banner
 - Application version badge in the site header (`version: {version}` from `VERSION`)
+- Hybrid PQ E2EE for chat keys and messages (IndexedDB wrapping keys, per-account identity)
 
 #### Tooling & deployment
 
 - Docker Compose for local development (PostgreSQL, server, client)
 - AWS deployment tooling (ECR image build/push, EC2 compose, ALB setup scripts)
 - Repo-root `VERSION` file shared by server builds, client builds, and documentation
+- Cryptography NIST expert Cursor skill
+- Cursor rule requiring `CHANGELOG.md` updates for notable changes
 
 [NEXT RELEASE]: https://github.com/HrrrXppp/e2eetext/compare/main...HEAD

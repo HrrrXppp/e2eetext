@@ -1,6 +1,6 @@
 # Messenger
 
-Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **Message encryption is not implemented yet** — payloads are stored in PostgreSQL as plaintext until the crypto layer lands. Authentication uses OIDC providers stored in PostgreSQL (Google is seeded by default).
+Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **New chats and messages use end-to-end encryption (E2EE v1)** — the server stores wrapped chat keys and opaque ciphertext only. Authentication uses OIDC providers stored in PostgreSQL (Google is seeded by default).
 
 ## Stack
 
@@ -170,14 +170,54 @@ All routes below require `Authorization: Bearer <id_token>` (or `?token=` for th
 | `POST` | `/api/v1/user` | Create user from auth token (optional body: `{ "skip_profile": true }`) |
 | `GET` | `/api/v1/user/{nodeId}/{localId}` | Get user by scoped ID |
 | `PATCH` | `/api/v1/user/{nodeId}/{localId}` | Update display name (`name` in JSON body) |
+| `PUT` | `/api/v1/user/{nodeId}/{localId}/identity-key` | Upload E2EE identity public key (own user only) |
+| `GET` | `/api/v1/user/{nodeId}/{localId}/identity-key` | Fetch a user's identity public key (authenticated) |
 | `GET` | `/api/v1/chat?user_id=` | List chats for a user (scoped `user_id`; response `id` is scoped) |
-| `POST` | `/api/v1/chat` | Create chat (`name`, `users_uids` with scoped user IDs) |
+| `POST` | `/api/v1/chat` | Create E2EE chat (`name`, `users_uids`, `e2ee.key_id`, `e2ee.wraps`) |
+| `GET` | `/api/v1/chat/{nodeId}/{localId}/key-wraps` | List chat-key wraps for the current member |
 | `GET` | `/api/v1/message?chat_id=` | List messages in a chat (scoped `chat_id`; response `chatId` is scoped) |
 | `POST` | `/api/v1/message` | Create message (`chat_id`, `user_id`, `data`; scoped IDs) |
 | `PATCH` | `/api/v1/message/{nodeId}/{localId}` | Mark message read (`{"unread": false}`) |
 | `GET` | `/api/v1/ws` | WebSocket for realtime events (`chat.added`, `chat.unread`) |
 
 Scoped resource IDs use the form `{nodeId}/{localId}` (e.g. `99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111`).
+
+## End-to-end encryption (v1)
+
+Hybrid **ML-KEM-768 + X25519** identity keys wrap a per-chat symmetric key `K_chat`; message bodies are **AES-256-GCM** (max **100 KiB** plaintext). The server stores public identity keys, wrapped chat keys, and opaque ciphertext in `messages.data` — it cannot decrypt content.
+
+### Algorithm suite
+
+| Purpose | Algorithm |
+|---------|-----------|
+| Identity KEM | ML-KEM-768 + X25519 hybrid (`ml_kem768_x25519`) |
+| Wrap `K_chat` | Hybrid encaps → HKDF-SHA-256 → AES-256-GCM |
+| Message body | HKDF-SHA-256 from `K_chat` → AES-256-GCM |
+
+### Wire types (binary fields are base64url)
+
+**IdentityPublicKey** (server): `{ "v": 1, "alg": "hybrid-kem-mlkem768-x25519", "publicKey": "…" }`
+
+**ChatKeyWrap** (per member): `{ "v": 1, "alg": "hybrid-kem-mlkem768-x25519-aes256gcm", "keyId", "kemCiphertext", "nonce", "ciphertext" }`
+
+**MessageEnvelope** (`messages.data`): `{ "v": 1, "alg": "aes256gcm-chat-key", "keyId", "nonce", "ciphertext" }`
+
+### Client flow
+
+1. **Sign-in** — generate identity keypair if missing; `PUT identity-key`.
+2. **Create chat** — generate `K_chat` + `keyId`; fetch each member's public key; build wraps; `POST /chat` with `e2ee`.
+3. **Open chat** — `GET key-wraps`; unwrap `K_chat`; cache locally (wrapped with the non-extractable device key).
+4. **Send / receive** — encrypt/decrypt `MessageEnvelope` in the client.
+
+Private identity ciphertext is stored per account in `localStorage` (`e2ee_identity_v1:{userId}`) and encrypted with a **non-extractable AES-256-GCM** wrapping key kept in IndexedDB (Web Crypto). That blocks XSS from reading raw wrapping-key bytes out of storage. Active same-origin XSS can still invoke decrypt APIs while the tab is unlocked — a passphrase lock or isolated crypto origin would be needed to close that remaining gap. Export/import backup JSON is available via `exportStoredIdentityBackup(userId)` / `importStoredIdentityBackup(userId, …)`. Sign-out clears that account's local E2EE material.
+
+### v1 limits
+
+- All chats require E2EE (`e2ee` payload mandatory on `POST /chat`).
+- One device per user (`device_id = default`).
+- No key rotation on member remove yet.
+- Chat names remain plaintext.
+- Legacy plaintext messages (non-envelope `data`) are shown as-is.
 
 ## Authentication flow
 
