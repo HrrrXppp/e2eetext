@@ -36,7 +36,9 @@ func (r *MessageRepository) List(ctx context.Context, filter repository.MessageF
 			) AS unread
 		FROM messages m
 		INNER JOIN users u ON u.id = m.user_id
+		INNER JOIN chats c ON c.id = m.chat_id
 		WHERE m.chat_id = $1
+			AND m.created_at > NOW() - (c.disappear_after_minutes * INTERVAL '1 minute')
 		ORDER BY m.created_at ASC`, filter.ChatID, filter.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("list messages: %w", err)

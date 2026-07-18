@@ -20,11 +20,11 @@ func TestChatRepository_List_ByUserID(t *testing.T) {
 	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
-	rows := sqlmock.NewRows([]string{"id", "name", "created_at", "updated_at", "unread_message_count"}).
-		AddRow("11111111-1111-1111-1111-111111111111", "General", createdAt, createdAt, 3).
-		AddRow("22222222-2222-2222-2222-222222222222", "Random", createdAt, createdAt, 0)
+	rows := sqlmock.NewRows([]string{"id", "name", "disappear_after_minutes", "created_at", "updated_at", "unread_message_count"}).
+		AddRow("11111111-1111-1111-1111-111111111111", "General", 86400, createdAt, createdAt, 3).
+		AddRow("22222222-2222-2222-2222-222222222222", "Random", 86400, createdAt, createdAt, 0)
 
-	mock.ExpectQuery(`SELECT c\.id, uc\.name, c\.created_at,[\s\S]+ORDER BY c\.updated_at DESC`).
+	mock.ExpectQuery(`SELECT c\.id,[\s\S]+uc\.name,[\s\S]+c\.disappear_after_minutes,[\s\S]+ORDER BY c\.updated_at DESC`).
 		WithArgs(userID).
 		WillReturnRows(rows)
 
@@ -66,11 +66,12 @@ func TestChatRepository_Create(t *testing.T) {
 	userID1 := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	userID2 := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
-	rows := sqlmock.NewRows([]string{"id", "created_at", "updated_at"}).
-		AddRow(chatID, createdAt, createdAt)
+	rows := sqlmock.NewRows([]string{"id", "disappear_after_minutes", "created_at", "updated_at"}).
+		AddRow(chatID, 86400, createdAt, createdAt)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO chats DEFAULT VALUES\s+RETURNING id, created_at, updated_at`).
+	mock.ExpectQuery(`INSERT INTO chats \(disappear_after_minutes\)\s+VALUES \(\$1\)\s+RETURNING id, disappear_after_minutes, created_at, updated_at`).
+		WithArgs(86400).
 		WillReturnRows(rows)
 	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name\)\s+VALUES \(\$1, \$2, \$3\)`).
 		WithArgs(chatID, userID1, "Project Chat").
@@ -80,7 +81,7 @@ func TestChatRepository_Create(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	chat, err := repo.Create(context.Background(), "Project Chat", []string{userID1, userID2})
+	chat, err := repo.Create(context.Background(), "Project Chat", []string{userID1, userID2}, 86400)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -89,6 +90,9 @@ func TestChatRepository_Create(t *testing.T) {
 	}
 	if chat.Name != "Project Chat" {
 		t.Errorf("Name = %q", chat.Name)
+	}
+	if chat.DisappearAfterMinutes != 86400 {
+		t.Errorf("DisappearAfterMinutes = %d, want 86400", chat.DisappearAfterMinutes)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -218,7 +222,7 @@ func TestChatRepository_UnreadCountsForChat(t *testing.T) {
 				sqlRows.AddRow(row.UserID, row.Count)
 			}
 
-			mock.ExpectQuery(`SELECT uc\.user_id, COUNT\(um\.message_id\)::int[\s\S]+GROUP BY uc\.user_id`).
+			mock.ExpectQuery(`SELECT uc\.user_id,[\s\S]+COUNT\(um\.message_id\)[\s\S]+GROUP BY uc\.user_id`).
 				WithArgs(tt.chatID).
 				WillReturnRows(sqlRows)
 

@@ -1,11 +1,13 @@
 import { API_V1 } from "@/lib/api";
 import { authHeaders } from "@/lib/auth";
+import { DEFAULT_DISAPPEAR_AFTER_MINUTES } from "@/lib/disappear";
 import type { ChatKeyWrap } from "@/lib/e2ee/types";
 import { scopeResourceIds } from "@/lib/scopedId";
 
 export type Chat = {
   id: string;
   name?: string;
+  disappearAfterMinutes: number;
   createdAt: string;
   updatedAt: string;
   unreadMessageCount?: number;
@@ -39,6 +41,7 @@ type CreateChatInput = {
   usersUids: string[];
   keyId: string;
   wraps: { userId: string; wrap: ChatKeyWrap }[];
+  disappearAfterMinutes?: number;
 };
 
 export async function createChat(input: CreateChatInput): Promise<Chat> {
@@ -61,6 +64,7 @@ export async function createChat(input: CreateChatInput): Promise<Chat> {
     body: JSON.stringify({
       name: input.name,
       users_uids: usersUids,
+      disappear_after_minutes: input.disappearAfterMinutes ?? DEFAULT_DISAPPEAR_AFTER_MINUTES,
       e2ee: {
         key_id: input.keyId,
         wraps,

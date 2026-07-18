@@ -5,6 +5,7 @@ import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
 const chat = {
   id: "11111111-1111-1111-1111-111111111111",
   name: "General",
+  disappearAfterMinutes: 86400,
   createdAt: "2026-06-11T12:00:00.000Z",
   updatedAt: "2026-06-11T12:00:00.000Z",
 };

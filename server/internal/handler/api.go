@@ -18,11 +18,12 @@ type apiUser struct {
 }
 
 type apiChat struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
-	UnreadMessageCount int       `json:"unreadMessageCount"`
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name,omitempty"`
+	DisappearAfterMinutes int       `json:"disappearAfterMinutes"`
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
+	UnreadMessageCount    int       `json:"unreadMessageCount"`
 }
 
 type apiMessage struct {
@@ -61,11 +62,12 @@ func toAPIUsers(n node.Registry, users []domain.User) []apiUser {
 
 func toAPIChat(n node.Registry, chat domain.Chat) apiChat {
 	return apiChat{
-		ID:                 n.ScopeID(chat.ID),
-		Name:               chat.Name,
-		CreatedAt:          chat.CreatedAt,
-		UpdatedAt:          chat.UpdatedAt,
-		UnreadMessageCount: chat.UnreadMessageCount,
+		ID:                    n.ScopeID(chat.ID),
+		Name:                  chat.Name,
+		DisappearAfterMinutes: chat.DisappearAfterMinutes,
+		CreatedAt:             chat.CreatedAt,
+		UpdatedAt:             chat.UpdatedAt,
+		UnreadMessageCount:    chat.UnreadMessageCount,
 	}
 }
 

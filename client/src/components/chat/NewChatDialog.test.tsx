@@ -64,6 +64,7 @@ describe("NewChatDialog", () => {
     createChat.mockResolvedValue({
       id: "node/chat-1",
       name: "Project",
+      disappearAfterMinutes: 86400,
       createdAt: "2026-06-11T12:00:00.000Z",
       updatedAt: "2026-06-11T12:00:00.000Z",
     });
@@ -92,6 +93,7 @@ describe("NewChatDialog", () => {
         usersUids: ["user-1", "member-1"],
         keyId: "key-1",
         wraps: expect.any(Array),
+        disappearAfterMinutes: 86400,
       });
     });
     expect(rememberCreatedChatKey).toHaveBeenCalledWith("user-1", "node/chat-1", "key-1", expect.any(Uint8Array));

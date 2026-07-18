@@ -44,8 +44,9 @@ func (s *ChatService) List(ctx context.Context, filter repository.ChatFilter, to
 }
 
 type CreateChatInput struct {
-	Name      string
-	UsersUIDs []string
+	Name                  string
+	UsersUIDs             []string
+	DisappearAfterMinutes int
 }
 
 func (s *ChatService) Create(ctx context.Context, input CreateChatInput, tokenUser TokenUser) (domain.Chat, error) {
@@ -65,6 +66,14 @@ func (s *ChatService) Create(ctx context.Context, input CreateChatInput, tokenUs
 		return domain.Chat{}, fmt.Errorf("users_uids is required")
 	}
 
+	disappearAfterMinutes := input.DisappearAfterMinutes
+	if disappearAfterMinutes == 0 {
+		disappearAfterMinutes = domain.DefaultDisappearAfterMinutes
+	}
+	if disappearAfterMinutes < 1 {
+		return domain.Chat{}, fmt.Errorf("disappear_after_minutes must be positive")
+	}
+
 	currentUserID, err := ResolveCurrentUserID(ctx, tokenUser, s.userRepo, s.oidcProviderRepo)
 	if err != nil {
 		return domain.Chat{}, err
@@ -73,5 +82,5 @@ func (s *ChatService) Create(ctx context.Context, input CreateChatInput, tokenUs
 		return domain.Chat{}, ErrChatAccessDenied
 	}
 
-	return s.repo.Create(ctx, name, userIDs)
+	return s.repo.Create(ctx, name, userIDs, disappearAfterMinutes)
 }

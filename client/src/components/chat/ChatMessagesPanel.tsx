@@ -1,6 +1,7 @@
-import { FormEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMarkMessageReadOnView } from "@/hooks/useMarkMessageReadOnView";
 import { formatChatUpdatedAt, type Chat } from "@/lib/chats";
+import { formatDisappearCountdown } from "@/lib/disappear";
 import type { Message } from "@/lib/messages";
 import { userLabel } from "@/lib/users";
 
@@ -43,6 +44,7 @@ export function ChatMessagesPanel({
   onMarkRead,
 }: ChatMessagesPanelProps) {
   const [draft, setDraft] = useState("");
+  const [, setTick] = useState(0);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const unreadDividerRef = useRef<HTMLDivElement>(null);
   const scrolledToUnreadForChatRef = useRef<string | null>(null);
@@ -73,6 +75,14 @@ export function ChatMessagesPanel({
     scrolledToUnreadForChatRef.current = chat.id;
   }, [chat, loading, error, unreadDividerIndex]);
 
+  useEffect(() => {
+    if (!chat || messages.length === 0) {
+      return;
+    }
+    const id = window.setInterval(() => setTick((value) => value + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [chat, messages.length]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = draft.trim();
@@ -100,6 +110,8 @@ export function ChatMessagesPanel({
           <p className="chats-page__panel-meta">
             Updated{" "}
             <time dateTime={chat.updatedAt}>{formatChatUpdatedAt(chat.updatedAt)}</time>
+            {" · "}
+            Messages disappear after {Math.round(chat.disappearAfterMinutes / (24 * 60))}d
           </p>
         </div>
       </header>
@@ -144,6 +156,8 @@ export function ChatMessagesPanel({
                     <p className="chats-page__message-text">{message.data}</p>
                     <time className="chats-page__message-time" dateTime={message.createdAt}>
                       {formatMessageTime(message.createdAt)}
+                      {" · "}
+                      {formatDisappearCountdown(message.createdAt, chat.disappearAfterMinutes)}
                     </time>
                   </article>
                 </li>
