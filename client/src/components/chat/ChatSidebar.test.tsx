@@ -7,6 +7,7 @@ const chats: Chat[] = [
   {
     id: "node/chat-1",
     name: "General",
+    disappearAfterMinutes: 86400,
     createdAt: "2026-06-11T12:00:00.000Z",
     updatedAt: "2026-06-11T12:00:00.000Z",
     unreadMessageCount: 3,
@@ -14,6 +15,7 @@ const chats: Chat[] = [
   {
     id: "node/chat-2",
     name: "",
+    disappearAfterMinutes: 86400,
     createdAt: "2026-06-10T12:00:00.000Z",
     updatedAt: "2026-06-10T12:00:00.000Z",
     unreadMessageCount: 0,

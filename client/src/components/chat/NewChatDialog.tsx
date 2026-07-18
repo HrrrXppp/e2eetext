@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { NewChatMemberSearch } from "@/components/chat/NewChatMemberSearch";
 import { createChat, type Chat } from "@/lib/chats";
+import { DEFAULT_DISAPPEAR_AFTER_MINUTES, formatDisappearAt, messageExpiresAt } from "@/lib/disappear";
 import { prepareE2EEChatCreation, rememberCreatedChatKey } from "@/lib/e2ee/session";
 import { userLabel, type User } from "@/lib/users";
 
@@ -80,6 +81,7 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
         usersUids: memberIds,
         keyId: prepared.keyId,
         wraps: prepared.wraps,
+        disappearAfterMinutes: DEFAULT_DISAPPEAR_AFTER_MINUTES,
       });
       await rememberCreatedChatKey(currentUserId, chat.id, prepared.keyId, prepared.chatKey);
       onCreated(chat);
@@ -96,6 +98,9 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
     view === "search"
       ? "Find people to add to this chat."
       : "Create a conversation and add members.";
+  const exampleSentAt = useMemo(() => new Date().toISOString(), []);
+  const exampleDisappearAt = formatDisappearAt(exampleSentAt, DEFAULT_DISAPPEAR_AFTER_MINUTES);
+  const exampleDisappearAtIso = messageExpiresAt(exampleSentAt, DEFAULT_DISAPPEAR_AFTER_MINUTES).toISOString();
 
   return (
     <div className="new-chat-dialog__backdrop" onClick={onClose}>
@@ -141,6 +146,12 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
                 autoComplete="off"
               />
             </label>
+
+            <p className="new-chat-dialog__hint">
+              Messages disappear {DEFAULT_DISAPPEAR_AFTER_MINUTES / (24 * 60)} days after they are sent. A
+              message sent now disappears on{" "}
+              <time dateTime={exampleDisappearAtIso}>{exampleDisappearAt}</time>.
+            </p>
 
             <div className="new-chat-dialog__members">
               <span className="new-chat-dialog__members-label">Members</span>

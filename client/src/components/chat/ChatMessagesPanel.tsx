@@ -1,6 +1,7 @@
 import { FormEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMarkMessageReadOnView } from "@/hooks/useMarkMessageReadOnView";
 import { formatChatUpdatedAt, type Chat } from "@/lib/chats";
+import { formatDisappearAt, messageExpiresAt } from "@/lib/disappear";
 import type { Message } from "@/lib/messages";
 import { userLabel } from "@/lib/users";
 
@@ -100,6 +101,8 @@ export function ChatMessagesPanel({
           <p className="chats-page__panel-meta">
             Updated{" "}
             <time dateTime={chat.updatedAt}>{formatChatUpdatedAt(chat.updatedAt)}</time>
+            {" · "}
+            Messages disappear after {Math.round(chat.disappearAfterMinutes / (24 * 60))}d
           </p>
         </div>
       </header>
@@ -142,9 +145,18 @@ export function ChatMessagesPanel({
                       {userLabel(message.userName, message.userId)}
                     </p>
                     <p className="chats-page__message-text">{message.data}</p>
-                    <time className="chats-page__message-time" dateTime={message.createdAt}>
-                      {formatMessageTime(message.createdAt)}
-                    </time>
+                    <p className="chats-page__message-time">
+                      <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+                      {" · disappears "}
+                      <time
+                        dateTime={messageExpiresAt(
+                          message.createdAt,
+                          chat.disappearAfterMinutes,
+                        ).toISOString()}
+                      >
+                        {formatDisappearAt(message.createdAt, chat.disappearAfterMinutes)}
+                      </time>
+                    </p>
                   </article>
                 </li>
               );
