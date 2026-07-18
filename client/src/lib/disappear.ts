@@ -1,12 +1,6 @@
 export const DEFAULT_DISAPPEAR_AFTER_MINUTES = 60 * 24 * 60; // 60 days
 
-export const DISAPPEAR_AFTER_PRESETS = [
-  { label: "1 day", minutes: 24 * 60 },
-  { label: "7 days", minutes: 7 * 24 * 60 },
-  { label: "30 days", minutes: 30 * 24 * 60 },
-  { label: "60 days", minutes: DEFAULT_DISAPPEAR_AFTER_MINUTES },
-] as const;
-
+/** Expiry instant = message createdAt plus the chat's TTL in minutes. */
 export function messageExpiresAt(createdAt: string, disappearAfterMinutes: number): Date {
   return new Date(new Date(createdAt).getTime() + disappearAfterMinutes * 60_000);
 }

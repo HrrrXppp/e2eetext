@@ -227,9 +227,9 @@ Chat-level TTL only. Column `chats.disappear_after_minutes` (API `disappearAfter
 
 There is no per-message `expires_at`. Changing a chat’s TTL retargets existing messages.
 
-- **List / unread** — server filters out expired rows.
-- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose builds Postgres from [`maintenance/postgres/Dockerfile`](maintenance/postgres/Dockerfile) (Postgres 16 + `postgresql-16-cron`) with `shared_preload_libraries=pg_cron` and `cron.database_name=messenger`. On AWS RDS, enable the `pg_cron` extension in the parameter group / allowed extensions before migrating.
-- **Client** — create-chat preset; countdown from `createdAt` + chat TTL; local drop on a timer.
+- **List / unread** — unchanged queries; expired rows are removed by purge.
+- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose builds Postgres inline (`dockerfile_inline` in `docker-compose.yml`: Postgres 16 + `postgresql-16-cron`) with `shared_preload_libraries=pg_cron` and `cron.database_name=messenger`. On AWS RDS, enable the `pg_cron` extension in the parameter group / allowed extensions before migrating.
+- **Client** — default 60-day TTL on create; countdown from `createdAt` + chat TTL; local drop on a timer.
 
 ## Authentication flow
 

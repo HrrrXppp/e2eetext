@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { NewChatMemberSearch } from "@/components/chat/NewChatMemberSearch";
 import { createChat, type Chat } from "@/lib/chats";
-import { DEFAULT_DISAPPEAR_AFTER_MINUTES, DISAPPEAR_AFTER_PRESETS } from "@/lib/disappear";
+import { DEFAULT_DISAPPEAR_AFTER_MINUTES } from "@/lib/disappear";
 import { prepareE2EEChatCreation, rememberCreatedChatKey } from "@/lib/e2ee/session";
 import { userLabel, type User } from "@/lib/users";
 
@@ -18,7 +18,6 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
   const dialogRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<DialogView>("form");
   const [name, setName] = useState("");
-  const [disappearAfterMinutes, setDisappearAfterMinutes] = useState(DEFAULT_DISAPPEAR_AFTER_MINUTES);
   const [members, setMembers] = useState<User[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +81,7 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
         usersUids: memberIds,
         keyId: prepared.keyId,
         wraps: prepared.wraps,
-        disappearAfterMinutes,
+        disappearAfterMinutes: DEFAULT_DISAPPEAR_AFTER_MINUTES,
       });
       await rememberCreatedChatKey(currentUserId, chat.id, prepared.keyId, prepared.chatKey);
       onCreated(chat);
@@ -143,20 +142,6 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
                 placeholder="Project team"
                 autoComplete="off"
               />
-            </label>
-
-            <label className="new-chat-dialog__field">
-              <span>Messages disappear after</span>
-              <select
-                value={disappearAfterMinutes}
-                onChange={(event) => setDisappearAfterMinutes(Number(event.target.value))}
-              >
-                {DISAPPEAR_AFTER_PRESETS.map((preset) => (
-                  <option key={preset.minutes} value={preset.minutes}>
-                    {preset.label}
-                  </option>
-                ))}
-              </select>
             </label>
 
             <div className="new-chat-dialog__members">

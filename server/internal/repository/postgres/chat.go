@@ -26,13 +26,10 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 			c.disappear_after_minutes,
 			c.created_at,
 			c.updated_at,
-			COUNT(um.message_id) FILTER (
-				WHERE m.created_at > NOW() - (c.disappear_after_minutes * INTERVAL '1 minute')
-			)::int AS unread_message_count
+			COUNT(um.message_id)::int AS unread_message_count
 		FROM chats c
 		INNER JOIN user_chats uc ON uc.chat_id = c.id AND uc.user_id = $1
 		LEFT JOIN unread_messages um ON um.chat_id = c.id AND um.user_id = $1
-		LEFT JOIN messages m ON m.id = um.message_id
 		GROUP BY c.id, uc.name, c.disappear_after_minutes, c.created_at, c.updated_at
 		ORDER BY c.updated_at DESC`, filter.UserID)
 	if err != nil {
@@ -105,15 +102,10 @@ func (r *ChatRepository) UserBelongsToChat(ctx context.Context, chatID, userID s
 
 func (r *ChatRepository) UnreadCountsForChat(ctx context.Context, chatID string) ([]repository.ChatUnreadCount, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT uc.user_id,
-			COUNT(um.message_id) FILTER (
-				WHERE m.created_at > NOW() - (c.disappear_after_minutes * INTERVAL '1 minute')
-			)::int
+		SELECT uc.user_id, COUNT(um.message_id)::int
 		FROM user_chats uc
-		INNER JOIN chats c ON c.id = uc.chat_id
 		LEFT JOIN unread_messages um
 			ON um.chat_id = uc.chat_id AND um.user_id = uc.user_id
-		LEFT JOIN messages m ON m.id = um.message_id
 		WHERE uc.chat_id = $1
 		GROUP BY uc.user_id`, chatID)
 	if err != nil {
@@ -141,9 +133,7 @@ func (r *ChatRepository) ListUnreadChatsForUser(ctx context.Context, userID stri
 		SELECT um.chat_id, COUNT(um.message_id)::int, c.updated_at
 		FROM unread_messages um
 		INNER JOIN chats c ON c.id = um.chat_id
-		INNER JOIN messages m ON m.id = um.message_id
 		WHERE um.user_id = $1
-			AND m.created_at > NOW() - (c.disappear_after_minutes * INTERVAL '1 minute')
 		GROUP BY um.chat_id, c.updated_at
 		ORDER BY c.updated_at DESC`, userID)
 	if err != nil {

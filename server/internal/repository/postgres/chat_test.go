@@ -222,7 +222,7 @@ func TestChatRepository_UnreadCountsForChat(t *testing.T) {
 				sqlRows.AddRow(row.UserID, row.Count)
 			}
 
-			mock.ExpectQuery(`SELECT uc\.user_id,[\s\S]+COUNT\(um\.message_id\)[\s\S]+GROUP BY uc\.user_id`).
+			mock.ExpectQuery(`SELECT uc\.user_id, COUNT\(um\.message_id\)::int[\s\S]+GROUP BY uc\.user_id`).
 				WithArgs(tt.chatID).
 				WillReturnRows(sqlRows)
 
