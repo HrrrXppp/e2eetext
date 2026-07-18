@@ -20,6 +20,7 @@ client/.env.local
 # Environment
 .env
 .env.local
+.github-token.local
 
 # Server secrets
 server/config.json

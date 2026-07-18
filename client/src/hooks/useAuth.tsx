@@ -9,6 +9,8 @@ import {
 } from "react";
 import { clearIdToken, getIdToken, hasUsableSession, refreshAuthTokensIfNeeded, startTokenRefreshLoop } from "@/lib/auth";
 import { parseIdToken } from "@/lib/idToken";
+import { ensureIdentityKeys } from "@/lib/e2ee/session";
+import { clearE2EEState } from "@/lib/e2ee/storage";
 import { fetchAuthProviders, findProviderBySlug } from "@/lib/oidcProviders";
 import { consumeSkipProfileOnCreate } from "@/lib/signInPreferences";
 import { ensureUserRegistered } from "@/lib/users";
@@ -104,6 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           provider: tokenUser.provider,
           oidcProviderId: dbUser.oidcProviderId,
         });
+
+        void ensureIdentityKeys(dbUser.id).catch(() => {
+          // Identity upload can be retried on next sign-in or chat action.
+        });
       } catch {
         if (active) {
           clearIdToken();
@@ -129,15 +135,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return startTokenRefreshLoop(() => {
+      if (user?.id) {
+        void clearE2EEState(user.id);
+      }
       clearIdToken();
       setUser(null);
     });
   }, [user]);
 
   const signOut = useCallback(() => {
+    if (user?.id) {
+      void clearE2EEState(user.id);
+    }
     clearIdToken();
     setUser(null);
-  }, []);
+  }, [user?.id]);
 
   const setDisplayName = useCallback((name?: string) => {
     setUser((current) => (current ? { ...current, name } : null));

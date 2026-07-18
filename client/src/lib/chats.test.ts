@@ -11,6 +11,15 @@ const sampleChat = {
   updatedAt: "2026-06-11T12:00:00.000Z",
 };
 
+const sampleWrap = {
+  v: 1 as const,
+  alg: "hybrid-kem-mlkem768-x25519-aes256gcm" as const,
+  keyId: "key-1",
+  kemCiphertext: "a",
+  nonce: "b",
+  ciphertext: "c",
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -53,7 +62,7 @@ describe("createChat", () => {
   const scopedUserC = `${testNodeId}/${userC}`;
   const scopedUserD = `${testNodeId}/${userD}`;
 
-  function mockCreateChat(response: Chat = sampleChat) {
+  function mockCreateChat(response: typeof sampleChat = sampleChat) {
     localStorage.setItem("messenger_id_token", "token");
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -70,17 +79,34 @@ describe("createChat", () => {
         Authorization: "Bearer token",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, users_uids: usersUids }),
+      body: JSON.stringify({
+        name,
+        users_uids: usersUids,
+        e2ee: {
+          key_id: "key-1",
+          wraps: usersUids.map((userId) => ({
+            user_id: userId,
+            wrap: sampleWrap,
+          })),
+        },
+      }),
     });
   }
+
+  const baseInput = {
+    keyId: "key-1",
+    wraps: [{ userId: userA, wrap: sampleWrap }],
+  };
 
   it("creates a solo chat with only the current user", async () => {
     const fetchMock = mockCreateChat();
 
     await expect(
       createChat({
+        ...baseInput,
         name: "Notes",
         usersUids: [userA],
+        wraps: [{ userId: userA, wrap: sampleWrap }],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -92,8 +118,13 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "General",
         usersUids: [userA, userB],
+        wraps: [
+          { userId: userA, wrap: sampleWrap },
+          { userId: userB, wrap: sampleWrap },
+        ],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -105,8 +136,14 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "Project",
         usersUids: [userA, userB, userC],
+        wraps: [
+          { userId: userA, wrap: sampleWrap },
+          { userId: userB, wrap: sampleWrap },
+          { userId: userC, wrap: sampleWrap },
+        ],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -118,8 +155,15 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "Team",
         usersUids: [userA, userB, userC, userD],
+        wraps: [
+          { userId: userA, wrap: sampleWrap },
+          { userId: userB, wrap: sampleWrap },
+          { userId: userC, wrap: sampleWrap },
+          { userId: userD, wrap: sampleWrap },
+        ],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -131,8 +175,14 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "General",
         usersUids: [userA, scopedUserB, scopedUserC],
+        wraps: [
+          { userId: userA, wrap: sampleWrap },
+          { userId: scopedUserB, wrap: sampleWrap },
+          { userId: scopedUserC, wrap: sampleWrap },
+        ],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -144,8 +194,14 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "General",
         usersUids: [userB, userA, userC],
+        wraps: [
+          { userId: userB, wrap: sampleWrap },
+          { userId: userA, wrap: sampleWrap },
+          { userId: userC, wrap: sampleWrap },
+        ],
       }),
     ).resolves.toEqual(sampleChat);
 
@@ -163,8 +219,13 @@ describe("createChat", () => {
 
     await expect(
       createChat({
+        ...baseInput,
         name: "General",
         usersUids: [userA, userB],
+        wraps: [
+          { userId: userA, wrap: sampleWrap },
+          { userId: userB, wrap: sampleWrap },
+        ],
       }),
     ).rejects.toThrow("failed to create chat");
   });

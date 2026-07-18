@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { NewChatDialog } from "@/components/chat/NewChatDialog";
 
 const createChat = vi.fn();
+const prepareE2EEChatCreation = vi.fn();
+const rememberCreatedChatKey = vi.fn();
 
 vi.mock("@/lib/chats", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/chats")>();
@@ -11,6 +13,11 @@ vi.mock("@/lib/chats", async (importOriginal) => {
     createChat: (...args: unknown[]) => createChat(...args),
   };
 });
+
+vi.mock("@/lib/e2ee/session", () => ({
+  prepareE2EEChatCreation: (...args: unknown[]) => prepareE2EEChatCreation(...args),
+  rememberCreatedChatKey: (...args: unknown[]) => rememberCreatedChatKey(...args),
+}));
 
 vi.mock("@/components/chat/NewChatMemberSearch", () => ({
   NewChatMemberSearch: ({
@@ -34,6 +41,7 @@ vi.mock("@/components/chat/NewChatMemberSearch", () => ({
 describe("NewChatDialog", () => {
   it("requires chat name before create", async () => {
     createChat.mockReset();
+    prepareE2EEChatCreation.mockReset();
     render(
       <NewChatDialog currentUserId="user-1" onClose={vi.fn()} onCreated={vi.fn()} />,
     );
@@ -45,12 +53,21 @@ describe("NewChatDialog", () => {
   });
 
   it("creates chat with current user and added members", async () => {
+    prepareE2EEChatCreation.mockResolvedValue({
+      keyId: "key-1",
+      chatKey: new Uint8Array(32),
+      wraps: [
+        { userId: "user-1", wrap: { v: 1, alg: "hybrid-kem-mlkem768-x25519-aes256gcm", keyId: "key-1", kemCiphertext: "a", nonce: "b", ciphertext: "c" } },
+        { userId: "member-1", wrap: { v: 1, alg: "hybrid-kem-mlkem768-x25519-aes256gcm", keyId: "key-1", kemCiphertext: "d", nonce: "e", ciphertext: "f" } },
+      ],
+    });
     createChat.mockResolvedValue({
       id: "node/chat-1",
       name: "Project",
       createdAt: "2026-06-11T12:00:00.000Z",
       updatedAt: "2026-06-11T12:00:00.000Z",
     });
+    rememberCreatedChatKey.mockResolvedValue(undefined);
     const onCreated = vi.fn();
     const onClose = vi.fn();
 
@@ -64,11 +81,20 @@ describe("NewChatDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create chat" }));
 
     await waitFor(() => {
+      expect(prepareE2EEChatCreation).toHaveBeenCalledWith({
+        currentUserId: "user-1",
+        memberUserIds: ["user-1", "member-1"],
+      });
+    });
+    await waitFor(() => {
       expect(createChat).toHaveBeenCalledWith({
         name: "Project",
         usersUids: ["user-1", "member-1"],
+        keyId: "key-1",
+        wraps: expect.any(Array),
       });
     });
+    expect(rememberCreatedChatKey).toHaveBeenCalledWith("user-1", "node/chat-1", "key-1", expect.any(Uint8Array));
     expect(onCreated).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });

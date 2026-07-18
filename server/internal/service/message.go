@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ekhrunov/messenger/server/internal/domain"
+	"github.com/ekhrunov/messenger/server/internal/e2ee"
 	"github.com/ekhrunov/messenger/server/internal/repository"
 )
 
@@ -68,6 +69,9 @@ func (s *MessageService) Create(ctx context.Context, input CreateMessageInput, t
 	}
 	if input.Data == "" {
 		return domain.Message{}, fmt.Errorf("data is required")
+	}
+	if len(input.Data) > e2ee.MaxMessageDataLen {
+		return domain.Message{}, fmt.Errorf("data exceeds maximum length")
 	}
 
 	if err := requireCurrentUserMatches(ctx, tokenUser, input.UserID, s.userRepo, s.oidcProviderRepo, ErrMessageAccessDenied); err != nil {

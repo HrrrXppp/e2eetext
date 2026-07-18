@@ -1,5 +1,6 @@
 import { API_V1 } from "@/lib/api";
 import { authHeaders } from "@/lib/auth";
+import type { ChatKeyWrap } from "@/lib/e2ee/types";
 import { scopeResourceIds } from "@/lib/scopedId";
 
 export type Chat = {
@@ -36,10 +37,20 @@ export async function fetchChats(userId: string): Promise<Chat[]> {
 type CreateChatInput = {
   name: string;
   usersUids: string[];
+  keyId: string;
+  wraps: { userId: string; wrap: ChatKeyWrap }[];
 };
 
 export async function createChat(input: CreateChatInput): Promise<Chat> {
-  const usersUids = scopeResourceIds(input.usersUids);
+  const scoped = scopeResourceIds([
+    ...input.usersUids,
+    ...input.wraps.map((item) => item.userId),
+  ]);
+  const usersUids = scoped.slice(0, input.usersUids.length);
+  const wraps = input.wraps.map((item, index) => ({
+    user_id: scoped[input.usersUids.length + index],
+    wrap: item.wrap,
+  }));
 
   const response = await fetch(`${API_V1}/chat`, {
     method: "POST",
@@ -50,6 +61,10 @@ export async function createChat(input: CreateChatInput): Promise<Chat> {
     body: JSON.stringify({
       name: input.name,
       users_uids: usersUids,
+      e2ee: {
+        key_id: input.keyId,
+        wraps,
+      },
     }),
   });
 
