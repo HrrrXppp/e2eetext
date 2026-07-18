@@ -173,7 +173,7 @@ All routes below require `Authorization: Bearer <id_token>` (or `?token=` for th
 | `PUT` | `/api/v1/user/{nodeId}/{localId}/identity-key` | Upload E2EE identity public key (own user only) |
 | `GET` | `/api/v1/user/{nodeId}/{localId}/identity-key` | Fetch a user's identity public key (authenticated) |
 | `GET` | `/api/v1/chat?user_id=` | List chats for a user (scoped `user_id`; response `id` is scoped) |
-| `POST` | `/api/v1/chat` | Create E2EE chat (`name`, `users_uids`, `e2ee.key_id`, `e2ee.wraps`) |
+| `POST` | `/api/v1/chat` | Create E2EE chat (`name`, `users_uids`, optional `disappear_after_minutes`, `e2ee.key_id`, `e2ee.wraps`) |
 | `GET` | `/api/v1/chat/{nodeId}/{localId}/key-wraps` | List chat-key wraps for the current member |
 | `GET` | `/api/v1/message?chat_id=` | List messages in a chat (scoped `chat_id`; response `chatId` is scoped) |
 | `POST` | `/api/v1/message` | Create message (`chat_id`, `user_id`, `data`; scoped IDs) |
@@ -218,6 +218,18 @@ Private identity ciphertext is stored per account in `localStorage` (`e2ee_ident
 - No key rotation on member remove yet.
 - Chat names remain plaintext.
 - Legacy plaintext messages (non-envelope `data`) are shown as-is.
+
+## Disappearing messages
+
+Chat-level TTL only. Column `chats.disappear_after_minutes` (API `disappearAfterMinutes`), **default 60 days (86400 minutes)**. A message is live while:
+
+`messages.created_at + disappear_after_minutes > now()`
+
+There is no per-message `expires_at`. Changing a chat’s TTL retargets existing messages.
+
+- **List / unread** — unchanged queries; expired rows are removed by purge.
+- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose builds Postgres inline (`dockerfile_inline` in `docker-compose.yml`: Postgres 16 + `postgresql-16-cron`) with `shared_preload_libraries=pg_cron` and `cron.database_name=messenger`. On AWS RDS, enable the `pg_cron` extension in the parameter group / allowed extensions before migrating.
+- **Client** — default 60-day TTL on create; countdown from `createdAt` + chat TTL; local drop on a timer.
 
 ## Authentication flow
 

@@ -25,6 +25,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - WebSocket endpoint and application route wiring
 - `GET /health` returns `status` and `version`
 - E2EE identity-key and chat key-wrap APIs; chat create requires per-member wraps
+- Disappearing messages: chat-level TTL (`disappear_after_minutes`, default 60 days) using `messages.created_at`; `pg_cron` schedules `purge_expired_messages()` in migration `000006`
 
 #### Client
 
@@ -34,10 +35,11 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Deploy-time dev instance banner
 - Application version badge in the site header (`version: {version}` from `VERSION`)
 - Hybrid PQ E2EE for chat keys and messages (IndexedDB wrapping keys, per-account identity)
+- Disappearing messages: each message shows absolute disappear date/time (chat TTL default 60 days)
 
 #### Tooling & deployment
 
-- Docker Compose for local development (PostgreSQL, server, client)
+- Docker Compose for local development (PostgreSQL with `pg_cron`, server, client)
 - AWS deployment tooling (ECR image build/push, EC2 compose, ALB setup scripts)
 - Repo-root `VERSION` file shared by server builds, client builds, and documentation
 - Cryptography NIST expert Cursor skill

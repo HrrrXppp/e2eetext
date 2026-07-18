@@ -64,6 +64,7 @@ describe("NewChatDialog", () => {
     createChat.mockResolvedValue({
       id: "node/chat-1",
       name: "Project",
+      disappearAfterMinutes: 86400,
       createdAt: "2026-06-11T12:00:00.000Z",
       updatedAt: "2026-06-11T12:00:00.000Z",
     });
@@ -92,11 +93,24 @@ describe("NewChatDialog", () => {
         usersUids: ["user-1", "member-1"],
         keyId: "key-1",
         wraps: expect.any(Array),
+        disappearAfterMinutes: 86400,
       });
     });
     expect(rememberCreatedChatKey).toHaveBeenCalledWith("user-1", "node/chat-1", "key-1", expect.any(Uint8Array));
     expect(onCreated).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows the absolute disappear date and time for a message sent now", () => {
+    render(
+      <NewChatDialog currentUserId="user-1" onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/A message sent now disappears on/i)).toBeInTheDocument();
+    const stamp = document.querySelector(".new-chat-dialog__hint time");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.getAttribute("dateTime")).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(stamp?.textContent?.length).toBeGreaterThan(0);
   });
 
   it("returns from search view on escape", () => {

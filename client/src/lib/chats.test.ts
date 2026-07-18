@@ -7,6 +7,7 @@ const scopedUserId = `${testNodeId}/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
 const sampleChat = {
   id: `${testNodeId}/11111111-1111-1111-1111-111111111111`,
   name: "General",
+  disappearAfterMinutes: 86400,
   createdAt: "2026-06-11T12:00:00.000Z",
   updatedAt: "2026-06-11T12:00:00.000Z",
 };
@@ -82,6 +83,7 @@ describe("createChat", () => {
       body: JSON.stringify({
         name,
         users_uids: usersUids,
+        disappear_after_minutes: 86400,
         e2ee: {
           key_id: "key-1",
           wraps: usersUids.map((userId) => ({
