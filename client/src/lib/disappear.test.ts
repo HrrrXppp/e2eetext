@@ -1,9 +1,7 @@
-import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DISAPPEAR_AFTER_MINUTES,
   filterActiveMessages,
   formatDisappearAt,
-  formatDisappearCountdown,
   isMessageExpired,
   messageExpiresAt,
 } from "@/lib/disappear";
@@ -34,11 +32,5 @@ describe("disappear helpers", () => {
     const formatted = formatDisappearAt(createdAt, 60);
     expect(formatted.length).toBeGreaterThan(0);
     expect(formatted).toMatch(/\d/);
-  });
-
-  it("formats countdown", () => {
-    const createdAt = "2026-01-01T00:00:00.000Z";
-    const now = Date.parse("2026-01-01T00:30:00.000Z");
-    expect(formatDisappearCountdown(createdAt, 60, now)).toBe("disappears in 30m");
   });
 });

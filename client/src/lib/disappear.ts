@@ -26,23 +26,3 @@ export function formatDisappearAt(createdAt: string, disappearAfterMinutes: numb
     minute: "2-digit",
   });
 }
-
-export function formatDisappearCountdown(createdAt: string, disappearAfterMinutes: number, now = Date.now()): string {
-  const msLeft = messageExpiresAt(createdAt, disappearAfterMinutes).getTime() - now;
-  if (msLeft <= 0) {
-    return "expired";
-  }
-
-  const minutesLeft = Math.ceil(msLeft / 60_000);
-  if (minutesLeft < 60) {
-    return `disappears in ${minutesLeft}m`;
-  }
-
-  const hoursLeft = Math.ceil(minutesLeft / 60);
-  if (hoursLeft < 48) {
-    return `disappears in ${hoursLeft}h`;
-  }
-
-  const daysLeft = Math.ceil(hoursLeft / 24);
-  return `disappears in ${daysLeft}d`;
-}

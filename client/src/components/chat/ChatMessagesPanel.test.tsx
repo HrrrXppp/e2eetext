@@ -61,6 +61,28 @@ describe("ChatMessagesPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks each message with its absolute disappear date and time", () => {
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={messagesWithUnread}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    const stamps = document.querySelectorAll(".chats-page__message-time time");
+    expect(stamps.length).toBe(4);
+    expect(stamps[1]).toHaveAttribute("dateTime", "2026-08-10T12:00:00.000Z");
+    expect(stamps[3]).toHaveAttribute("dateTime", "2026-08-10T12:01:00.000Z");
+    expect(screen.getAllByText(/disappears/i).length).toBeGreaterThanOrEqual(2);
+  });
+
   it("scrolls to the unread divider once when a chat opens", () => {
     const scrollIntoView = vi
       .spyOn(HTMLElement.prototype, "scrollIntoView")

@@ -35,7 +35,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Deploy-time dev instance banner
 - Application version badge in the site header (`version: {version}` from `VERSION`)
 - Hybrid PQ E2EE for chat keys and messages (IndexedDB wrapping keys, per-account identity)
-- Disappearing-message countdown (chat TTL default 60 days)
+- Disappearing messages: each message shows absolute disappear date/time (chat TTL default 60 days)
 
 #### Tooling & deployment
 
