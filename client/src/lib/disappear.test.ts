@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DISAPPEAR_AFTER_MINUTES,
   filterActiveMessages,
+  formatDisappearAt,
   formatDisappearCountdown,
   isMessageExpired,
   messageExpiresAt,
@@ -26,6 +27,11 @@ describe("disappear helpers", () => {
     ];
     expect(filterActiveMessages(messages, 60, now).map((m) => m.id)).toEqual(["b"]);
     expect(isMessageExpired(messages[0].createdAt, 60, now)).toBe(true);
+  });
+
+  it("formats an absolute disappear timestamp", () => {
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    expect(formatDisappearAt(createdAt, 60)).toMatch(/2026/);
   });
 
   it("formats countdown", () => {

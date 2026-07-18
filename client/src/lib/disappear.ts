@@ -17,6 +17,16 @@ export function filterActiveMessages<T extends { createdAt: string }>(
   return messages.filter((message) => !isMessageExpired(message.createdAt, disappearAfterMinutes, now));
 }
 
+export function formatDisappearAt(createdAt: string, disappearAfterMinutes: number): string {
+  return messageExpiresAt(createdAt, disappearAfterMinutes).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatDisappearCountdown(createdAt: string, disappearAfterMinutes: number, now = Date.now()): string {
   const msLeft = messageExpiresAt(createdAt, disappearAfterMinutes).getTime() - now;
   if (msLeft <= 0) {

@@ -101,12 +101,16 @@ describe("NewChatDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("shows that messages disappear after 60 days", () => {
+  it("shows the absolute disappear date and time for a message sent now", () => {
     render(
       <NewChatDialog currentUserId="user-1" onClose={vi.fn()} onCreated={vi.fn()} />,
     );
 
-    expect(screen.getByText(/Messages in this chat disappear after 60 days/i)).toBeInTheDocument();
+    expect(screen.getByText(/A message sent now disappears on/i)).toBeInTheDocument();
+    const stamp = document.querySelector(".new-chat-dialog__hint time");
+    expect(stamp).not.toBeNull();
+    expect(stamp?.getAttribute("dateTime")).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(stamp?.textContent?.length).toBeGreaterThan(0);
   });
 
   it("returns from search view on escape", () => {
