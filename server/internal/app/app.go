@@ -24,9 +24,11 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 	userRepo := postgres.NewUserRepository(db)
 	chatRepo := postgres.NewChatRepository(db)
 	messageRepo := postgres.NewMessageRepository(db)
+	e2eeRepo := postgres.NewE2EERepository(db)
 	authService := service.NewAuthService(cfg, oidcProviderRepo)
 	userService := service.NewUserService(userRepo, oidcProviderRepo)
 	chatService := service.NewChatService(chatRepo, userRepo, oidcProviderRepo)
+	e2eeService := service.NewE2EEService(e2eeRepo, chatRepo, userRepo, oidcProviderRepo)
 	messageService := service.NewMessageService(messageRepo, chatRepo, userRepo, oidcProviderRepo)
 	hub := ws.NewHub()
 	requireAuth := middleware.RequireAuth(authService)
@@ -47,9 +49,14 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 	mux.Handle("GET /api/v1/user/{nodeId}/{localId}", requireAuth(http.HandlerFunc(userHandler.GetByID)))
 	mux.Handle("PATCH /api/v1/user/{nodeId}/{localId}", requireAuth(http.HandlerFunc(userHandler.Update)))
 
-	chatHandler := handler.NewChatHandler(chatService, hub, nodeRegistry)
+	chatHandler := handler.NewChatHandler(chatService, e2eeService, hub, nodeRegistry)
 	mux.Handle("GET /api/v1/chat", requireAuth(http.HandlerFunc(chatHandler.List)))
 	mux.Handle("POST /api/v1/chat", requireAuth(http.HandlerFunc(chatHandler.Create)))
+
+	e2eeHandler := handler.NewE2EEHandler(e2eeService, nodeRegistry)
+	mux.Handle("PUT /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(http.HandlerFunc(e2eeHandler.PutIdentityKey)))
+	mux.Handle("GET /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(http.HandlerFunc(e2eeHandler.GetIdentityKey)))
+	mux.Handle("GET /api/v1/chat/{nodeId}/{localId}/key-wraps", requireAuth(http.HandlerFunc(e2eeHandler.ListKeyWraps)))
 
 	messageHandler := handler.NewMessageHandler(messageService, chatRepo, hub, nodeRegistry)
 	mux.Handle("GET /api/v1/message", requireAuth(http.HandlerFunc(messageHandler.List)))

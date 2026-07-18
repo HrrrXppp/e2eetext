@@ -114,6 +114,26 @@ func (s *stubChatOIDCProviderRepo) GetByName(_ context.Context, name string) (do
 	return domain.OIDCProvider{}, errors.New("oidc provider not found")
 }
 
+type stubE2EERepo struct {
+	chatRepo *stubChatRepo
+}
+
+func (s *stubE2EERepo) UpsertIdentityKey(context.Context, string, string, json.RawMessage) error {
+	return nil
+}
+
+func (s *stubE2EERepo) GetIdentityKey(context.Context, string) (domain.UserIdentityKey, error) {
+	return domain.UserIdentityKey{}, errors.New("identity key not found")
+}
+
+func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, userIDs []string, _, _ string, _ map[string]json.RawMessage) (domain.Chat, error) {
+	return s.chatRepo.Create(ctx, name, userIDs)
+}
+
+func (s *stubE2EERepo) ListKeyWrapsForUser(context.Context, string, string) ([]domain.UserChatKeyWrap, error) {
+	return nil, nil
+}
+
 func newChatHandlerForTest(chatRepo *stubChatRepo, userRepo *stubChatUserRepo, oidcRepo *stubChatOIDCProviderRepo) *ChatHandler {
 	if userRepo == nil {
 		userRepo = &stubChatUserRepo{}
@@ -121,7 +141,9 @@ func newChatHandlerForTest(chatRepo *stubChatRepo, userRepo *stubChatUserRepo, o
 	if oidcRepo == nil {
 		oidcRepo = &stubChatOIDCProviderRepo{}
 	}
-	return NewChatHandler(service.NewChatService(chatRepo, userRepo, oidcRepo), nil, testNode())
+	e2eeRepo := &stubE2EERepo{chatRepo: chatRepo}
+	e2eeService := service.NewE2EEService(e2eeRepo, chatRepo, userRepo, oidcRepo)
+	return NewChatHandler(service.NewChatService(chatRepo, userRepo, oidcRepo), e2eeService, nil, testNode())
 }
 
 func requestWithTokenUser(req *http.Request, tokenUser service.TokenUser) *http.Request {
@@ -254,7 +276,14 @@ func TestChatHandler_Create(t *testing.T) {
 		"users_uids": [
 			"` + currentUserID + `",
 			"` + otherUserID + `"
-		]
+		],
+		"e2ee": {
+			"key_id": "11111111-1111-1111-1111-111111111111",
+			"wraps": [
+				{"user_id": "` + currentUserID + `", "wrap": {"v":1,"alg":"hybrid-kem-mlkem768-x25519-aes256gcm","keyId":"11111111-1111-1111-1111-111111111111","kemCiphertext":"a","nonce":"b","ciphertext":"c"}},
+				{"user_id": "` + otherUserID + `", "wrap": {"v":1,"alg":"hybrid-kem-mlkem768-x25519-aes256gcm","keyId":"11111111-1111-1111-1111-111111111111","kemCiphertext":"d","nonce":"e","ciphertext":"f"}}
+			]
+		}
 	}`)
 	req := requestWithTokenUser(
 		httptest.NewRequest(http.MethodPost, "/api/v1/chat", bytes.NewReader(body)),
@@ -307,7 +336,14 @@ func TestChatHandler_Create_ForbiddenWhenCurrentUserNotInMembers(t *testing.T) {
 		"users_uids": [
 			"` + otherUserID + `",
 			"` + thirdUserID + `"
-		]
+		],
+		"e2ee": {
+			"key_id": "11111111-1111-1111-1111-111111111111",
+			"wraps": [
+				{"user_id": "` + otherUserID + `", "wrap": {"v":1,"alg":"hybrid-kem-mlkem768-x25519-aes256gcm","keyId":"11111111-1111-1111-1111-111111111111","kemCiphertext":"a","nonce":"b","ciphertext":"c"}},
+				{"user_id": "` + thirdUserID + `", "wrap": {"v":1,"alg":"hybrid-kem-mlkem768-x25519-aes256gcm","keyId":"11111111-1111-1111-1111-111111111111","kemCiphertext":"d","nonce":"e","ciphertext":"f"}}
+			]
+		}
 	}`)
 	req := requestWithTokenUser(
 		httptest.NewRequest(http.MethodPost, "/api/v1/chat", bytes.NewReader(body)),
