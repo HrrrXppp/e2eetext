@@ -19,6 +19,14 @@ vi.mock("@/lib/users", () => ({
   ensureUserRegistered: (...args: unknown[]) => ensureUserRegistered(...args),
 }));
 
+vi.mock("@/lib/e2ee/session", () => ({
+  ensureIdentityKeys: vi.fn().mockResolvedValue({ publicKey: "pk", secretKey: "sk" }),
+}));
+
+vi.mock("@/lib/e2ee/storage", () => ({
+  clearE2EEState: vi.fn(),
+}));
+
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }

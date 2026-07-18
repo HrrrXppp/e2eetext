@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { fetchChats, type Chat } from "@/lib/chats";
+import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/session";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
 
@@ -53,20 +54,35 @@ export function ChatsPage() {
     }
   }, []);
 
-  const loadMessages = useCallback(async (chatId: string) => {
-    setMessagesLoading(true);
-    setMessagesError(null);
+  const loadMessages = useCallback(
+    async (chatId: string, viewerUserId: string) => {
+      setMessagesLoading(true);
+      setMessagesError(null);
 
-    try {
-      const items = await fetchMessages(chatId);
-      setMessages(items);
-    } catch {
-      setMessagesError("Could not load messages. Try again later.");
-      setMessages([]);
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, []);
+      try {
+        const items = await fetchMessages(chatId);
+        const decrypted = await Promise.all(
+          items.map(async (message) => {
+            try {
+              return {
+                ...message,
+                data: await decryptIncomingMessage(message, viewerUserId),
+              };
+            } catch {
+              return { ...message, data: "Error decrypt message" };
+            }
+          }),
+        );
+        setMessages(decrypted);
+      } catch {
+        setMessagesError("Could not load messages. Try again later.");
+        setMessages([]);
+      } finally {
+        setMessagesLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (authLoading) {
@@ -82,13 +98,13 @@ export function ChatsPage() {
   }, [authLoading, user, loadChats]);
 
   useEffect(() => {
-    if (!selectedChatId) {
+    if (!selectedChatId || !user?.id) {
       setMessages([]);
       return;
     }
 
-    void loadMessages(selectedChatId);
-  }, [selectedChatId, loadMessages]);
+    void loadMessages(selectedChatId, user.id);
+  }, [selectedChatId, user?.id, loadMessages]);
 
   function handleChatCreated(chat: Chat) {
     setChats((current) => [chat, ...current]);
@@ -110,8 +126,8 @@ export function ChatsPage() {
         const openChat = chats.find((chat) => chat.id === selectedChatId);
         const previousCount = openChat?.unreadMessageCount ?? 0;
 
-        if (incomingCount !== previousCount) {
-          void loadMessages(selectedChatId);
+        if (incomingCount !== previousCount && user?.id) {
+          void loadMessages(selectedChatId, user.id);
         }
       }
 
@@ -135,7 +151,7 @@ export function ChatsPage() {
         );
       });
     },
-    [chats, loadMessages, selectedChatId],
+    [chats, loadMessages, selectedChatId, user?.id],
   );
 
   const handleMarkMessageRead = useCallback(
@@ -167,8 +183,8 @@ export function ChatsPage() {
       );
 
       void markMessageRead(messageId).catch(() => {
-        void loadMessages(selectedChatId);
         if (user?.id) {
+          void loadMessages(selectedChatId, user.id);
           void loadChats(user.id);
         }
       });
@@ -185,12 +201,17 @@ export function ChatsPage() {
     setSendError(null);
 
     try {
+      const encrypted = await encryptOutgoingMessage({
+        plaintext: data,
+        chatId: selectedChatId,
+        senderUserId: user.id,
+      });
       const message = await createMessage({
         chatId: selectedChatId,
         userId: user.id,
-        data,
+        data: encrypted,
       });
-      setMessages((current) => [...current, message]);
+      setMessages((current) => [...current, { ...message, data }]);
       setChats((current) =>
         [...current]
           .map((chat) =>

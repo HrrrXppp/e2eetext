@@ -14,9 +14,15 @@ vi.mock("@/lib/chats", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/e2ee/session", () => ({
+  decryptIncomingMessage: vi.fn(async (message: { data: string }) => message.data),
+  encryptOutgoingMessage: vi.fn(async ({ plaintext }: { plaintext: string }) => plaintext),
+}));
+
 vi.mock("@/lib/messages", () => ({
   fetchMessages: vi.fn(),
   createMessage: vi.fn(),
+  markMessageRead: vi.fn(),
 }));
 
 vi.mock("@/hooks/useChatSocket", () => ({

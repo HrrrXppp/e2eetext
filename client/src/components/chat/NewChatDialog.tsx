@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { NewChatMemberSearch } from "@/components/chat/NewChatMemberSearch";
 import { createChat, type Chat } from "@/lib/chats";
+import { prepareE2EEChatCreation, rememberCreatedChatKey } from "@/lib/e2ee/session";
 import { userLabel, type User } from "@/lib/users";
 
 type NewChatDialogProps = {
@@ -69,10 +70,18 @@ export function NewChatDialog({ currentUserId, onClose, onCreated }: NewChatDial
     setError(null);
 
     try {
+      const memberIds = [currentUserId, ...members.map((member) => member.id)];
+      const prepared = await prepareE2EEChatCreation({
+        currentUserId,
+        memberUserIds: memberIds,
+      });
       const chat = await createChat({
         name: trimmedName,
-        usersUids: [currentUserId, ...members.map((member) => member.id)],
+        usersUids: memberIds,
+        keyId: prepared.keyId,
+        wraps: prepared.wraps,
       });
+      await rememberCreatedChatKey(currentUserId, chat.id, prepared.keyId, prepared.chatKey);
       onCreated(chat);
       onClose();
     } catch {
