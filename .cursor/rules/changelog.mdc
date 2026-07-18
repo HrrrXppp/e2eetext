@@ -1,0 +1,20 @@
+---
+description: Keep CHANGELOG.md updated for user-facing and notable changes
+alwaysApply: true
+---
+
+# Changelog updates
+
+When you add, change, or remove user-facing behavior (API, client features, crypto, migrations that affect clients, tooling users rely on), update [`CHANGELOG.md`](CHANGELOG.md) in the same change set.
+
+## Conventions (from CHANGELOG.md)
+
+- On branches not yet merged to `main`, put entries under **`## [NEXT RELEASE]`**.
+- Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): use `### Added` / `### Changed` / `### Fixed` / `### Removed` as needed.
+- Group bullets under existing subsections when they fit: **Server**, **Client**, **Tooling & deployment**.
+- Keep the short intro line under `NEXT RELEASE` accurate if the product posture changed (e.g. encryption status).
+- Do not invent a semver release heading until a release is cut on `main`.
+
+## When arranging / committing feature work
+
+Include the CHANGELOG update in the docs commit (or the feature commit if there is no separate docs commit). Do not leave notable shipped work undocumented in CHANGELOG.
