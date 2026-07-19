@@ -15,13 +15,19 @@ function apiProxyEntry(extra?: ProxyOptions): ProxyOptions {
     ...extra,
     configure: (proxy, options) => {
       extra?.configure?.(proxy, options);
-      proxy.on("proxyReq", (proxyReq, req) => {
+      const forwardOriginHeaders = (proxyReq: { setHeader: (name: string, value: string) => void }, req: { headers: { host?: string } }) => {
         const host = req.headers.host;
         if (typeof host === "string" && host) {
           proxyReq.setHeader("X-Forwarded-Host", host);
         }
         proxyReq.setHeader("X-Forwarded-Proto", "http");
-      });
+      };
+      proxy.on("proxyReq", forwardOriginHeaders);
+      // http-proxy fires a separate event for WebSocket upgrades — without
+      // this, the server's Origin check (used for the /api/v1/ws upgrade)
+      // sees the proxy target's Host instead of the browser's, and rejects
+      // every WebSocket connection made through `npm run dev`.
+      proxy.on("proxyReqWs", forwardOriginHeaders);
     },
   };
 }
