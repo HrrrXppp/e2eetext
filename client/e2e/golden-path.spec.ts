@@ -1,4 +1,27 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
+
+const execFileAsync = promisify(execFile);
+
+// Queries the most recently created message's raw `data` column directly
+// from Postgres — the same database global-setup.ts pointed the whole
+// stack at (E2E_DATABASE_URL) — so we assert on what the server actually
+// persisted, not just what the sender's own browser rendered back to it.
+async function readLatestMessageDataFromDB(): Promise<string> {
+  const databaseURL = process.env.E2E_DATABASE_URL;
+  if (!databaseURL) {
+    throw new Error("E2E_DATABASE_URL is required (set by global-setup.ts)");
+  }
+  const { stdout } = await execFileAsync("psql", [
+    databaseURL,
+    "-t",
+    "-A",
+    "-c",
+    "SELECT data FROM messages ORDER BY created_at DESC LIMIT 1;",
+  ]);
+  return stdout.trim();
+}
 
 // Signs in through the real OAuth authorization-code flow against the mock
 // identity provider (see e2e/global-setup.ts), then sets a deterministic
@@ -53,6 +76,13 @@ test("two real browsers sign in, create a chat, and exchange an E2EE message", a
     await expect(
       alicePage.locator(".chats-page__message-text").filter({ hasText: plaintext }),
     ).toBeVisible();
+
+    // Verify what's actually stored in Postgres, not just what the sender's
+    // own browser renders back — the server must never see the plaintext.
+    const storedData = await readLatestMessageDataFromDB();
+    expect(storedData.length).toBeGreaterThan(0);
+    expect(storedData).not.toContain(plaintext);
+    expect(storedData.toLowerCase()).not.toContain(plaintext.toLowerCase());
 
     // The real assertion: Bob's browser independently unwraps the chat key
     // (via his own ML-KEM secret key) and decrypts the message client-side.
