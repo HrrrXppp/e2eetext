@@ -283,6 +283,56 @@ cd server && go test ./...
 cd client && npm test
 ```
 
+### Integration tests (server, real Postgres)
+
+`server/internal/integration` exercises the real HTTP handlers, real Postgres
+repositories, and real auth verification — no mocks — against a mock OIDC
+issuer that mints real signed ID tokens, so the exact same middleware chain
+production traffic hits gets exercised. It's build-tag gated (`integration`)
+so it's never compiled or run by the default `go test ./...`.
+
+```bash
+docker run -d --name e2eetext-integration-db \
+  -e POSTGRES_USER=messenger -e POSTGRES_PASSWORD=messenger -e POSTGRES_DB=messenger \
+  -p 55432:5432 postgres:16-alpine
+
+cd server
+INTEGRATION_DATABASE_URL="postgres://messenger:messenger@127.0.0.1:55432/messenger?sslmode=disable" \
+  go test -tags=integration ./internal/integration/...
+```
+
+Migrations run automatically on first connect. Tests skip (not fail) if
+`INTEGRATION_DATABASE_URL` (or `DATABASE_URL`) isn't set.
+
+### End-to-end tests (client, real browser)
+
+`client/e2e` drives a real Chromium browser through two independently
+signed-in profiles — real OAuth authorization-code flow (against a
+throwaway mock identity provider, `mockoidc`), a real Go server,
+real Postgres, and real client-side ML-KEM/AES-GCM crypto — creating a chat
+and exchanging a message to prove E2EE actually round-trips between two
+separate browser identities, not just that the UI renders.
+
+```bash
+docker run -d --name e2eetext-e2e-db \
+  -e POSTGRES_USER=messenger -e POSTGRES_PASSWORD=messenger -e POSTGRES_DB=messenger \
+  -p 55433:5432 postgres:16-alpine
+
+cd client
+npx playwright install chromium   # first run only
+E2E_DATABASE_URL="postgres://messenger:messenger@127.0.0.1:55433/messenger?sslmode=disable" \
+  npm run test:e2e
+```
+
+`client/e2e/global-setup.ts` boots the mock identity provider, the Go
+server, and `vite dev` itself — no separate `npm run dev` needed. Point it
+at a disposable database; each run seeds an "OIDC" sign-in provider and
+creates fresh random test users, so it's safe to reuse the same one across
+runs. This suite is comprehensive rather than fast (real network round
+trips, real crypto, two full sign-ins) — on a loaded machine, prefer the
+Go integration suite above for quick iteration and treat this one as a
+pre-release sanity check.
+
 ### Client dev proxy
 
 Vite proxies `/api` and `/health` to `http://localhost:8080`, so the browser uses a single origin (`localhost:5173`) during development.
