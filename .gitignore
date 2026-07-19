@@ -4,6 +4,7 @@ server/tmp/
 *.exe
 *.test
 *.out
+mockoidc/mockoidc
 
 # Node / React
 client/node_modules/

@@ -296,7 +296,7 @@ Migrations run automatically on first connect. Tests skip (not fail) if
 
 `client/e2e` drives a real Chromium browser through two independently
 signed-in profiles — real OAuth authorization-code flow (against a
-throwaway mock identity provider, `server/cmd/mockoidc`), a real Go server,
+throwaway mock identity provider, `mockoidc`), a real Go server,
 real Postgres, and real client-side ML-KEM/AES-GCM crypto — creating a chat
 and exchanging a message to prove E2EE actually round-trips between two
 separate browser identities, not just that the UI renders.

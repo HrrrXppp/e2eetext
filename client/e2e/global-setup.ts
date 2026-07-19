@@ -11,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const SERVER_DIR = path.join(REPO_ROOT, "server");
 const CLIENT_DIR = path.join(REPO_ROOT, "client");
+const MOCKOIDC_DIR = path.join(REPO_ROOT, "mockoidc");
 
 const MOCK_OIDC_URL = "http://127.0.0.1:9998";
 const SERVER_URL = "http://127.0.0.1:8080";
@@ -130,8 +131,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const mockOIDC = spawnLogged(
     "mockoidc",
     "go",
-    ["run", "./cmd/mockoidc", "--addr", ":9998", "--base-url", MOCK_OIDC_URL],
-    { cwd: SERVER_DIR },
+    ["run", ".", "--addr", ":9998", "--base-url", MOCK_OIDC_URL],
+    { cwd: MOCKOIDC_DIR },
   );
   children.push(mockOIDC);
   await waitForHttp(`${MOCK_OIDC_URL}/.well-known/openid-configuration`, 60_000, "mockoidc");

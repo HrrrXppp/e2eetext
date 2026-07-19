@@ -35,7 +35,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Deploy-time dev instance banner
 - Application version badge in the site header (`version: {version}` from `VERSION`)
 - Hybrid PQ E2EE for chat keys and messages (IndexedDB wrapping keys, per-account identity)
-- Playwright E2E suite (`client/e2e`, `npm run test:e2e`) driving two independently signed-in real browser profiles through the real OAuth flow, real Postgres, and real client-side E2EE crypto, backed by a standalone mock OIDC server (`server/cmd/mockoidc`)
+- Playwright E2E suite (`client/e2e`, `npm run test:e2e`) driving two independently signed-in real browser profiles through the real OAuth flow, real Postgres, and real client-side E2EE crypto, backed by a standalone mock OIDC server (`mockoidc`)
 
 #### Tooling & deployment
 
