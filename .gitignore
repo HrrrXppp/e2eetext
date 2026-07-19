@@ -23,6 +23,10 @@ client/blob-report/
 *.swp
 .DS_Store
 
+# Claude Code local overrides (personal, may contain locally-approved
+# permission entries with embedded secrets — never intended to be shared)
+.claude/settings.local.json
+
 # Environment
 .env
 .env.local
