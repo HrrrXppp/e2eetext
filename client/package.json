@@ -11,6 +11,7 @@
     "build": "tsc -b tsconfig.app.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "lint": "eslint .",
     "predev": "node scripts/check-node-version.mjs",
     "prebuild": "node scripts/check-node-version.mjs",
@@ -24,6 +25,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^19.0.0",

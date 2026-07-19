@@ -11,6 +11,11 @@ client/dist/
 client/.env
 client/.env.local
 
+# Playwright
+client/test-results/
+client/playwright-report/
+client/blob-report/
+
 # IDE / OS
 .idea/
 .vscode/
