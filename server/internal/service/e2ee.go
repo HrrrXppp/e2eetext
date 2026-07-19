@@ -89,10 +89,11 @@ type ChatKeyWrapInput struct {
 }
 
 type CreateE2EEChatInput struct {
-	Name      string
-	UsersUIDs []string
-	KeyID     string
-	Wraps     []ChatKeyWrapInput
+	Name                  string
+	UsersUIDs             []string
+	KeyID                 string
+	Wraps                 []ChatKeyWrapInput
+	DisappearAfterMinutes int
 }
 
 func (s *E2EEService) CreateChat(ctx context.Context, input CreateE2EEChatInput, tokenUser TokenUser) (domain.Chat, error) {
@@ -156,7 +157,15 @@ func (s *E2EEService) CreateChat(ctx context.Context, input CreateE2EEChatInput,
 		}
 	}
 
-	return s.repo.CreateChatWithKeys(ctx, name, userIDs, keyID, currentUserID, wrapsByUser)
+	disappearAfterMinutes := input.DisappearAfterMinutes
+	if disappearAfterMinutes == 0 {
+		disappearAfterMinutes = domain.DefaultDisappearAfterMinutes
+	}
+	if disappearAfterMinutes < 1 {
+		return domain.Chat{}, fmt.Errorf("disappear_after_minutes must be positive")
+	}
+
+	return s.repo.CreateChatWithKeys(ctx, name, userIDs, keyID, currentUserID, wrapsByUser, disappearAfterMinutes)
 }
 
 func (s *E2EEService) ListKeyWraps(ctx context.Context, chatID string, tokenUser TokenUser) ([]domain.UserChatKeyWrap, error) {

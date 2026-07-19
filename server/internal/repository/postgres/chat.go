@@ -23,13 +23,14 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT c.id,
 			uc.name,
+			c.disappear_after_minutes,
 			c.created_at,
 			c.updated_at,
 			COUNT(um.message_id)::int AS unread_message_count
 		FROM chats c
 		INNER JOIN user_chats uc ON uc.chat_id = c.id AND uc.user_id = $1
 		LEFT JOIN unread_messages um ON um.chat_id = c.id AND um.user_id = $1
-		GROUP BY c.id, uc.name, c.created_at, c.updated_at
+		GROUP BY c.id, uc.name, c.disappear_after_minutes, c.created_at, c.updated_at
 		ORDER BY c.updated_at DESC`, filter.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("list chats: %w", err)
@@ -51,7 +52,7 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 	return chats, nil
 }
 
-func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []string) (domain.Chat, error) {
+func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []string, disappearAfterMinutes int) (domain.Chat, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.Chat{}, fmt.Errorf("begin create chat tx: %w", err)
@@ -60,10 +61,11 @@ func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []stri
 
 	var chat domain.Chat
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO chats DEFAULT VALUES
-		RETURNING id, created_at, updated_at`)
+		INSERT INTO chats (disappear_after_minutes)
+		VALUES ($1)
+		RETURNING id, disappear_after_minutes, created_at, updated_at`, disappearAfterMinutes)
 
-	if err := row.Scan(&chat.ID, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
+	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
 		return domain.Chat{}, fmt.Errorf("insert chat: %w", err)
 	}
 
@@ -162,7 +164,14 @@ func scanChat(row chatRow) (domain.Chat, error) {
 	var chat domain.Chat
 	var name sql.NullString
 
-	if err := row.Scan(&chat.ID, &name, &chat.CreatedAt, &chat.UpdatedAt, &chat.UnreadMessageCount); err != nil {
+	if err := row.Scan(
+		&chat.ID,
+		&name,
+		&chat.DisappearAfterMinutes,
+		&chat.CreatedAt,
+		&chat.UpdatedAt,
+		&chat.UnreadMessageCount,
+	); err != nil {
 		return domain.Chat{}, fmt.Errorf("scan chat: %w", err)
 	}
 

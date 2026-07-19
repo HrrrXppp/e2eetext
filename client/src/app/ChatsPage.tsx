@@ -8,6 +8,7 @@ import { useChatSocket } from "@/hooks/useChatSocket";
 import { fetchChats, type Chat } from "@/lib/chats";
 import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/session";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
+import { filterActiveMessages } from "@/lib/disappear";
 import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
 
 export function ChatsPage() {
@@ -83,6 +84,19 @@ export function ChatsPage() {
     },
     [],
   );
+
+  useEffect(() => {
+    if (!selectedChat) {
+      return;
+    }
+    const ttl = selectedChat.disappearAfterMinutes;
+    const tick = () => {
+      setMessages((current) => filterActiveMessages(current, ttl));
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [selectedChat]);
 
   useEffect(() => {
     if (authLoading) {
