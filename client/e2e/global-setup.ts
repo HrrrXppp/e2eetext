@@ -151,11 +151,30 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   await seedMockProvider(databaseURL);
 
-  const vite = spawnLogged("vite", "npm", ["run", "dev", "--", "--port", "5173", "--strictPort"], {
-    cwd: CLIENT_DIR,
-  });
+  // Serve a real production build (vite preview) instead of `vite dev`.
+  // The dev server's HMR client can trigger unprompted full-page reloads
+  // (e.g. on WebSocket reconnect), which aborts whatever fetch the app
+  // happens to have in flight at that moment — this showed up in CI as
+  // GET /api/v1/user getting net::ERR_ABORTED mid-sign-in, immediately
+  // followed by an unexplained extra page load in the trace. `preview`
+  // serves static built assets with no HMR machinery at all, and is more
+  // representative of what actually ships anyway.
+  await execFileAsync("npm", ["run", "build"], { cwd: CLIENT_DIR });
+
+  // --host 127.0.0.1 pins vite to the exact address CLIENT_URL polls below —
+  // without it, vite's default "localhost" bind and Node's "localhost"
+  // resolution can land on different loopback interfaces (IPv4 vs IPv6)
+  // depending on the OS/Node version, causing waitForHttp to time out even
+  // though the server is actually up (seen on GitHub Actions' Node 24
+  // runners; not reproduced with every local Node version).
+  const vite = spawnLogged(
+    "vite",
+    "npm",
+    ["run", "preview", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort"],
+    { cwd: CLIENT_DIR },
+  );
   children.push(vite);
-  await waitForHttp(`${CLIENT_URL}/`, 60_000, "vite dev server");
+  await waitForHttp(`${CLIENT_URL}/`, 60_000, "vite preview");
 
   return async () => {
     await killAll(children);
