@@ -29,14 +29,44 @@ function parseStoredIdentity(raw: string): StoredIdentity | null {
   }
 }
 
-async function readIdentityPayload(userId: string, raw: string): Promise<StoredIdentity | null> {
-  if (raw.startsWith("{")) {
-    return parseStoredIdentity(raw);
+// Matches the {v, iv, ciphertext} shape encryptLocalValue produces (see
+// localCrypto.ts). Checked up front so a corrupt/unrelated localStorage
+// value that is neither a valid plaintext identity nor a valid envelope
+// fails closed immediately, instead of being handed to decryptLocalValue
+// only to throw there.
+function looksLikeEncryptedEnvelope(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as { v?: number; iv?: string; ciphertext?: string };
+    return parsed.v === 1 && typeof parsed.iv === "string" && typeof parsed.ciphertext === "string";
+  } catch {
+    return false;
+  }
+}
+
+// Both legacy plaintext identities and the encrypted envelope (from
+// encryptLocalValue) serialize as JSON objects, so a "starts with {" prefix
+// check can't tell them apart — every encrypted value would be misread as
+// plaintext and fail parseStoredIdentity's field check (missing
+// publicKey/secretKey, since it actually has v/iv/ciphertext), silently
+// skipping decryption entirely. Discriminate by shape instead: only treat it
+// as legacy plaintext if it actually parses as one.
+async function readIdentityPayload(
+  userId: string,
+  raw: string,
+): Promise<{ identity: StoredIdentity; wasPlaintext: boolean } | null> {
+  const plaintext = parseStoredIdentity(raw);
+  if (plaintext) {
+    return { identity: plaintext, wasPlaintext: true };
+  }
+
+  if (!looksLikeEncryptedEnvelope(raw)) {
+    return null;
   }
 
   try {
     const decrypted = await decryptLocalValue(userId, raw);
-    return parseStoredIdentity(decrypted);
+    const identity = parseStoredIdentity(decrypted);
+    return identity ? { identity, wasPlaintext: false } : null;
   } catch {
     return null;
   }
@@ -48,11 +78,15 @@ export async function loadStoredIdentity(userId: string): Promise<StoredIdentity
     return null;
   }
 
-  const identity = await readIdentityPayload(userId, scopedRaw);
-  if (identity && scopedRaw.startsWith("{")) {
-    await saveStoredIdentity(userId, identity);
+  const result = await readIdentityPayload(userId, scopedRaw);
+  if (!result) {
+    return null;
   }
-  return identity;
+
+  if (result.wasPlaintext) {
+    await saveStoredIdentity(userId, result.identity);
+  }
+  return result.identity;
 }
 
 export async function saveStoredIdentity(userId: string, identity: StoredIdentity): Promise<void> {
