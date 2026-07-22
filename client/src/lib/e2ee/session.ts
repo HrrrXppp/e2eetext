@@ -29,7 +29,18 @@ export async function ensureIdentityKeys(userId: string): Promise<StoredIdentity
     await saveStoredIdentity(userId, identity);
   }
 
-  await uploadIdentityKey(userId, identity);
+  // Not awaited: the current session never needs its own uploaded key back
+  // (prepareE2EEChatCreation below wraps for itself from the in-memory
+  // identity, never a server fetch) — uploading only makes this user's key
+  // discoverable to *other* users. Blocking sign-in on this network round
+  // trip was making the whole UI hang on any upload slowness with no
+  // timeout of its own, which showed up as an ~80s stall on a single click
+  // in CI (traced to this fetch). A failed/slow upload is retried the next
+  // time this runs (next sign-in, or the fallback in
+  // prepareE2EEChatCreation).
+  uploadIdentityKey(userId, identity).catch((error) => {
+    console.error("uploadIdentityKey failed", error);
+  });
   return identity;
 }
 
@@ -41,7 +52,10 @@ export async function prepareE2EEChatCreation(input: {
   if (!identity) {
     identity = generateIdentityKeyPair();
     await saveStoredIdentity(input.currentUserId, identity);
-    await uploadIdentityKey(input.currentUserId, identity);
+    // Not awaited — see the matching comment in ensureIdentityKeys above.
+    uploadIdentityKey(input.currentUserId, identity).catch((error) => {
+      console.error("uploadIdentityKey failed", error);
+    });
   }
 
   const keyId = newKeyId();

@@ -108,6 +108,12 @@ export async function importStoredIdentityBackup(userId: string, raw: string): P
   return identity;
 }
 
+// fetch() has no default timeout — an unresponsive server would otherwise
+// hang this indefinitely. Callers now treat this as background work (see
+// ensureIdentityKeys/prepareE2EEChatCreation in session.ts), but it should
+// still fail on its own rather than hold a dangling promise/connection open.
+const UPLOAD_IDENTITY_KEY_TIMEOUT_MS = 15_000;
+
 export async function uploadIdentityKey(userId: string, identity: StoredIdentity): Promise<void> {
   const response = await fetch(`${API_V1}/user/${userId}/identity-key`, {
     method: "PUT",
@@ -116,6 +122,7 @@ export async function uploadIdentityKey(userId: string, identity: StoredIdentity
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ publicKey: toIdentityPublicKey(identity) }),
+    signal: AbortSignal.timeout(UPLOAD_IDENTITY_KEY_TIMEOUT_MS),
   });
 
   if (!response.ok) {
