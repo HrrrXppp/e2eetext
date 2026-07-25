@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { OAUTH_CALLBACK_PATH } from "@/lib/api";
 import {
   clearIdToken,
   getAuthProvider,
@@ -54,6 +55,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // AuthCallback.tsx owns this transient route: it stores the session
+    // then immediately calls window.location.replace("/chats"), where a
+    // fresh AuthProvider mount does the real work below. Nothing on this
+    // route reads AuthContext (App.tsx renders only <AuthCallback />
+    // here), and registering here too would race that navigation — the
+    // in-flight fetch gets aborted mid-navigation, which can otherwise
+    // surface as a spurious sign-out immediately after a successful login.
+    if (window.location.pathname === OAUTH_CALLBACK_PATH) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     async function loadAuthState() {
