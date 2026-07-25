@@ -14,7 +14,7 @@ export default defineConfig({
   // occasional dropped connection under load is infra noise, not a product
   // bug — retry once before failing the run.
   retries: 1,
-  reporter: "list",
+  reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
   globalSetup: "./e2e/global-setup.ts",
   use: {
     baseURL: "http://127.0.0.1:5173",

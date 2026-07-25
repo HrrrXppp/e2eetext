@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Build
+        working-directory: server
+        run: go build ./...
+
+      - name: Vet
+        working-directory: server
+        run: go vet ./...
+
+      - name: Test
+        working-directory: server
+        run: go test ./...
+
+      # Started only now, right before the step that actually needs it —
+      # go test ./... above is sqlmock/stub-based and never dials a real
+      # database, so starting Postgres any earlier would both misrepresent
+      # that dependency and waste time on a run that fails before it's needed.
+      - uses: ./.github/actions/start-pgcron-postgres
+
+      - name: Integration test
+        working-directory: server
+        env:
+          INTEGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test -tags=integration ./internal/integration/...
+
+      - name: Build mockoidc
+        working-directory: mockoidc
+        run: go build ./...
+
+      - name: Vet mockoidc
+        working-directory: mockoidc
+        run: go vet ./...
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      - name: Test
+        working-directory: client
+        run: npm test
+
+      - name: Build
+        working-directory: client
+        run: npm run build

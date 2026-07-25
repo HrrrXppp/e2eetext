@@ -64,15 +64,38 @@ async function saveWrappingKey(userId: string, key: CryptoKey): Promise<void> {
   await withStore("readwrite", (store) => store.put(record));
 }
 
+// getStorageKey is check-then-act (load, and only if missing, generate +
+// save) — without de-duplication, two calls racing for the same userId
+// before either has persisted a key each generate a different one, and
+// whichever save() lands second silently overwrites the first in
+// IndexedDB. Anything already encrypted with the now-lost key becomes
+// permanently undecryptable (AES-GCM tag verification just throws, which
+// callers around here tend to swallow as "not found"). Cache the in-flight
+// promise per userId so concurrent callers share one outcome instead of
+// racing.
+const storageKeyInflight = new Map<string, Promise<CryptoKey>>();
+
 async function getStorageKey(userId: string): Promise<CryptoKey> {
-  const existing = await loadWrappingKey(userId);
-  if (existing) {
-    return existing;
+  const inflight = storageKeyInflight.get(userId);
+  if (inflight) {
+    return inflight;
   }
 
-  const key = await generateWrappingKey();
-  await saveWrappingKey(userId, key);
-  return key;
+  const promise = (async () => {
+    const existing = await loadWrappingKey(userId);
+    if (existing) {
+      return existing;
+    }
+
+    const key = await generateWrappingKey();
+    await saveWrappingKey(userId, key);
+    return key;
+  })().finally(() => {
+    storageKeyInflight.delete(userId);
+  });
+
+  storageKeyInflight.set(userId, promise);
+  return promise;
 }
 
 export async function encryptLocalValue(userId: string, value: string): Promise<string> {

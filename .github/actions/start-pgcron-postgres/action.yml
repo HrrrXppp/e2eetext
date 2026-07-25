@@ -1,0 +1,25 @@
+name: Start Postgres (with pg_cron)
+description: >-
+  Builds and starts the pg_cron-enabled Postgres image (migration 000006,
+  disappearing messages, needs it) and waits for it to accept connections.
+  GitHub Actions' declarative `services:` block only accepts pre-built
+  images, so this builds the same image docker-compose.yml uses and runs it
+  directly instead.
+
+runs:
+  using: composite
+  steps:
+    - name: Start Postgres (with pg_cron)
+      shell: bash
+      run: |
+        docker build -t e2eetext-postgres -f maintenance/postgres-pgcron.Dockerfile .
+        docker run -d --name postgres \
+          -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=postgres \
+          -p 5432:5432 \
+          e2eetext-postgres postgres -c shared_preload_libraries=pg_cron -c cron.database_name=postgres
+        for _ in $(seq 1 30); do
+          docker exec postgres pg_isready -U postgres -d postgres && exit 0
+          sleep 2
+        done
+        echo "Postgres did not become ready in time" >&2
+        exit 1

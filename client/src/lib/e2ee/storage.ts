@@ -29,11 +29,10 @@ function parseStoredIdentity(raw: string): StoredIdentity | null {
   }
 }
 
+// No production deployment exists yet, so there's no legacy plaintext
+// identity data to migrate — every stored value is the encrypted envelope
+// saveStoredIdentity writes. Just decrypt and parse it.
 async function readIdentityPayload(userId: string, raw: string): Promise<StoredIdentity | null> {
-  if (raw.startsWith("{")) {
-    return parseStoredIdentity(raw);
-  }
-
   try {
     const decrypted = await decryptLocalValue(userId, raw);
     return parseStoredIdentity(decrypted);
@@ -48,11 +47,7 @@ export async function loadStoredIdentity(userId: string): Promise<StoredIdentity
     return null;
   }
 
-  const identity = await readIdentityPayload(userId, scopedRaw);
-  if (identity && scopedRaw.startsWith("{")) {
-    await saveStoredIdentity(userId, identity);
-  }
-  return identity;
+  return readIdentityPayload(userId, scopedRaw);
 }
 
 export async function saveStoredIdentity(userId: string, identity: StoredIdentity): Promise<void> {
@@ -74,6 +69,12 @@ export async function importStoredIdentityBackup(userId: string, raw: string): P
   return identity;
 }
 
+// fetch() has no default timeout — an unresponsive server would otherwise
+// hang this indefinitely. Callers now treat this as background work (see
+// ensureIdentityKeys/prepareE2EEChatCreation in session.ts), but it should
+// still fail on its own rather than hold a dangling promise/connection open.
+const UPLOAD_IDENTITY_KEY_TIMEOUT_MS = 15_000;
+
 export async function uploadIdentityKey(userId: string, identity: StoredIdentity): Promise<void> {
   const response = await fetch(`${API_V1}/user/${userId}/identity-key`, {
     method: "PUT",
@@ -82,6 +83,7 @@ export async function uploadIdentityKey(userId: string, identity: StoredIdentity
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ publicKey: toIdentityPublicKey(identity) }),
+    signal: AbortSignal.timeout(UPLOAD_IDENTITY_KEY_TIMEOUT_MS),
   });
 
   if (!response.ok) {

@@ -99,16 +99,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // Awaited (not fire-and-forget) so the UI never becomes interactive
+        // before a *local* identity keypair exists — chat creation and
+        // message send both assume one is already in place. The server
+        // upload inside ensureIdentityKeys is background work and doesn't
+        // hold this up (see its comment) — this only throws on a genuine
+        // local-storage/crypto failure. On failure this still falls through
+        // to setUser below; chat creation/sending retries key generation on
+        // demand.
+        try {
+          await ensureIdentityKeys(dbUser.id);
+        } catch {
+          // Local generation/persistence failed; chat creation/sending
+          // retries key generation on demand, so sign-in can still proceed.
+        }
+        if (!active) {
+          return;
+        }
+
         setUser({
           id: dbUser.id,
           subject: dbUser.subject,
           name: dbUser.name?.trim() || undefined,
           provider: tokenUser.provider,
           oidcProviderId: dbUser.oidcProviderId,
-        });
-
-        void ensureIdentityKeys(dbUser.id).catch(() => {
-          // Identity upload can be retried on next sign-in or chat action.
         });
       } catch {
         if (active) {

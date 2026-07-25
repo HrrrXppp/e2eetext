@@ -2,11 +2,7 @@ services:
   postgres:
     build:
       context: .
-      dockerfile_inline: |
-        FROM postgres:16-bookworm
-        RUN apt-get update \
-        	&& apt-get install -y --no-install-recommends postgresql-16-cron \
-        	&& rm -rf /var/lib/apt/lists/*
+      dockerfile: maintenance/postgres-pgcron.Dockerfile
     image: e2eetext-postgres
     environment:
       POSTGRES_USER: messenger

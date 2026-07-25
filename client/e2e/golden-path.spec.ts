@@ -28,6 +28,16 @@ async function readLatestMessageDataFromDB(): Promise<string> {
 // display name so the other browser context can find this user by name in
 // the "new chat" search — mirroring how a real user would look someone up.
 async function signIn(page: Page, displayName: string): Promise<void> {
+  // Opt-in only (DEBUG_E2E=1) — logging this on every run, including
+  // passing ones, would flood CI output for no benefit.
+  if (process.env.DEBUG_E2E) {
+    page.on("console", (msg) => console.log(`[console:${msg.type()}]`, msg.text()));
+    page.on("pageerror", (err) => console.log("[pageerror]", err.message, err.stack));
+    page.on("requestfailed", (req) => console.log("[requestfailed]", req.url(), req.failure()?.errorText));
+    page.on("response", (res) => {
+      if (res.url().includes("/api/v1/")) console.log("[response]", res.status(), res.url());
+    });
+  }
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Sign in with OIDC" }).click();
@@ -70,7 +80,11 @@ test("two real browsers sign in, create a chat, and exchange an E2EE message", a
     const aliceChatOption = alicePage.getByRole("option", { name: new RegExp(chatName) });
     await expect(aliceChatOption).toBeVisible();
 
-    await alicePage.getByLabel("Message").fill(plaintext);
+    // exact: true — getByLabel does substring matching by default, and
+    // "Message" is also a substring of the messages panel's own
+    // aria-label ("Messages in {chatName}"), so a non-exact match resolves
+    // to two elements (strict-mode violation).
+    await alicePage.getByLabel("Message", { exact: true }).fill(plaintext);
     await alicePage.getByRole("button", { name: "Send" }).click();
 
     await expect(
