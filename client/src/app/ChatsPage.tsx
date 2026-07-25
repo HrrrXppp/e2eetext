@@ -242,8 +242,7 @@ export function ChatsPage() {
               new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
           ),
       );
-    } catch (error) {
-      console.error("send message failed", error);
+    } catch {
       setSendError("Could not send message. Try again.");
     } finally {
       setSending(false);

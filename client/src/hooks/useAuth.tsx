@@ -109,8 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // demand.
         try {
           await ensureIdentityKeys(dbUser.id);
-        } catch (error) {
-          console.error("ensureIdentityKeys failed", error);
+        } catch {
+          // Local generation/persistence failed; chat creation/sending
+          // retries key generation on demand, so sign-in can still proceed.
         }
         if (!active) {
           return;
