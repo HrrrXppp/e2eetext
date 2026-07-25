@@ -10,9 +10,26 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// supportedPrivateKeyJWTAlgorithm is the only private_key_jwt signing
+// algorithm this server accepts today. Keep in sync with
+// service.allowedPrivateKeyJWTAlgorithms, which enforces the same
+// allowlist at mint time; config validation just fails closed earlier.
+const supportedPrivateKeyJWTAlgorithm = "ES256"
+
 type OAuthCredential struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+
+	// Optional private_key_jwt client-authentication fields (RFC 7523 /
+	// OpenID Connect Core §9), used instead of ClientSecret whenever the
+	// provider's client_secret_strategy is "private_key_jwt". Generic — not
+	// specific to any one provider. For Apple: Issuer is the Team ID,
+	// Subject is the Services ID (reuses ClientID), and Audience is the
+	// provider's issuer URL (domain.OIDCProvider.Link).
+	PrivateKeyJWTIssuer     string `json:"private_key_jwt_issuer,omitempty"`
+	PrivateKeyJWTKeyID      string `json:"private_key_jwt_key_id,omitempty"`
+	PrivateKeyJWTAlgorithm  string `json:"private_key_jwt_algorithm,omitempty"`
+	PrivateKeyJWTPrivateKey string `json:"private_key_jwt_private_key,omitempty"`
 }
 
 type Config struct {
@@ -112,8 +129,23 @@ func normalizeOAuthCredentials(credentials map[string]OAuthCredential) (map[stri
 		if strings.TrimSpace(credential.ClientID) == "" {
 			return nil, fmt.Errorf("oauth_credentials.%s.client_id is required", slug)
 		}
-		if strings.TrimSpace(credential.ClientSecret) == "" {
-			return nil, fmt.Errorf("oauth_credentials.%s.client_secret is required", slug)
+		if strings.TrimSpace(credential.ClientSecret) == "" && strings.TrimSpace(credential.PrivateKeyJWTPrivateKey) == "" {
+			return nil, fmt.Errorf("oauth_credentials.%s.client_secret (or private_key_jwt_private_key) is required", slug)
+		}
+		if strings.TrimSpace(credential.PrivateKeyJWTPrivateKey) != "" {
+			// A signed client-assertion JWT is only correct with an explicit
+			// issuer + key id; without them, minting silently produces a
+			// JWT the IdP (Apple, mockoidc) rejects only at token exchange,
+			// deep into the OAuth flow. Fail closed here instead.
+			if strings.TrimSpace(credential.PrivateKeyJWTIssuer) == "" {
+				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_issuer is required when private_key_jwt_private_key is set", slug)
+			}
+			if strings.TrimSpace(credential.PrivateKeyJWTKeyID) == "" {
+				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_key_id is required when private_key_jwt_private_key is set", slug)
+			}
+			if credential.PrivateKeyJWTAlgorithm != "" && credential.PrivateKeyJWTAlgorithm != supportedPrivateKeyJWTAlgorithm {
+				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_algorithm %q is not supported (only %q)", slug, credential.PrivateKeyJWTAlgorithm, supportedPrivateKeyJWTAlgorithm)
+			}
 		}
 		normalized[slug] = credential
 	}

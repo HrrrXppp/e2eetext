@@ -23,6 +23,9 @@ const (
 	oauthStateCookie  = "oauth_state"
 	oauthNonceCookie  = "oauth_nonce"
 	oauthCookieMaxAge = 10 * time.Minute
+
+	clientSecretStrategyPrivateKeyJWT = "private_key_jwt"
+	privateKeyJWTTTL                  = 5 * time.Minute
 )
 
 type contextKey string
@@ -107,8 +110,20 @@ func (s *AuthService) BeginLogin(w http.ResponseWriter, r *http.Request, provide
 
 	authOpts := []oauth2.AuthCodeOption{
 		oidc.Nonce(nonce),
-		oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("prompt", "consent"),
+	}
+	if provider.ClientSecretStrategy != clientSecretStrategyPrivateKeyJWT {
+		// AccessTypeOffline + prompt=consent are Google-shaped: they ask for
+		// a refresh token and force the consent screen on every login.
+		// Apple (and any other private_key_jwt provider) has different
+		// authorize/token semantics, so keep these Google-only rather than
+		// sending Google-specific params to every IdP.
+		authOpts = append(authOpts,
+			oauth2.AccessTypeOffline,
+			oauth2.SetAuthURLParam("prompt", "consent"),
+		)
+	}
+	if provider.ResponseMode != "" {
+		authOpts = append(authOpts, oauth2.SetAuthURLParam("response_mode", provider.ResponseMode))
 	}
 
 	authURL := oauthConfig.AuthCodeURL(state, authOpts...)
@@ -379,6 +394,22 @@ func (s *AuthService) oauthConfig(ctx context.Context, provider domain.OIDCProvi
 		return nil, nil, fmt.Errorf("discover oidc provider: %w", err)
 	}
 
+	clientSecret := credential.ClientSecret
+	if provider.ClientSecretStrategy == clientSecretStrategyPrivateKeyJWT {
+		clientSecret, err = mintPrivateKeyJWT(
+			credential.PrivateKeyJWTIssuer,
+			credential.ClientID,
+			provider.Link,
+			credential.PrivateKeyJWTKeyID,
+			credential.PrivateKeyJWTAlgorithm,
+			credential.PrivateKeyJWTPrivateKey,
+			privateKeyJWTTTL,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("mint private_key_jwt client secret: %w", err)
+		}
+	}
+
 	var redirectURL string
 	if r != nil {
 		redirectURL = requestorigin.OAuthCallbackURL(r, slug)
@@ -386,15 +417,27 @@ func (s *AuthService) oauthConfig(ctx context.Context, provider domain.OIDCProvi
 
 	oauthConfig := &oauth2.Config{
 		ClientID:     credential.ClientID,
-		ClientSecret: credential.ClientSecret,
+		ClientSecret: clientSecret,
 		RedirectURL:  redirectURL,
 		Endpoint:     oidcProvider.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile"},
+		Scopes:       providerScopes(provider.Scopes),
 	}
 
 	verifier := oidcProvider.Verifier(&oidc.Config{ClientID: credential.ClientID})
 
 	return oauthConfig, verifier, nil
+}
+
+// providerScopes returns the provider's DB-configured OAuth scopes, falling
+// back to the historical Google-shaped default for callers that construct a
+// domain.OIDCProvider without Scopes set (e.g. older rows, direct
+// constructors in tests). In production every row has scopes set via the
+// NOT NULL DEFAULT column, so this fallback should rarely trigger.
+func providerScopes(scopes []string) []string {
+	if len(scopes) == 0 {
+		return []string{oidc.ScopeOpenID, "profile"}
+	}
+	return scopes
 }
 
 func tokenUserFromIDToken(idToken *oidc.IDToken, providerName string) (TokenUser, error) {
