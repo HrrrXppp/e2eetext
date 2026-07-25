@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	jose "github.com/go-jose/go-jose/v4"
@@ -213,6 +214,39 @@ func TestAuthService_BeginLogin_ResponseMode(t *testing.T) {
 	}
 }
 
+// TestAuthService_CompleteLogin_RejectsPOSTForNonFormPostProvider covers the
+// restriction CompleteLogin enforces itself: the router registers both GET
+// and POST on every provider's callback path (it can't know a given
+// provider's response_mode, stored in the DB, until the path is parsed), so
+// only a provider actually configured for response_mode=form_post (Apple)
+// may legitimately POST its callback.
+func TestAuthService_CompleteLogin_RejectsPOSTForNonFormPostProvider(t *testing.T) {
+	srv := newTestOIDCDiscoveryServer(t)
+
+	cfg := config.Config{
+		OAuthCredentials: map[string]config.OAuthCredential{
+			"google": {ClientID: "gid", ClientSecret: "gsecret"},
+		},
+	}
+	repo := &mockOIDCProviderRepository{providers: []domain.OIDCProvider{
+		{Name: "Google", Link: srv.URL, Scopes: []string{"openid", "profile"}, ClientSecretStrategy: "static"},
+	}}
+	svc := NewAuthService(cfg, repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/google/callback", nil)
+	req.AddCookie(&http.Cookie{Name: oauthStateCookie, Value: "state123"})
+	req.AddCookie(&http.Cookie{Name: oauthNonceCookie, Value: "nonce123"})
+	rec := httptest.NewRecorder()
+
+	err := svc.CompleteLogin(rec, req, "google", "code123", "state123", "")
+	if err == nil {
+		t.Fatal("CompleteLogin() error = nil, want error rejecting POST for a non-form_post provider")
+	}
+	if !strings.Contains(err.Error(), "does not accept a POST callback") {
+		t.Errorf("CompleteLogin() error = %v, want mention of rejecting the POST callback", err)
+	}
+}
+
 func TestAuthService_BeginLogin_OmitsAccessTypeAndPromptForPrivateKeyJWT(t *testing.T) {
 	srv := newTestOIDCDiscoveryServer(t)
 	pemKey, _ := generateTestECKeyPEM(t)
@@ -291,5 +325,105 @@ func TestAuthService_BeginLogin_SetsAccessTypeAndPromptForStaticStrategy(t *test
 	}
 	if got := location.Query().Get("prompt"); got != "consent" {
 		t.Errorf("prompt = %q, want consent for static-strategy provider", got)
+	}
+}
+
+func TestAuthService_BeginLogin_SetsSameSiteNoneSecureCookiesOverHTTPS(t *testing.T) {
+	srv := newTestOIDCDiscoveryServer(t)
+
+	cfg := config.Config{
+		OAuthCredentials: map[string]config.OAuthCredential{
+			"google": {ClientID: "gid", ClientSecret: "gsecret"},
+		},
+	}
+	repo := &mockOIDCProviderRepository{providers: []domain.OIDCProvider{
+		{Name: "Google", Link: srv.URL, Scopes: []string{"openid", "profile"}, ClientSecretStrategy: "static"},
+	}}
+	svc := NewAuthService(cfg, repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/google/login", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	if err := svc.BeginLogin(rec, req, "google"); err != nil {
+		t.Fatalf("BeginLogin() error = %v", err)
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected oauth_state/oauth_nonce cookies to be set")
+	}
+	for _, c := range cookies {
+		if c.SameSite != http.SameSiteNoneMode {
+			t.Errorf("cookie %s SameSite = %v, want SameSiteNoneMode over HTTPS", c.Name, c.SameSite)
+		}
+		if !c.Secure {
+			t.Errorf("cookie %s Secure = false, want true over HTTPS (required for SameSite=None)", c.Name)
+		}
+	}
+}
+
+func TestAuthService_BeginLogin_SetsSameSiteLaxCookiesOverPlainHTTP(t *testing.T) {
+	srv := newTestOIDCDiscoveryServer(t)
+
+	cfg := config.Config{
+		OAuthCredentials: map[string]config.OAuthCredential{
+			"google": {ClientID: "gid", ClientSecret: "gsecret"},
+		},
+	}
+	repo := &mockOIDCProviderRepository{providers: []domain.OIDCProvider{
+		{Name: "Google", Link: srv.URL, Scopes: []string{"openid", "profile"}, ClientSecretStrategy: "static"},
+	}}
+	svc := NewAuthService(cfg, repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/google/login", nil)
+	rec := httptest.NewRecorder()
+
+	if err := svc.BeginLogin(rec, req, "google"); err != nil {
+		t.Fatalf("BeginLogin() error = %v", err)
+	}
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected oauth_state/oauth_nonce cookies to be set")
+	}
+	for _, c := range cookies {
+		if c.SameSite != http.SameSiteLaxMode {
+			t.Errorf("cookie %s SameSite = %v, want SameSiteLaxMode over plain HTTP", c.Name, c.SameSite)
+		}
+		if c.Secure {
+			t.Errorf("cookie %s Secure = true, want false over plain HTTP", c.Name)
+		}
+	}
+}
+
+func TestParseOneTimeUserName(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "full name",
+			raw:  `{"name":{"firstName":"Ada","lastName":"Appleseed"},"email":"ada@example.com"}`,
+			want: "Ada Appleseed",
+		},
+		{
+			name: "missing last name",
+			raw:  `{"name":{"firstName":"Ada"},"email":"ada@example.com"}`,
+			want: "Ada",
+		},
+		{name: "empty string", raw: "", want: ""},
+		{name: "no name field (repeat sign-in)", raw: `{"email":"ada@example.com"}`, want: ""},
+		{name: "invalid json", raw: "not json", want: ""},
+		{name: "whitespace only names", raw: `{"name":{"firstName":"  ","lastName":"  "}}`, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseOneTimeUserName(tt.raw); got != tt.want {
+				t.Errorf("parseOneTimeUserName(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
 	}
 }

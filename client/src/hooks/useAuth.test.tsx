@@ -79,6 +79,47 @@ describe("useAuth", () => {
     });
   });
 
+  it("resolves the provider from the stored auth provider slug, not a guess from the issuer", async () => {
+    // Two non-Google providers share the same "not google.com" issuer
+    // shape the client used to fall back on for slug-guessing (see
+    // idToken.ts); only the explicitly-stored provider slug (set at
+    // sign-in time from the server's callback redirect) can tell them
+    // apart.
+    const idToken = makeToken({
+      sub: "apple-subject-1",
+      iss: "http://127.0.0.1:9998/apple",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    localStorage.setItem("messenger_id_token", idToken);
+    localStorage.setItem("messenger_auth_provider", "apple");
+
+    fetchAuthProviders.mockResolvedValue([
+      { id: "oidc-provider-id", name: "OIDC", link: "http://127.0.0.1:9998", slug: "oidc" },
+      { id: "apple-provider-id", name: "Apple", link: "http://127.0.0.1:9998/apple", slug: "apple" },
+    ]);
+    ensureUserRegistered.mockResolvedValue({
+      id: "user-1",
+      subject: "apple-subject-1",
+      name: "Ada Appleseed",
+      oidcProviderId: "apple-provider-id",
+      createdAt: "2026-06-11T12:00:00.000Z",
+      updatedAt: "2026-06-11T12:00:00.000Z",
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(ensureUserRegistered).toHaveBeenCalledWith(
+      expect.anything(),
+      "apple-provider-id",
+      expect.anything(),
+    );
+    expect(result.current.user?.oidcProviderId).toBe("apple-provider-id");
+  });
+
   it("clears user when session is missing", async () => {
     fetchAuthProviders.mockResolvedValue([]);
 

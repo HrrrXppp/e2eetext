@@ -4,15 +4,21 @@ import { AuthCallback } from "@/app/AuthCallback";
 import { makeToken } from "@/test/makeToken";
 
 const storeAuthSession = vi.fn();
+const setPendingSignInName = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   storeAuthSession: (...args: unknown[]) => storeAuthSession(...args),
+}));
+
+vi.mock("@/lib/signInPreferences", () => ({
+  setPendingSignInName: (...args: unknown[]) => setPendingSignInName(...args),
 }));
 
 describe("AuthCallback", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     storeAuthSession.mockReset();
+    setPendingSignInName.mockReset();
   });
 
   it("stores session and redirects when id token is present", async () => {
@@ -26,13 +32,52 @@ describe("AuthCallback", () => {
     render(<AuthCallback />);
 
     await waitFor(() => {
-      expect(storeAuthSession).toHaveBeenCalledWith({
-        idToken: "test-id-token",
-        accessToken: "access",
-        refreshToken: "refresh",
-      });
+      expect(storeAuthSession).toHaveBeenCalledWith(
+        {
+          idToken: "test-id-token",
+          accessToken: "access",
+          refreshToken: "refresh",
+        },
+        undefined,
+      );
     });
     expect(replace).toHaveBeenCalledWith("/chats");
+  });
+
+  it("passes the provider and one-time name through from the callback URL", async () => {
+    const replace = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      hash: "#id_token=test-id-token&provider=apple&name=Ada%20Appleseed",
+      replace,
+    });
+
+    render(<AuthCallback />);
+
+    await waitFor(() => {
+      expect(storeAuthSession).toHaveBeenCalledWith(
+        expect.objectContaining({ idToken: "test-id-token" }),
+        "apple",
+      );
+    });
+    expect(setPendingSignInName).toHaveBeenCalledWith("Ada Appleseed");
+    expect(replace).toHaveBeenCalledWith("/chats");
+  });
+
+  it("clears any pending name when the callback carries none", async () => {
+    const replace = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      hash: "#id_token=test-id-token",
+      replace,
+    });
+
+    render(<AuthCallback />);
+
+    await waitFor(() => {
+      expect(storeAuthSession).toHaveBeenCalled();
+    });
+    expect(setPendingSignInName).toHaveBeenCalledWith(undefined);
   });
 
   it("shows error when id token is missing", async () => {

@@ -113,9 +113,12 @@ func TestAllowedMethods_AuthLogin(t *testing.T) {
 func TestAllowedMethods_AuthCallback(t *testing.T) {
 	handler := newTestHandler(t)
 
+	// GET is the default 302-redirect callback (e.g. Google); POST is
+	// required by providers using response_mode=form_post (e.g. Apple
+	// whenever name/email scopes are requested) — both hit the same URL.
 	assertMethodAllowed(t, handler, http.MethodGet, "/api/v1/auth/google/callback")
-	assertMethodNotAllowed(t, handler, http.MethodPost, "/api/v1/auth/google/callback", http.MethodGet)
-	assertMethodNotAllowed(t, handler, http.MethodDelete, "/api/v1/auth/google/callback", http.MethodGet)
+	assertMethodAllowed(t, handler, http.MethodPost, "/api/v1/auth/google/callback")
+	assertMethodNotAllowed(t, handler, http.MethodDelete, "/api/v1/auth/google/callback", http.MethodGet, http.MethodPost)
 }
 
 func TestAllowedMethods_AuthRefresh(t *testing.T) {

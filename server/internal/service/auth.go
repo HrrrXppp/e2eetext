@@ -26,6 +26,8 @@ const (
 
 	clientSecretStrategyPrivateKeyJWT = "private_key_jwt"
 	privateKeyJWTTTL                  = 5 * time.Minute
+
+	responseModeFormPost = "form_post"
 )
 
 type contextKey string
@@ -105,8 +107,8 @@ func (s *AuthService) BeginLogin(w http.ResponseWriter, r *http.Request, provide
 		return fmt.Errorf("generate oauth nonce: %w", err)
 	}
 
-	setTemporaryCookie(w, oauthStateCookie, state)
-	setTemporaryCookie(w, oauthNonceCookie, nonce)
+	setTemporaryCookie(w, r, oauthStateCookie, state)
+	setTemporaryCookie(w, r, oauthNonceCookie, nonce)
 
 	authOpts := []oauth2.AuthCodeOption{
 		oidc.Nonce(nonce),
@@ -132,7 +134,7 @@ func (s *AuthService) BeginLogin(w http.ResponseWriter, r *http.Request, provide
 	return nil
 }
 
-func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, providerSlug, code, state string) error {
+func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, providerSlug, code, state, oneTimeUser string) error {
 	if err := validateOAuthCookie(r, oauthStateCookie, state); err != nil {
 		return err
 	}
@@ -142,12 +144,24 @@ func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, prov
 		return err
 	}
 
-	clearTemporaryCookie(w, oauthStateCookie)
-	clearTemporaryCookie(w, oauthNonceCookie)
+	clearTemporaryCookie(w, r, oauthStateCookie)
+	clearTemporaryCookie(w, r, oauthNonceCookie)
 
 	provider, err := s.providerBySlug(r.Context(), providerSlug)
 	if err != nil {
 		return err
+	}
+
+	// The router registers both GET and POST on this same callback path for
+	// every provider, since it can't know a given provider's response_mode
+	// (stored in the DB) until the path is parsed. Enforce the real
+	// restriction here instead: only a provider configured for
+	// response_mode=form_post (Apple) may POST its callback; anyone else
+	// doing so isn't a real IdP callback (form_post response_mode is
+	// exactly the OIDC-spec mechanism that makes a provider deliver the
+	// callback via POST instead of a GET redirect).
+	if r.Method == http.MethodPost && provider.ResponseMode != responseModeFormPost {
+		return fmt.Errorf("provider %q does not accept a POST callback", providerSlug)
 	}
 
 	oauthConfig, verifier, err := s.oauthConfig(r.Context(), provider, r)
@@ -175,16 +189,57 @@ func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, prov
 	}
 
 	redirectURL := fmt.Sprintf(
-		"%s#id_token=%s&access_token=%s",
+		"%s#id_token=%s&access_token=%s&provider=%s",
 		requestorigin.OAuthClientCallbackURL(r),
 		url.QueryEscape(rawIDToken),
 		url.QueryEscape(token.AccessToken),
+		url.QueryEscape(providerSlug),
 	)
 	if token.RefreshToken != "" {
 		redirectURL += "&refresh_token=" + url.QueryEscape(token.RefreshToken)
 	}
+	// Some providers (Apple) hand us the user's name only once, out-of-band
+	// from the ID token, on the very first authorization for a given
+	// subject (its ID token never carries a name claim at all). Thread it
+	// through to the client so it can relay it to ensureUserRegistered /
+	// CreateFromToken the same way Google's ID-token-derived name flows
+	// today.
+	if name := parseOneTimeUserName(oneTimeUser); name != "" {
+		redirectURL += "&name=" + url.QueryEscape(name)
+	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 	return nil
+}
+
+// oneTimeUserPayload mirrors the shape of Apple's one-time "user" form
+// field: {"name":{"firstName":"...","lastName":"..."}}. We only request the
+// "name" scope (not "email" — we don't keep the user's email address), so
+// Apple's payload carries no email field to decode here.
+type oneTimeUserPayload struct {
+	Name *struct {
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+	} `json:"name"`
+}
+
+// parseOneTimeUserName extracts a display name from a provider's one-time
+// "user" JSON payload, if any. Returns "" if raw is empty, invalid, or
+// carries no name.
+func parseOneTimeUserName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	var payload oneTimeUserPayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil || payload.Name == nil {
+		return ""
+	}
+
+	name := strings.TrimSpace(strings.Join(strings.Fields(
+		payload.Name.FirstName+" "+payload.Name.LastName,
+	), " "))
+	return name
 }
 
 type RefreshTokenInput struct {
@@ -511,27 +566,41 @@ func randomToken(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func setTemporaryCookie(w http.ResponseWriter, name, value string) {
+func setTemporaryCookie(w http.ResponseWriter, r *http.Request, name, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
 		Path:     "/",
 		MaxAge:   int(oauthCookieMaxAge.Seconds()),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
+		SameSite: cookieSameSite(r),
+		Secure:   requestorigin.IsHTTPS(r),
 	})
 }
 
-func clearTemporaryCookie(w http.ResponseWriter, name string) {
+func clearTemporaryCookie(w http.ResponseWriter, r *http.Request, name string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: cookieSameSite(r),
+		Secure:   requestorigin.IsHTTPS(r),
 	})
+}
+
+// cookieSameSite selects SameSite=None for HTTPS requests so an IdP-initiated
+// cross-site POST (e.g. Apple's response_mode=form_post callback, sent as a
+// top-level navigation from appleid.apple.com) still carries oauth_state /
+// oauth_nonce. SameSite=None is only honored by browsers alongside the
+// Secure attribute, which requires HTTPS — so plain-HTTP local dev/mockoidc
+// (same-origin) keeps the previous SameSite=Lax behavior.
+func cookieSameSite(r *http.Request) http.SameSite {
+	if requestorigin.IsHTTPS(r) {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
 }
 
 func validateOAuthCookie(r *http.Request, name, expected string) error {
