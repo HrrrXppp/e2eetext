@@ -19,7 +19,9 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 
 - Go HTTP API (`/api/v1`) with PostgreSQL (pgx) and SQL migrations
 - Federated node-scoped resource IDs
-- OIDC authentication with request-derived redirect URLs (Google seeded by default)
+- OIDC authentication with request-derived redirect URLs (Google and Apple seeded by default)
+- Generic `private_key_jwt` client authentication (RFC 7523 / OpenID Connect Core §9) for providers with no static client secret (e.g. Apple); per-provider scopes, `response_mode`, and client-authentication strategy are now data on the `oidc_providers` row (migration `000007`), not hardcoded per-provider Go branches
+- Dual `GET`/`POST` OIDC callback route so `response_mode=form_post` providers (Apple) work; one-time out-of-band display names (Apple's first-sign-in-only `user` payload) flow through to user registration
 - User registration, search, and profile API
 - Chats, messages, unread tracking, and a WebSocket event hub
 - WebSocket endpoint and application route wiring
@@ -38,6 +40,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Hybrid PQ E2EE for chat keys and messages (IndexedDB wrapping keys, per-account identity)
 - Disappearing messages: each message shows absolute disappear date/time (chat TTL default 60 days)
 - Playwright E2E suite (`client/e2e`, `npm run test:e2e`) driving two independently signed-in real browser profiles through the real OAuth flow, real Postgres, and real client-side E2EE crypto, backed by a standalone mock OIDC server (`mockoidc`)
+- Apple-like sign-in E2E spec (`client/e2e/apple-sign-in.spec.ts`) exercising `response_mode=form_post`, the one-time name payload, and `private_key_jwt` client authentication against a second mock issuer mode in `mockoidc`
 
 #### Tooling & deployment
 
