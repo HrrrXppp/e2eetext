@@ -1,6 +1,23 @@
 # OIDC identity provider trusting GitHub Actions' token issuer, used by
 # .github/workflows/build-images.yml (aws-actions/configure-aws-credentials
 # with role-to-assume: ${{ secrets.AWS_ROLE_ARN }}).
+#
+# thumbprint_list is explicitly set (from var.oidc_thumbprint_list) rather
+# than omitted. The hashicorp/aws provider version this module is locked to
+# (5.100.0, satisfying the "~> 5.0" constraint in versions.tf — verified via
+# `terraform providers schema`) does expose this argument as Optional +
+# Computed, meaning AWS can auto-validate GitHub's well-known OIDC issuer
+# chain and Terraform would leave an already-recorded value alone if the
+# argument were simply omitted. That makes dropping it a plausible future
+# simplification. It isn't done here because: (a) "~> 5.0" itself allows
+# upgrading to other 5.x releases where this behavior may differ, so
+# omitting it ties correctness to whichever provider version happens to be
+# resolved rather than to an explicit, reviewable value; and (b) this fix's
+# job is narrowly to correct the wrong hardcoded value against live state
+# (verified with no AWS access, via the CI plan log), not to change how the
+# attribute is managed. Revisit once the provider constraint is pinned
+# tighter and someone can confirm the omitted-argument behavior against a
+# real `terraform plan`.
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]

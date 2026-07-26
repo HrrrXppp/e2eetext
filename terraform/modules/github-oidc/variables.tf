@@ -11,14 +11,18 @@ variable "github_repo" {
 variable "oidc_thumbprint_list" {
   description = <<-EOT
     TLS certificate thumbprints for token.actions.githubusercontent.com's certificate
-    authority chain. GitHub's current root CA (DigiCert Global Root G2) thumbprint is
-    listed by default. Only relevant on initial creation; when importing an existing
-    provider this value must match what AWS already has recorded, or Terraform will
-    show a diff. AWS also accepts an empty list and verifies the chain itself for
-    GitHub/GitLab's well-known OIDC issuers on recent provider versions.
+    authority chain. This must match the thumbprint AWS already has recorded for the
+    live, manually-created OIDC provider (confirmed via
+    `aws iam get-open-id-connect-provider`), or Terraform will plan an in-place update
+    that changes the live thumbprint and risks breaking OIDC federation if it doesn't
+    match GitHub's actual current certificate chain. The value below is NOT the
+    commonly-copied "well-known" GitHub thumbprint from older tutorials/docs
+    (6938fd4d98bab03faadb97b34396831e3780aea1) — that value doesn't match what's
+    actually live for this provider. Note the real chain can rotate over time (e.g. if
+    GitHub changes CAs), so this may need to be re-verified against AWS periodically.
   EOT
   type        = list(string)
-  default     = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  default     = ["ab9d0263244dd0326eb67015705a667e79cfe998"]
 }
 
 variable "role_name" {
