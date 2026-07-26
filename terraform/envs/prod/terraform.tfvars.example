@@ -1,0 +1,41 @@
+# Copy to terraform.tfvars.
+#
+# IMPORTANT: unlike dev, whether a live prod stack already exists has not
+# been confirmed. Before filling this in, run something like:
+#
+#   aws ec2 describe-instances --filters "Name=tag:Name,Values=e2eetext-prod*"
+#   aws elbv2 describe-load-balancers --names e2eetext-prod
+#
+# If real resources come back, fill this in with their actual identifiers
+# and follow README.md's import bootstrap (adapted for prod) before
+# `terraform apply`. If nothing comes back, this is a fresh deployment —
+# get sign-off on instance size/domain/ACM cert before applying.
+
+aws_region = "us-east-2"
+
+# Leave unset to use the account's default VPC unless prod uses a custom one.
+# vpc_id     = "vpc-xxxxxxxx"
+# subnet_ids = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+
+# If importing: get real values from `aws ec2 describe-instances`.
+# If applying fresh: choose deliberately (t3.small is the README's minimum).
+ami_id        = "ami-xxxxxxxxxxxxxxxxx"
+instance_type = "t3.small"
+# ec2_subnet_id = "subnet-xxxxxxxx"
+
+# The prod ALB's security group ID (pre-existing if importing; create one
+# allowing 80/443 from 0.0.0.0/0 first if applying fresh).
+alb_security_group_id = "sg-xxxxxxxx"
+
+# Production domain's ACM certificate:
+#   aws acm list-certificates --region us-east-2
+acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxxxx"
+
+# Optional — only if the live (or intended) security group/role/instance
+# profile names differ from this module's defaults.
+# ec2_security_group_name       = "<actual-sg-name>"
+# ec2_iam_role_name             = "<actual-role-name>"
+# ec2_iam_instance_profile_name = "<actual-instance-profile-name>"
+
+# admin_ssh_cidr_blocks = ["203.0.113.0/32"]
+# key_name              = "e2eetext-prod-key"
