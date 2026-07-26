@@ -14,7 +14,7 @@ env:
   TF_VERSION: "1.10.5"
 
 jobs:
-  fmt-and-validate:
+  fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,12 +26,31 @@ jobs:
       - name: terraform fmt -check
         run: terraform fmt -check -recursive terraform
 
+  # Phase 2 of #27 added terraform/envs/{dev,prod} alongside envs/shared —
+  # matrixed so every root config gets init+validate on PRs touching
+  # terraform/. `terraform validate` doesn't need variable values (dev/prod's
+  # ami_id/instance_type/alb_security_group_id/acm_certificate_arn are
+  # required with no defaults, by design — see terraform/modules/ec2's
+  # variables.tf), so this needs no secrets/tfvars to run.
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [shared, dev, prod]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
       - name: terraform init (no backend)
-        working-directory: terraform/envs/shared
+        working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -backend=false -input=false
 
       - name: terraform validate
-        working-directory: terraform/envs/shared
+        working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform validate
 
   # Plan-only — never apply in CI given the blast radius (a shared,
@@ -52,11 +71,31 @@ jobs:
   # once this job has real AWS credentials, a same-repo PR can't use edits
   # to this workflow file to run arbitrary steps with those OIDC-derived
   # credentials before anyone reviews it.
+  #
+  # Matrixed over shared/dev/prod like the validate job above. dev and prod
+  # additionally need their required-with-no-default variables (ami_id,
+  # instance_type, alb_security_group_id, acm_certificate_arn — see
+  # terraform/envs/{dev,prod}/terraform.tfvars.example) supplied somehow for
+  # `terraform plan` to run at all; those are intentionally NOT hardcoded
+  # here or given fallback defaults in the .tf files (a wrong guess for an
+  # import target risks a forced replace on live resources — the same
+  # lesson Phase 1 learned the hard way with the OIDC role name/thumbprint).
+  # Instead they're read from optional DEV_TFVARS / PROD_TFVARS secrets
+  # (full .tfvars-file contents) written to a gitignored ci.auto.tfvars
+  # before plan runs. Until those secrets are populated (which requires
+  # first confirming the real, live resource identifiers — see README's
+  # import bootstrap section), the dev/prod plan steps degrade to a skipped
+  # no-op via the same "not configured yet" pattern already used for
+  # AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
   plan:
-    needs: fmt-and-validate
+    needs: [fmt, validate]
     runs-on: ubuntu-latest
     environment: terraform-plan
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [shared, dev, prod]
     steps:
       - uses: actions/checkout@v7
 
@@ -80,14 +119,26 @@ jobs:
           role-to-assume: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Write per-environment tfvars (dev/prod only, if configured)
+        if: matrix.environment != 'shared' && steps.secrets-check.outputs.configured == 'true'
+        working-directory: terraform/envs/${{ matrix.environment }}
+        env:
+          ENV_TFVARS: ${{ matrix.environment == 'dev' && secrets.DEV_TFVARS || secrets.PROD_TFVARS }}
+        run: |
+          if [ -n "$ENV_TFVARS" ]; then
+            echo "$ENV_TFVARS" > ci.auto.tfvars
+          else
+            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — plan for terraform/envs/${{ matrix.environment }} will fail on missing required variables and be swallowed by continue-on-error below."
+          fi
+
       - name: terraform init
         if: steps.secrets-check.outputs.configured == 'true'
         continue-on-error: true
-        working-directory: terraform/envs/shared
+        working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -input=false
 
       - name: terraform plan
         if: steps.secrets-check.outputs.configured == 'true'
         continue-on-error: true
-        working-directory: terraform/envs/shared
+        working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform plan -input=false -lock-timeout=60s
