@@ -18,7 +18,7 @@ variable "oidc_thumbprint_list" {
     GitHub/GitLab's well-known OIDC issuers on recent provider versions.
   EOT
   type        = list(string)
-  default     = ["6938fd4d98bab03faadb97b34396831e3780aea"]
+  default     = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
 variable "role_name" {

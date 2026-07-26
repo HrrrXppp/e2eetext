@@ -15,7 +15,7 @@ terraform {
   backend "s3" {
     bucket       = "e2eetext-terraform-state"
     key          = "envs/shared/terraform.tfstate"
-    region       = "us-east-1"
+    region       = "us-east-2"
     use_lockfile = true
     encrypt      = true
   }

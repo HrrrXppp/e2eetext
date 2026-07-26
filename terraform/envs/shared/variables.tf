@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for the ECR repositories (must match maintenance/ecr/.env's AWS_REGION)."
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "github_org" {
@@ -38,5 +38,5 @@ variable "oidc_thumbprint_list" {
     if the post-import `terraform plan` shows a diff on this field.
   EOT
   type        = list(string)
-  default     = ["6938fd4d98bab03faadb97b34396831e3780aea"]
+  default     = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
