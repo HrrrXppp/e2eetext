@@ -34,6 +34,10 @@ messenger/
 │   ├── ecr/               # build + push images to AWS ECR
 │   ├── alb/               # ALB setup example (AWS CLI)
 │   └── ec2/               # single-EC2 production compose
+└── terraform/
+    ├── modules/           # reusable ecr, github-oidc (more in later phases)
+    └── envs/
+        └── shared/        # account-wide root config (Phase 1: ECR + OIDC)
 ```
 
 
@@ -378,6 +382,8 @@ The server runs migrations automatically on startup.
 
 ### 2. Create ECR repositories
 
+The documented path is now `terraform apply` — see [Infrastructure as code (Terraform)](#infrastructure-as-code-terraform) below, which also codifies the GitHub Actions OIDC role used by `build-images.yml`. The script below remains as a manual fallback/bootstrap option:
+
 On your **local machine** (AWS CLI configured):
 
 ```bash
@@ -543,3 +549,76 @@ bash maintenance/ec2/deploy.sh
 | `database unavailable` | `DATABASE_URL`, RDS security group port 5432 from EC2 |
 | `load config` | `CONFIG_PATH` must point to a valid JSON file (e.g. `maintenance/ec2/config/config.json` on EC2) |
 | `exec format error` | Rebuild with `DOCKER_PLATFORM=linux/amd64` |
+
+## Infrastructure as code (Terraform)
+
+AWS infrastructure is being migrated from the manual/scripted setup above to Terraform, in phases tracked by [#27](https://github.com/HrrrXppp/e2eetext/issues/27):
+
+- **Phase 1 (done):** `terraform/envs/shared` — the two ECR repositories and the GitHub Actions OIDC role/policy, all account-wide with no dev/prod split.
+- **Phase 2/3 (planned):** `terraform/envs/{dev,prod}` — networking, ALB, EC2, and RDS, which are genuinely per-environment.
+
+```
+terraform/
+├── modules/
+│   ├── ecr/            # the e2eetext-server / e2eetext-client repos
+│   └── github-oidc/    # OIDC provider + IAM role/policy for build-images.yml
+└── envs/
+    └── shared/          # root config instantiating both modules (Phase 1)
+```
+
+### One-time backend bootstrap
+
+State is stored in S3 with native S3 state locking (Terraform >= 1.10, no DynamoDB table needed). The bucket referenced in `terraform/envs/shared/versions.tf` (`e2eetext-terraform-state`) does not exist yet — create it once, with versioning enabled, before the first `terraform init`:
+
+```bash
+aws s3api create-bucket --bucket e2eetext-terraform-state --region us-east-1
+aws s3api put-bucket-versioning --bucket e2eetext-terraform-state \
+  --versioning-configuration Status=Enabled
+
+# State holds IAM/ECR topology (and later more sensitive env data) — keep
+# the bucket private and encrypted at rest from the start:
+aws s3api put-public-access-block --bucket e2eetext-terraform-state \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-encryption --bucket e2eetext-terraform-state \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+```
+
+### One-time import bootstrap
+
+The ECR repos and the GitHub OIDC provider/role/policy already exist — they were created by hand (`maintenance/ecr/create-repos.sh`, and a manual OIDC setup for `build-images.yml`). Terraform must **import** them, not create them, or `apply` will try to recreate live resources and fail/conflict. Before the first `terraform apply`:
+
+```bash
+cd terraform/envs/shared
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars: set github_actions_role_name / github_actions_policy_name
+# to whatever the manually-created IAM role/policy are actually named in AWS.
+
+terraform init
+
+# ECR repositories
+terraform import 'module.ecr.aws_ecr_repository.this["e2eetext-server"]' e2eetext-server
+terraform import 'module.ecr.aws_ecr_repository.this["e2eetext-client"]' e2eetext-client
+
+# GitHub Actions OIDC identity provider
+terraform import module.github_oidc.aws_iam_openid_connect_provider.github \
+  arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com
+
+# IAM role assumed by build-images.yml (secrets.AWS_ROLE_ARN)
+terraform import module.github_oidc.aws_iam_role.github_actions_ecr_push <ROLE_NAME>
+
+# IAM policy granting ECR push, attached to the role above
+terraform import module.github_oidc.aws_iam_policy.ecr_push \
+  arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
+
+# Attachment of the policy above to the role above
+terraform import module.github_oidc.aws_iam_role_policy_attachment.ecr_push \
+  <ROLE_NAME>/arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
+```
+
+Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing all six resources, `terraform plan` should show **no changes** — that's the acceptance bar, proving the config matches what's already live rather than describing a divergent target state. Only once that's confirmed is `terraform apply` safe to run.
+
+### CI
+
+`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` and `terraform validate` always; a `terraform plan` (never `apply`, given the blast radius of account-wide ECR/IAM resources) runs too, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job; until then (or if it's under-scoped) the job either skips cleanly or, thanks to `continue-on-error` on its AWS steps, degrades to a warning instead of a hard failure. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.

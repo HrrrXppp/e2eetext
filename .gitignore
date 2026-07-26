@@ -44,3 +44,12 @@ maintenance/ecr/.env
 
 maintenance/alb/create-alb.sh
 
+# Terraform (commit .terraform.lock.hcl for reproducible provider versions)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
