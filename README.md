@@ -555,16 +555,24 @@ bash maintenance/ec2/deploy.sh
 AWS infrastructure is being migrated from the manual/scripted setup above to Terraform, in phases tracked by [#27](https://github.com/HrrrXppp/e2eetext/issues/27):
 
 - **Phase 1 (done):** `terraform/envs/shared` — the two ECR repositories and the GitHub Actions OIDC role/policy, all account-wide with no dev/prod split.
-- **Phase 2/3 (planned):** `terraform/envs/{dev,prod}` — networking, ALB, EC2, and RDS, which are genuinely per-environment.
+- **Phase 2 (done):** `terraform/envs/{dev,prod}` — networking, ALB, and EC2, which are genuinely per-environment.
+- **Phase 3 (planned):** RDS, same per-environment split.
 
 ```
 terraform/
 ├── modules/
 │   ├── ecr/            # the e2eetext-server / e2eetext-client repos
-│   └── github-oidc/    # OIDC provider + IAM role/policy for build-images.yml
+│   ├── github-oidc/    # OIDC provider + IAM role/policy for build-images.yml
+│   ├── network/         # data-source lookup of the VPC/subnets to deploy into
+│   ├── alb/              # ALB + target groups + listener rules (matches create-alb.example.sh)
+│   └── ec2/              # instance + security group + IAM instance profile
 └── envs/
-    └── shared/          # root config instantiating both modules (Phase 1)
+    ├── shared/          # root config instantiating ecr + github-oidc (Phase 1)
+    ├── dev/              # root config instantiating network + alb + ec2 for dev (Phase 2)
+    └── prod/             # same, for prod (Phase 2)
 ```
+
+`terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/alb` also does not create the ALB's own security group; like `create-alb.example.sh`, it takes an existing security group ID as input.
 
 ### One-time backend bootstrap
 
@@ -585,7 +593,7 @@ aws s3api put-bucket-encryption --bucket e2eetext-terraform-state \
   '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 ```
 
-### One-time import bootstrap
+### One-time import bootstrap (`envs/shared` — Phase 1)
 
 The ECR repos and the GitHub OIDC provider/role/policy already exist — they were created by hand (`maintenance/ecr/create-repos.sh`, and a manual OIDC setup for `build-images.yml`). Terraform must **import** them, not create them, or `apply` will try to recreate live resources and fail/conflict. Before the first `terraform apply`:
 
@@ -619,6 +627,61 @@ terraform import module.github_oidc.aws_iam_role_policy_attachment.ecr_push \
 
 Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing all six resources, `terraform plan` should show **no changes** — that's the acceptance bar, proving the config matches what's already live rather than describing a divergent target state. Only once that's confirmed is `terraform apply` safe to run.
 
+### One-time import bootstrap (`envs/dev` — Phase 2)
+
+A live dev EC2/ALB/VPC stack already exists (confirmed by the repo owner on [#27](https://github.com/HrrrXppp/e2eetext/issues/27)) — it was created by hand, following (at least loosely) this README's "Production on AWS" walkthrough and `maintenance/alb/create-alb.example.sh`. As with Phase 1, Terraform must **import** these, not create them:
+
+```bash
+cd terraform/envs/dev
+cp terraform.tfvars.example terraform.tfvars
+# Fill in the REAL identifiers of the live dev stack — see the comments in
+# terraform.tfvars.example for the exact `aws ec2 describe-instances` /
+# `aws elbv2 describe-load-balancers` commands to look them up. Do not guess
+# ami_id, instance_type, or subnet_id: these force a replace on `apply` if
+# they don't match the live instance exactly.
+
+terraform init
+
+# VPC/subnets are data-sourced, not managed resources — nothing to import there.
+
+# EC2 instance, its security group, and its IAM role/instance profile
+terraform import module.ec2.aws_instance.this <DEV_INSTANCE_ID>
+terraform import module.ec2.aws_security_group.this <DEV_EC2_SG_ID>
+terraform import module.ec2.aws_iam_role.this <DEV_EC2_ROLE_NAME>
+terraform import module.ec2.aws_iam_instance_profile.this <DEV_EC2_INSTANCE_PROFILE_NAME>
+terraform import module.ec2.aws_iam_role_policy_attachment.ecr_read_only \
+  <DEV_EC2_ROLE_NAME>/arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+# ALB, its two target groups, their attachments, and its listeners/rules
+terraform import module.alb.aws_lb.this <DEV_ALB_ARN>
+terraform import module.alb.aws_lb_target_group.server <DEV_SERVER_TG_ARN>
+terraform import module.alb.aws_lb_target_group.client <DEV_CLIENT_TG_ARN>
+terraform import module.alb.aws_lb_target_group_attachment.server <DEV_SERVER_TG_ARN>/<DEV_INSTANCE_ID>/8081
+terraform import module.alb.aws_lb_target_group_attachment.client <DEV_CLIENT_TG_ARN>/<DEV_INSTANCE_ID>/8080
+terraform import module.alb.aws_lb_listener.https <DEV_HTTPS_LISTENER_ARN>
+terraform import module.alb.aws_lb_listener.http_redirect <DEV_HTTP_LISTENER_ARN>
+terraform import module.alb.aws_lb_listener_rule.api <DEV_HTTPS_LISTENER_ARN>/<DEV_API_RULE_ARN_SUFFIX>
+terraform import module.alb.aws_lb_listener_rule.health <DEV_HTTPS_LISTENER_ARN>/<DEV_HEALTH_RULE_ARN_SUFFIX>
+```
+
+Look up the ARNs with `aws elbv2 describe-load-balancers --names <name>`, `describe-target-groups`, `describe-listeners`, and `describe-rules`. After importing everything, `terraform plan` should show **no changes** — the same acceptance bar as Phase 1. If it shows a diff (e.g. a different AMI, health-check interval, or idle timeout than what's live), fix the `.tf`/`.tfvars` to match reality rather than accepting the diff; don't `apply` until it's clean.
+
+### `envs/prod` (Phase 2) — live status not yet confirmed
+
+Unlike dev, whether a live prod EC2/ALB/VPC stack already exists has **not** been confirmed as part of this issue. This README's "Production on AWS" walkthrough only documents a procedure — every value in it (account ID, region, domain, VPC/subnet/security-group IDs, ACM cert ARN) is an obvious placeholder, not a recorded real identifier, so the repo alone doesn't prove a prod stack has actually been stood up.
+
+Before running anything against `terraform/envs/prod`, confirm which situation applies:
+
+```bash
+aws ec2 describe-instances --filters "Name=tag:Name,Values=e2eetext-prod*"
+aws elbv2 describe-load-balancers --names e2eetext-prod
+```
+
+- **If real resources come back:** follow the same import bootstrap as dev above, substituting prod's real identifiers.
+- **If nothing comes back:** `terraform apply` can create the stack fresh — but get sign-off on instance size, domain, and ACM certificate choices first, since this would be standing up production infrastructure for real users.
+
 ### CI
 
-`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` and `terraform validate` always; a `terraform plan` (never `apply`, given the blast radius of account-wide ECR/IAM resources) runs too, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job; until then (or if it's under-scoped) the job either skips cleanly or, thanks to `continue-on-error` on its AWS steps, degrades to a warning instead of a hard failure. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.
+`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` always (whole tree), and `terraform init -backend=false` + `terraform validate` for each of `envs/shared`, `envs/dev`, `envs/prod` (matrixed — validate doesn't need variable values, so this needs no secrets). A `terraform plan` (never `apply`, given the blast radius) runs too, matrixed the same way, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job; until then (or if it's under-scoped) the job either skips cleanly or, thanks to `continue-on-error` on its AWS steps, degrades to a warning instead of a hard failure. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.
+
+`envs/dev` and `envs/prod` additionally need their required-with-no-default variables (`ami_id`, `instance_type`, `alb_security_group_id`, `acm_certificate_arn`) supplied for `terraform plan` to run — these are deliberately not hardcoded or defaulted in the `.tf` files (a wrong guess for an import target risks a forced replace on live resources). The plan job reads them from optional `DEV_TFVARS` / `PROD_TFVARS` secrets (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning); until those secrets are populated — which requires first confirming the real, live resource identifiers per the import bootstrap sections above — the dev/prod plan steps degrade to a skipped no-op the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case does.
