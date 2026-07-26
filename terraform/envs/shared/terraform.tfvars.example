@@ -12,3 +12,9 @@ github_repo = "e2eetext"
 # importing, then set them here.
 github_actions_role_name   = "github-actions-ecr-push"
 github_actions_policy_name = "github-actions-ecr-push"
+
+# Only needed if the live OIDC provider's thumbprint differs from the
+# module's default (GitHub's current root CA). Check via `aws iam
+# get-open-id-connect-provider` if the post-import `terraform plan` shows
+# a diff on this field.
+# oidc_thumbprint_list = ["<actual-thumbprint>"]

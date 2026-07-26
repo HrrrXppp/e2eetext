@@ -35,17 +35,27 @@ jobs:
         run: terraform validate
 
   # Plan-only — never apply in CI given the blast radius (a shared,
-  # account-wide ECR/IAM stack). This job needs the AWS_ROLE_ARN /
-  # AWS_REGION secrets already used by build-images.yml, plus that role
-  # (or a wider one) having read access to IAM/ECR/S3 state — the current
-  # github-actions-ecr-push role is scoped to ECR push only (see
-  # terraform/modules/github-oidc), so this step will fail with
-  # AccessDenied until it's granted read access or a separate read-only
-  # "terraform-plan" role is provisioned. Skips cleanly (rather than
-  # failing the required checks above) when the secrets aren't set.
+  # account-wide ECR/IAM stack). Deliberately does NOT reuse the
+  # AWS_ROLE_ARN secret build-images.yml assumes: that role is scoped to
+  # ECR push only (see terraform/modules/github-oidc) and lacks the
+  # IAM/ECR/S3 read access `terraform plan` needs, so reusing it would just
+  # trade one AccessDenied failure mode for another. Instead this job looks
+  # for a separate AWS_TERRAFORM_PLAN_ROLE_ARN secret pointing at a
+  # dedicated, read-only "terraform-plan" role — until that's provisioned,
+  # the job skips cleanly rather than failing (or erroring red) on every
+  # Terraform PR. `continue-on-error` on the AWS-touching steps is a second
+  # safety net so a misconfigured/under-scoped plan role degrades this
+  # optional job to a warning instead of a hard failure.
+  #
+  # Gated behind the "terraform-plan" GitHub Environment (must be created in
+  # repo Settings > Environments, ideally with required reviewers) so that,
+  # once this job has real AWS credentials, a same-repo PR can't use edits
+  # to this workflow file to run arbitrary steps with those OIDC-derived
+  # credentials before anyone reviews it.
   plan:
     needs: fmt-and-validate
     runs-on: ubuntu-latest
+    environment: terraform-plan
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/checkout@v7
@@ -57,7 +67,7 @@ jobs:
       - name: Check AWS secrets are configured
         id: secrets-check
         run: |
-          if [ -n "${{ secrets.AWS_ROLE_ARN }}" ] && [ -n "${{ secrets.AWS_REGION }}" ]; then
+          if [ -n "${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}" ] && [ -n "${{ secrets.AWS_REGION }}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -65,16 +75,19 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         if: steps.secrets-check.outputs.configured == 'true'
+        continue-on-error: true
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: terraform init
         if: steps.secrets-check.outputs.configured == 'true'
+        continue-on-error: true
         working-directory: terraform/envs/shared
         run: terraform init -input=false
 
       - name: terraform plan
         if: steps.secrets-check.outputs.configured == 'true'
+        continue-on-error: true
         working-directory: terraform/envs/shared
         run: terraform plan -input=false -lock-timeout=60s

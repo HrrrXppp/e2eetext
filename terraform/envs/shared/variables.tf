@@ -27,3 +27,16 @@ variable "github_actions_policy_name" {
   type        = string
   default     = "github-actions-ecr-push"
 }
+
+variable "oidc_thumbprint_list" {
+  description = <<-EOT
+    TLS certificate thumbprints for token.actions.githubusercontent.com, passed
+    through to module.github_oidc. The default is GitHub's current root CA
+    (DigiCert Global Root G2) thumbprint. Only override this if the live,
+    manually-created OIDC provider was recorded with a different thumbprint —
+    check `aws iam list-open-id-connect-providers` / `get-open-id-connect-provider`
+    if the post-import `terraform plan` shows a diff on this field.
+  EOT
+  type        = list(string)
+  default     = ["6938fd4d98bab03faadb97b34396831e3780aea"]
+}

@@ -574,6 +574,15 @@ State is stored in S3 with native S3 state locking (Terraform >= 1.10, no Dynamo
 aws s3api create-bucket --bucket e2eetext-terraform-state --region us-east-1
 aws s3api put-bucket-versioning --bucket e2eetext-terraform-state \
   --versioning-configuration Status=Enabled
+
+# State holds IAM/ECR topology (and later more sensitive env data) — keep
+# the bucket private and encrypted at rest from the start:
+aws s3api put-public-access-block --bucket e2eetext-terraform-state \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-encryption --bucket e2eetext-terraform-state \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 ```
 
 ### One-time import bootstrap
@@ -602,10 +611,14 @@ terraform import module.github_oidc.aws_iam_role.github_actions_ecr_push <ROLE_N
 # IAM policy granting ECR push, attached to the role above
 terraform import module.github_oidc.aws_iam_policy.ecr_push \
   arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
+
+# Attachment of the policy above to the role above
+terraform import module.github_oidc.aws_iam_role_policy_attachment.ecr_push \
+  <ROLE_NAME>/arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
 ```
 
-Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing all five resources, `terraform plan` should show **no changes** — that's the acceptance bar, proving the config matches what's already live rather than describing a divergent target state. Only once that's confirmed is `terraform apply` safe to run.
+Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing all six resources, `terraform plan` should show **no changes** — that's the acceptance bar, proving the config matches what's already live rather than describing a divergent target state. Only once that's confirmed is `terraform apply` safe to run.
 
 ### CI
 
-`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` and `terraform validate` always; a `terraform plan` (never `apply`, given the blast radius of account-wide ECR/IAM resources) runs too, but only once repo secrets are configured and only against the state already bootstrapped above. Note the current `github-actions-ecr-push` role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import), so it does not have the IAM/ECR/S3 read access `terraform plan` needs — CI's plan step will show `AccessDenied` until a separate read-only role (or a widened policy) is provisioned for it.
+`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` and `terraform validate` always; a `terraform plan` (never `apply`, given the blast radius of account-wide ECR/IAM resources) runs too, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job; until then (or if it's under-scoped) the job either skips cleanly or, thanks to `continue-on-error` on its AWS steps, degrades to a warning instead of a hard failure. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.

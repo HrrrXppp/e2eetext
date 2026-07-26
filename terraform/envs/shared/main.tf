@@ -24,5 +24,7 @@ module "github_oidc" {
   role_name   = var.github_actions_role_name
   policy_name = var.github_actions_policy_name
 
+  oidc_thumbprint_list = var.oidc_thumbprint_list
+
   ecr_repository_arns = values(module.ecr.repository_arns)
 }

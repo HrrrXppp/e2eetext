@@ -8,7 +8,14 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 # Trust policy scoped to the whole repository (repo:OWNER/REPO:*) — not a
-# branch or environment, matching the manually-created role.
+# branch or environment, matching the manually-created role. This is
+# intentionally broad for the zero-diff Phase 1 import (any ref/workflow in
+# the repo, including workflow_dispatch from an arbitrary branch, can assume
+# this role): tightening it now would diverge from what's actually live and
+# break the "terraform plan shows no changes" import bar. Once import is
+# confirmed, consider narrowing the `sub` condition below to specific refs
+# (e.g. "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main") and/or
+# fronting it with a GitHub Environment that requires reviewers.
 data "aws_iam_policy_document" "trust" {
   statement {
     sid     = "GitHubActionsAssumeRoleWithWebIdentity"
