@@ -19,7 +19,11 @@ variable "github_repo" {
 variable "github_actions_role_name" {
   description = "Name of the existing IAM role that build-images.yml assumes (secrets.AWS_ROLE_ARN). Must match exactly for a zero-diff import."
   type        = string
-  default     = "github-actions-ecr-push"
+  # The live role is actually named "github-actions-ecr-role", not
+  # "github-actions-ecr-push" — confirmed via the PR #29 CI plan, which
+  # showed the role "must be replaced" (destroy + create under the wrong
+  # name) instead of matching the imported live resource.
+  default = "github-actions-ecr-role"
 }
 
 variable "github_actions_policy_name" {

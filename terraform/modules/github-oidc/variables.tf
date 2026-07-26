@@ -24,7 +24,13 @@ variable "oidc_thumbprint_list" {
 variable "role_name" {
   description = "Name of the IAM role assumed by GitHub Actions via OIDC. Must match the role already created manually, for a zero-diff import."
   type        = string
-  default     = "github-actions-ecr-push"
+  # Matches the live role's actual name (see .github/workflows/build-images.yml's
+  # secrets.AWS_ROLE_ARN, which points at this role). A prior default of
+  # "github-actions-ecr-push" didn't match, which made Terraform plan to
+  # destroy the live role and create a new one under that name instead of
+  # recognizing it — that would have broken build-images.yml the moment
+  # apply ran, since AWS_ROLE_ARN would still point at the deleted role.
+  default = "github-actions-ecr-role"
 }
 
 variable "policy_name" {

@@ -10,7 +10,7 @@ github_repo = "e2eetext"
 # Must match the IAM role/policy names already created for build-images.yml's
 # secrets.AWS_ROLE_ARN — check the AWS Console/CLI for the real names before
 # importing, then set them here.
-github_actions_role_name   = "github-actions-ecr-push"
+github_actions_role_name   = "github-actions-ecr-role"
 github_actions_policy_name = "github-actions-ecr-push"
 
 # Only needed if the live OIDC provider's thumbprint differs from the
