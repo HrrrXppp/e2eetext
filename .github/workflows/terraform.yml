@@ -143,8 +143,17 @@ jobs:
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -input=false
 
+      # -lock=false: this job is plan-only and never writes state, but
+      # Terraform's native S3 locking (use_lockfile) still wants to PUT a
+      # .tflock object even for a plan — which a deliberately read-only
+      # plan role must not be allowed to do (observed as "Error acquiring
+      # the state lock" / s3:PutObject AccessDenied on
+      # envs/dev/terraform.tfstate.tflock once AWS_TERRAFORM_PLAN_ROLE_ARN
+      # was configured). Skipping the lock is safe here precisely because
+      # nothing in CI ever mutates state. The role's required (read-only)
+      # permissions are documented in README's Terraform CI section.
       - name: terraform plan
         if: steps.secrets-check.outputs.configured == 'true'
         continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
-        run: terraform plan -input=false -lock-timeout=60s
+        run: terraform plan -input=false -lock=false
