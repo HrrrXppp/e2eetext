@@ -37,5 +37,21 @@ acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxx
 # ec2_iam_role_name             = "<actual-role-name>"
 # ec2_iam_instance_profile_name = "<actual-instance-profile-name>"
 
+# If importing a live, hand-made stack: audit it first and override the
+# script-shaped defaults to match reality — the dev audit (2026-07-26)
+# found every one of these diverged there, and ALB/TG names are ForceNew
+# (a mismatch means replacement, i.e. downtime). See envs/dev/variables.tf
+# for the dev values as a worked example.
+# alb_name                 = "<live-alb-name>"
+# server_target_group_name = "<live-server-tg-name>"
+# client_target_group_name = "<live-client-tg-name>"
+# alb_idle_timeout         = 60
+# https_default_action     = "fixed-404"   # or "forward-client"
+# api_rule_priority        = 100
+# api_path_patterns        = ["/api/*"]
+# create_health_rule       = false
+# ec2_security_group_ids   = ["sg-xxxxxxxx"]  # live instance's real SGs
+# create_ec2_iam_instance_profile = false     # if the live instance has none
+
 # admin_ssh_cidr_blocks = ["203.0.113.0/32"]
 # key_name              = "e2eetext-prod-key"

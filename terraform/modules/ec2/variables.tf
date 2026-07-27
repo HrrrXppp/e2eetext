@@ -1,6 +1,7 @@
 variable "name" {
-  description = "Name tag for the EC2 instance (e.g. \"e2eetext-dev\")."
+  description = "Name tag for the EC2 instance (e.g. \"e2eetext-dev\"). Leave empty to set no Name tag — required for a zero-diff import of the live dev instance, which is untagged."
   type        = string
+  default     = ""
 }
 
 variable "ami_id" {
@@ -44,6 +45,33 @@ variable "key_name" {
   description = "EC2 key pair name for SSH access. Leave empty if none is attached (e.g. SSM-only access)."
   type        = string
   default     = ""
+}
+
+variable "security_group_ids" {
+  description = <<-EOT
+    Pre-existing security group IDs to attach to the instance instead of
+    creating one. Leave empty (default) to have this module create its own
+    SG (named var.security_group_name, allowing 8080/8081 from the ALB).
+    Set to the instance's real, live security groups when importing an
+    instance whose SGs were made by hand — swapping them for a module-made
+    SG is an in-place update but a real firewall change (e.g. detaching a
+    live ec2-rds-* group can cut RDS connectivity).
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "create_iam_instance_profile" {
+  description = <<-EOT
+    Whether to create the IAM role + instance profile (with
+    AmazonEC2ContainerRegistryReadOnly) and attach it to the instance. Set
+    false when importing a live instance that runs without any instance
+    profile (true of the live dev instance) so the import stays zero-diff;
+    flip to true later to migrate to the README's documented ECR-pull
+    setup.
+  EOT
+  type        = bool
+  default     = true
 }
 
 variable "security_group_name" {

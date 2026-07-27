@@ -12,7 +12,20 @@
 # ForceNew) — exactly the class of mistake Phase 1 hit with the OIDC
 # role name/thumbprint. See README's import bootstrap section.
 
+locals {
+  # When the caller passes pre-existing security group IDs (the live dev
+  # instance runs with hand-made SGs — "launch-wizard-2" + "ec2-rds-1" —
+  # not one this module created), don't create a new SG at all: attaching a
+  # module-made SG in their place would change the live firewall (and
+  # ec2-rds-1's own description warns that detaching it can cut RDS
+  # connectivity).
+  create_security_group = length(var.security_group_ids) == 0
+  security_group_ids    = local.create_security_group ? [aws_security_group.this[0].id] : var.security_group_ids
+}
+
 resource "aws_security_group" "this" {
+  count = local.create_security_group ? 1 : 0
+
   name        = var.security_group_name
   description = "e2eetext EC2 instance: SSH (admin only) + 8080/8081 from the ALB only"
   vpc_id      = var.vpc_id
@@ -57,6 +70,8 @@ resource "aws_security_group" "this" {
 }
 
 data "aws_iam_policy_document" "assume_role" {
+  count = var.create_iam_instance_profile ? 1 : 0
+
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
@@ -69,26 +84,36 @@ data "aws_iam_policy_document" "assume_role" {
 }
 
 resource "aws_iam_role" "this" {
+  count = var.create_iam_instance_profile ? 1 : 0
+
   name               = var.iam_role_name
-  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.assume_role[0].json
   tags               = var.tags
 }
 
 # README's "IAM role: attach AmazonEC2ContainerRegistryReadOnly (so EC2 can
-# pull from ECR)" — this is what already lets maintenance/ec2/ecr-login.sh's
-# `aws ecr get-login-password` work without any static credentials on the
+# pull from ECR)" — with the profile attached, maintenance/ec2/ecr-login.sh's
+# `aws ecr get-login-password` works without any static credentials on the
 # box (the AWS CLI picks up the instance profile automatically via its
-# default credential chain). Codifying the existing role/policy here is not
-# a functional change to ecr-login.sh or deploy.sh — both already assume
-# this role is in place — so neither script needs to change for Phase 2.
+# default credential chain). NOTE: despite the README, the live dev
+# instance runs with NO instance profile at all (confirmed against AWS,
+# 2026-07-26 — the account has zero instance profiles), so ECR pulls there
+# must rely on credentials configured on the box. Callers describing such
+# an instance set var.create_iam_instance_profile = false; flipping it to
+# true later (an in-place instance update) is the migration path to the
+# README's documented setup.
 resource "aws_iam_role_policy_attachment" "ecr_read_only" {
-  role       = aws_iam_role.this.name
+  count = var.create_iam_instance_profile ? 1 : 0
+
+  role       = aws_iam_role.this[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 resource "aws_iam_instance_profile" "this" {
+  count = var.create_iam_instance_profile ? 1 : 0
+
   name = var.iam_instance_profile_name
-  role = aws_iam_role.this.name
+  role = aws_iam_role.this[0].name
   tags = var.tags
 }
 
@@ -96,13 +121,15 @@ resource "aws_instance" "this" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [aws_security_group.this.id]
-  iam_instance_profile   = aws_iam_instance_profile.this.name
+  vpc_security_group_ids = local.security_group_ids
+  iam_instance_profile   = var.create_iam_instance_profile ? aws_iam_instance_profile.this[0].name : null
   key_name               = var.key_name != "" ? var.key_name : null
 
-  tags = merge(var.tags, {
-    Name = var.name
-  })
+  # Name tag only when var.name is non-empty — the live, hand-made dev
+  # instance carries no tags at all, and forcing a Name tag on it would
+  # break the zero-diff import bar. Adding one later is a deliberate
+  # in-place change (set var.name), not something import should smuggle in.
+  tags = merge(var.tags, var.name != "" ? { Name = var.name } : {})
 
   lifecycle {
     # user_data / AMI drift on an already-provisioned, hand-configured

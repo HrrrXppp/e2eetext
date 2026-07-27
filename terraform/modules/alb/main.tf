@@ -11,6 +11,11 @@
 # var.security_group_ids as-is. See README's import bootstrap section for
 # how to import the rest of what this module manages.
 
+locals {
+  server_target_group_name = var.server_target_group_name != "" ? var.server_target_group_name : "${var.name}-server"
+  client_target_group_name = var.client_target_group_name != "" ? var.client_target_group_name : "${var.name}-client"
+}
+
 resource "aws_lb" "this" {
   name               = var.name
   internal           = false
@@ -18,8 +23,10 @@ resource "aws_lb" "this" {
   security_groups    = var.security_group_ids
   subnets            = var.subnet_ids
 
-  # create-alb.example.sh sets this explicitly for /ws WebSocket support.
-  idle_timeout = 3600
+  # create-alb.example.sh sets 3600 (the module default) for /ws WebSocket
+  # support; the live dev ALB runs the AWS default of 60 — see
+  # var.idle_timeout.
+  idle_timeout = var.idle_timeout
 
   tags = var.tags
 }
@@ -27,15 +34,18 @@ resource "aws_lb" "this" {
 # Port 8081, health check /health — matches create-alb.example.sh's
 # "server target group" section exactly.
 resource "aws_lb_target_group" "server" {
-  name        = "${var.name}-server"
+  name        = local.server_target_group_name
   port        = 8081
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "instance"
 
   health_check {
-    path     = "/health"
-    interval = 30
+    path                = "/health"
+    interval            = 30
+    port                = var.server_health_check_port
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
   }
 
   tags = var.tags
@@ -46,15 +56,18 @@ resource "aws_lb_target_group" "server" {
 # /health as its health-check path per the script, even though it's the
 # default/catch-all target rather than the one serving GET /health).
 resource "aws_lb_target_group" "client" {
-  name        = "${var.name}-client"
+  name        = local.client_target_group_name
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "instance"
 
   health_check {
-    path     = "/health"
-    interval = 30
+    path                = "/health"
+    interval            = 30
+    port                = var.client_health_check_port
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
   }
 
   tags = var.tags
@@ -72,50 +85,102 @@ resource "aws_lb_target_group_attachment" "client" {
   port             = 8080
 }
 
-# Default action forwards to the client TG — matches the script and
-# README's routing table (everything not matched by a rule below, including
-# /oauth/callback, goes to the client SPA).
+# Default action: forward to the client TG ("forward-client" — matches the
+# script and README's routing table: everything not matched by a rule below,
+# including /oauth/callback, goes to the client SPA), or a fixed 404
+# ("fixed-404" — what the live dev listener actually does; its client
+# routing lives in hand-made path-pattern rules that Terraform does not yet
+# manage). See var.https_default_action.
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"
   certificate_arn   = var.acm_certificate_arn
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.client.arn
+  dynamic "default_action" {
+    for_each = var.https_default_action == "forward-client" ? [1] : []
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.client.arn
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = var.https_default_action == "fixed-404" ? [1] : []
+    content {
+      type = "fixed-response"
+
+      fixed_response {
+        content_type = "text/plain"
+        message_body = var.fixed_404_message_body
+        status_code  = "404"
+      }
+    }
   }
 
   tags = var.tags
 }
 
-# Priority 10: /api* -> server. Matches create-alb.example.sh's create_rule
-# 10 '/api*'.
+# /api -> server. create-alb.example.sh's create_rule 10 '/api*' by
+# default; the live dev ALB has this rule at priority 100 matching
+# '/api/*' instead — see var.api_rule_priority / var.api_path_patterns.
 resource "aws_lb_listener_rule" "api" {
   listener_arn = aws_lb_listener.https.arn
-  priority     = 10
+  priority     = var.api_rule_priority
 
+  # Written in the expanded forward-block form (equivalent to
+  # target_group_arn for a single TG) because that's what ELBv2 stores:
+  # importing the live rule with the shorthand leaves a perpetual
+  # stickiness/weight diff in plan.
   action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.server.arn
+    type = "forward"
+
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.server.arn
+        weight = 1
+      }
+
+      stickiness {
+        enabled  = false
+        duration = 3600
+      }
+    }
   }
 
   condition {
     path_pattern {
-      values = ["/api*"]
+      values = var.api_path_patterns
     }
   }
 }
 
-# Priority 20: /health (exact) -> server. Matches create-alb.example.sh's
-# create_rule 20 '/health'.
+# /health (exact) -> server. Matches create-alb.example.sh's create_rule 20
+# '/health'. The live dev listener has no such rule (its target groups
+# still health-check /health directly against ports 8080/8081, which needs
+# no listener rule) — var.create_health_rule = false skips it there.
 resource "aws_lb_listener_rule" "health" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 20
+  count = var.create_health_rule ? 1 : 0
 
+  listener_arn = aws_lb_listener.https.arn
+  priority     = var.health_rule_priority
+
+  # Same expanded forward-block form as the api rule above, for the same
+  # import-diff reason.
   action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.server.arn
+    type = "forward"
+
+    forward {
+      target_group {
+        arn    = aws_lb_target_group.server.arn
+        weight = 1
+      }
+
+      stickiness {
+        enabled  = false
+        duration = 3600
+      }
+    }
   }
 
   condition {

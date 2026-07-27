@@ -28,10 +28,12 @@ jobs:
 
   # Phase 2 of #27 added terraform/envs/{dev,prod} alongside envs/shared —
   # matrixed so every root config gets init+validate on PRs touching
-  # terraform/. `terraform validate` doesn't need variable values (dev/prod's
+  # terraform/. `terraform validate` doesn't need variable values (prod's
   # ami_id/instance_type/alb_security_group_id/acm_certificate_arn are
-  # required with no defaults, by design — see terraform/modules/ec2's
-  # variables.tf), so this needs no secrets/tfvars to run.
+  # required with no defaults, by design, until its live status is
+  # confirmed; dev's defaults are audited-live values — see
+  # terraform/envs/dev/variables.tf), so this needs no secrets/tfvars to
+  # run.
   validate:
     runs-on: ubuntu-latest
     strategy:
@@ -72,21 +74,25 @@ jobs:
   # to this workflow file to run arbitrary steps with those OIDC-derived
   # credentials before anyone reviews it.
   #
-  # Matrixed over shared/dev/prod like the validate job above. dev and prod
-  # additionally need their required-with-no-default variables (ami_id,
-  # instance_type, alb_security_group_id, acm_certificate_arn — see
-  # terraform/envs/{dev,prod}/terraform.tfvars.example) supplied somehow for
-  # `terraform plan` to run at all; those are intentionally NOT hardcoded
-  # here or given fallback defaults in the .tf files (a wrong guess for an
-  # import target risks a forced replace on live resources — the same
-  # lesson Phase 1 learned the hard way with the OIDC role name/thumbprint).
-  # Instead they're read from optional DEV_TFVARS / PROD_TFVARS secrets
-  # (full .tfvars-file contents) written to a gitignored ci.auto.tfvars
-  # before plan runs. Until those secrets are populated (which requires
-  # first confirming the real, live resource identifiers — see README's
-  # import bootstrap section), the dev/prod plan steps degrade to a skipped
-  # no-op via the same "not configured yet" pattern already used for
-  # AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
+  # Matrixed over shared/dev/prod like the validate job above. dev plans
+  # with no tfvars at all — its variable defaults are audited-live values,
+  # and it looks the ALB SG / ACM cert up from the live ALB by name (which
+  # is why its plan needs real AWS credentials). prod still needs its
+  # required-with-no-default variables (ami_id, instance_type,
+  # alb_security_group_id, acm_certificate_arn — see
+  # terraform/envs/prod/terraform.tfvars.example) supplied for `terraform
+  # plan` to run at all; those are intentionally NOT hardcoded here or
+  # given fallback defaults in the .tf files while prod's live status is
+  # unconfirmed (a wrong guess for an import target risks a forced replace
+  # on live resources — the same lesson Phase 1 learned the hard way with
+  # the OIDC role name/thumbprint). They're read from optional DEV_TFVARS /
+  # PROD_TFVARS secrets (full .tfvars-file contents) written to a
+  # gitignored ci.auto.tfvars before plan runs — DEV_TFVARS is now purely
+  # an optional override hook. Until PROD_TFVARS is populated (which
+  # requires first confirming prod's real, live resource identifiers — see
+  # README's import bootstrap section), the prod plan step degrades to a
+  # skipped no-op via the same "not configured yet" pattern already used
+  # for AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
   plan:
     needs: [fmt, validate]
     runs-on: ubuntu-latest
@@ -128,7 +134,7 @@ jobs:
           if [ -n "$ENV_TFVARS" ]; then
             echo "$ENV_TFVARS" > ci.auto.tfvars
           else
-            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — plan for terraform/envs/${{ matrix.environment }} will fail on missing required variables and be swallowed by continue-on-error below."
+            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — planning terraform/envs/${{ matrix.environment }} with its in-repo defaults (fine for dev; prod will fail on missing required variables and be swallowed by continue-on-error below)."
           fi
 
       - name: terraform init

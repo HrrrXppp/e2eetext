@@ -23,6 +23,13 @@
 #   greenfield Terraform — but get that confirmed (and get sign-off on
 #   instance size/domain/ACM cert choices) before running `apply` against
 #   the resources real users would hit.
+#
+# Heads-up from the dev audit (2026-07-26): the live dev stack diverged
+# from create-alb.example.sh in almost every override this config exposes
+# (ALB/TG names, idle timeout, default action, rule priorities/patterns,
+# instance SGs, no instance profile). If a live prod stack exists, expect
+# the same and audit it before importing — the variables below default to
+# the script-shaped topology and must be overridden to match reality.
 
 provider "aws" {
   region = var.aws_region
@@ -48,6 +55,9 @@ module "ec2" {
   admin_ssh_cidr_blocks = var.admin_ssh_cidr_blocks
   key_name              = var.key_name
 
+  security_group_ids          = var.ec2_security_group_ids
+  create_iam_instance_profile = var.create_ec2_iam_instance_profile
+
   security_group_name       = var.ec2_security_group_name
   iam_role_name             = var.ec2_iam_role_name
   iam_instance_profile_name = var.ec2_iam_instance_profile_name
@@ -58,13 +68,21 @@ module "ec2" {
 module "alb" {
   source = "../../modules/alb"
 
-  name       = var.name_prefix
+  name       = var.alb_name != "" ? var.alb_name : var.name_prefix
   vpc_id     = module.network.vpc_id
   subnet_ids = length(var.alb_subnet_ids) > 0 ? var.alb_subnet_ids : module.network.subnet_ids
 
   security_group_ids  = [var.alb_security_group_id]
   instance_id         = module.ec2.instance_id
   acm_certificate_arn = var.acm_certificate_arn
+
+  server_target_group_name = var.server_target_group_name
+  client_target_group_name = var.client_target_group_name
+  idle_timeout             = var.alb_idle_timeout
+  https_default_action     = var.https_default_action
+  api_rule_priority        = var.api_rule_priority
+  api_path_patterns        = var.api_path_patterns
+  create_health_rule       = var.create_health_rule
 
   tags = var.tags
 }
