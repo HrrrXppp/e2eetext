@@ -47,6 +47,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Cryptography NIST expert Cursor skill
 - Cursor rule requiring `CHANGELOG.md` updates for notable changes
 - Terraform (Phase 1 of #27): `terraform/modules/{ecr,github-oidc}` and `terraform/envs/shared`, codifying the account-wide ECR repositories and GitHub Actions OIDC role/policy already created manually; plan-only `terraform.yml` CI workflow (`fmt`, `validate`, gated `plan`)
+- Terraform (Phase 2 of #27): `terraform/modules/{network,alb,ec2}` and `terraform/envs/{dev,prod}`, codifying per-environment networking (default-VPC data source), ALB (matching `create-alb.example.sh`'s target groups/listener rules), and EC2 (instance + security group + IAM instance profile); `terraform.yml` CI matrixed over `shared`/`dev`/`prod`
 
 ### Fixed
 

@@ -1,0 +1,49 @@
+# terraform/envs/dev needs NO terraform.tfvars to plan: every variable has
+# a confirmed-live default (audited against AWS 2026-07-26 — see
+# variables.tf) or is looked up from the live stack by name in main.tf
+# (ALB security group + ACM cert ARN come off the live "dev-e2eetext" ALB;
+# the instance's SGs resolve from their names). Copy this file to
+# terraform.tfvars only to OVERRIDE something — e.g. if the live stack has
+# drifted from the audited values, or to stand dev up fresh in an account
+# where the live ALB doesn't exist (then the by-name lookups fail and the
+# explicit IDs below become required).
+#
+# Before `terraform import`, do set ec2_subnet_id (see below). Do not
+# `terraform apply` before importing — see README.md's import bootstrap.
+
+# aws_region   = "us-east-2"
+# name_prefix  = "e2eetext-dev"
+
+# Confirmed live 2026-07-26 (already the defaults — override only on drift):
+# ami_id        = "ami-0e5497a77ef21b5ac"
+# instance_type = "t3.small"
+# key_name      = "alpha-0.0.1"
+# alb_name      = "dev-e2eetext"
+# server_target_group_name = "dev-server"
+# client_target_group_name = "client"
+# alb_idle_timeout         = 60
+# https_default_action     = "fixed-404"
+# api_rule_priority        = 100
+# api_path_patterns        = ["/api/*"]
+# create_health_rule       = false
+# ec2_security_group_names = ["launch-wizard-2", "ec2-rds-1"]
+# create_ec2_iam_instance_profile = false
+
+# REQUIRED before `terraform import` (not for plain plan): the live
+# instance's actual subnet — module.network's subnet order isn't
+# guaranteed, and a subnet mismatch on aws_instance forces a replace.
+#   aws ec2 describe-instances \
+#     --query 'Reservations[0].Instances[0].[ImageId,InstanceType,SubnetId]'
+# ec2_subnet_id = "subnet-xxxxxxxx"
+
+# Only needed if the live ALB doesn't exist (fresh account) — otherwise
+# main.tf looks these up from the ALB named alb_name:
+# alb_security_group_id = "sg-xxxxxxxx"
+# acm_certificate_arn   = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxxxx"
+
+# Optional:
+# vpc_id                = "vpc-xxxxxxxx"
+# subnet_ids            = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+# alb_subnet_ids        = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+# admin_ssh_cidr_blocks = ["203.0.113.0/32"]
+# tags                  = { Environment = "dev", ManagedBy = "terraform" }
