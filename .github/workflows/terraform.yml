@@ -126,6 +126,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Write per-environment tfvars (dev/prod only, if configured)
+        id: write-tfvars
         if: matrix.environment != 'shared' && steps.secrets-check.outputs.configured == 'true'
         working-directory: terraform/envs/${{ matrix.environment }}
         env:
@@ -133,12 +134,23 @@ jobs:
         run: |
           if [ -n "$ENV_TFVARS" ]; then
             echo "$ENV_TFVARS" > ci.auto.tfvars
+            echo "written=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — planning terraform/envs/${{ matrix.environment }} with its in-repo defaults (fine for dev; prod will fail on missing required variables and be swallowed by continue-on-error below)."
+            echo "written=false" >> "$GITHUB_OUTPUT"
+            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — planning terraform/envs/${{ matrix.environment }} with its in-repo defaults (fine for dev, which plans with no tfvars at all; prod has no such defaults yet, so its init/plan steps below are skipped rather than run-and-fail)."
           fi
 
+      # prod's ami_id/instance_type/alb_security_group_id/acm_certificate_arn
+      # are required with no defaults (see terraform/envs/prod/variables.tf),
+      # so without PROD_TFVARS a `terraform plan` there can only fail with
+      # "No value for required variable" — continue-on-error would swallow
+      # that at the job level but still leave a failed red step in the Actions
+      # UI, which is exactly what a "skipped no-op" is meant to avoid. So
+      # prod's init/plan only run once PROD_TFVARS actually wrote a tfvars
+      # file; shared/dev are unaffected (their required-tfvars flag is
+      # unset/false via write-tfvars' `if`, but they don't need one).
       - name: terraform init
-        if: steps.secrets-check.outputs.configured == 'true'
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment != 'prod' || steps.write-tfvars.outputs.written == 'true')
         continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -input=false
@@ -153,7 +165,7 @@ jobs:
       # nothing in CI ever mutates state. The role's required (read-only)
       # permissions are documented in README's Terraform CI section.
       - name: terraform plan
-        if: steps.secrets-check.outputs.configured == 'true'
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment != 'prod' || steps.write-tfvars.outputs.written == 'true')
         continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform plan -input=false -lock=false
