@@ -134,7 +134,14 @@ jobs:
         if: matrix.environment != 'shared' && steps.secrets-check.outputs.configured == 'true'
         working-directory: terraform/envs/${{ matrix.environment }}
         env:
-          ENV_TFVARS: ${{ matrix.environment == 'dev' && secrets.DEV_TFVARS || secrets.PROD_TFVARS }}
+          # Explicit three-way branch, not `dev && X || Y`: that older form
+          # treats an empty/unset DEV_TFVARS as falsy and silently falls
+          # through to secrets.PROD_TFVARS, so the dev matrix leg would plan
+          # dev state using prod's tfvars (including prod's RDS identity) —
+          # flagged on PR #32 as the same expression bug already fixed once
+          # for Phase 2. Each leg now only ever resolves to its own secret,
+          # or '' if that secret isn't set.
+          ENV_TFVARS: ${{ matrix.environment == 'dev' && secrets.DEV_TFVARS || (matrix.environment == 'prod' && secrets.PROD_TFVARS || '') }}
         run: |
           if [ -n "$ENV_TFVARS" ]; then
             echo "$ENV_TFVARS" > ci.auto.tfvars
@@ -154,9 +161,16 @@ jobs:
       # meant to avoid. So dev/prod's init/plan only run once their tfvars
       # were actually written; shared is unaffected (it has no
       # required-with-no-default variables, so it needs no tfvars at all).
+      #
+      # No `continue-on-error` on init/plan themselves (PR #32 review):
+      # `continue-on-error` stays only on the AWS-credentials step above,
+      # covering the "AWS_TERRAFORM_PLAN_ROLE_ARN isn't provisioned/scoped
+      # yet" case this job is meant to degrade gracefully for. Once tfvars
+      # are written AND credentials were configured, a failure here is a
+      # real problem (bad tfvars, insufficient permissions, a genuine
+      # config error) that should fail the check, not stay silently green.
       - name: terraform init
         if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
-        continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -input=false
 
@@ -169,8 +183,23 @@ jobs:
       # was configured). Skipping the lock is safe here precisely because
       # nothing in CI ever mutates state. The role's required (read-only)
       # permissions are documented in README's Terraform CI section.
+      #
+      # No `-detailed-exitcode` here: neither env is imported yet, so a
+      # non-empty diff is the expected, correct result of every plan until
+      # import happens — treating "changes present" as a failure would make
+      # this job red by design until then, not a useful signal.
+      #
+      # TF_VAR_rds_password: deliberately NOT part of DEV_TFVARS/PROD_TFVARS
+      # (docs already say never put the master password in a .tfvars file —
+      # see rds_password's variable description) — sourced from its own
+      # dedicated secret instead, so the full tfvars blob secret can be
+      # shared/rotated more freely without also carrying the DB password.
+      # Empty/unset is fine pre-import (plan still runs; Terraform just
+      # reports the required-variable error for rds_password same as any
+      # other missing one).
       - name: terraform plan
         if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
-        continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
+        env:
+          TF_VAR_rds_password: ${{ matrix.environment == 'dev' && secrets.DEV_RDS_PASSWORD || (matrix.environment == 'prod' && secrets.PROD_RDS_PASSWORD || '') }}
         run: terraform plan -input=false -lock=false
