@@ -26,8 +26,6 @@ const (
 
 	clientSecretStrategyPrivateKeyJWT = "private_key_jwt"
 	privateKeyJWTTTL                  = 5 * time.Minute
-
-	responseModeFormPost = "form_post"
 )
 
 type contextKey string
@@ -155,13 +153,10 @@ func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, prov
 	// The router registers both GET and POST on this same callback path for
 	// every provider, since it can't know a given provider's response_mode
 	// (stored in the DB) until the path is parsed. Enforce the real
-	// restriction here instead: only a provider configured for
-	// response_mode=form_post (Apple) may POST its callback; anyone else
-	// doing so isn't a real IdP callback (form_post response_mode is
-	// exactly the OIDC-spec mechanism that makes a provider deliver the
-	// callback via POST instead of a GET redirect).
-	if r.Method == http.MethodPost && provider.ResponseMode != responseModeFormPost {
-		return fmt.Errorf("provider %q does not accept a POST callback", providerSlug)
+	// restriction here instead, against the provider's own description of
+	// which methods it accepts (domain.OIDCProvider.AllowedCallbackMethods).
+	if !provider.AllowsCallbackMethod(r.Method) {
+		return fmt.Errorf("provider %q does not accept a %s callback", providerSlug, r.Method)
 	}
 
 	oauthConfig, verifier, err := s.oauthConfig(r.Context(), provider, r)
