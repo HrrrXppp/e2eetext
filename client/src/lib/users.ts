@@ -83,6 +83,11 @@ type UserFilter = {
 
 type CreateUserOptions = {
   skipProfile?: boolean;
+  // A display name captured out-of-band from the ID token (e.g. Apple's
+  // one-time "user" payload, only ever sent on the first authorization for
+  // a subject). Ignored server-side if the verified ID token already
+  // carries a name claim.
+  name?: string;
 };
 
 export async function fetchUsers(filter: UserFilter): Promise<User[]> {
@@ -130,12 +135,20 @@ export async function createUser(options?: CreateUserOptions): Promise<User> {
     headers,
   };
 
+  const body: { skip_profile?: boolean; name?: string } = {};
   if (options?.skipProfile) {
+    body.skip_profile = true;
+  }
+  if (options?.name) {
+    body.name = options.name;
+  }
+
+  if (Object.keys(body).length > 0) {
     init.headers = {
       ...headers,
       "Content-Type": "application/json",
     };
-    init.body = JSON.stringify({ skip_profile: true });
+    init.body = JSON.stringify(body);
   }
 
   const response = await fetch(`${API_V1}/user`, init);
@@ -153,6 +166,7 @@ export async function createUser(options?: CreateUserOptions): Promise<User> {
 
 type EnsureUserOptions = {
   skipProfile?: boolean;
+  name?: string;
 };
 
 const ensureUserInflight = new Map<string, Promise<User>>();
@@ -162,7 +176,7 @@ function ensureUserKey(
   oidcProviderId: string,
   options?: EnsureUserOptions,
 ): string {
-  return `${oidcProviderId}:${claims.subject}:${options?.skipProfile ? "1" : "0"}`;
+  return `${oidcProviderId}:${claims.subject}:${options?.skipProfile ? "1" : "0"}:${options?.name ?? ""}`;
 }
 
 export async function ensureUserRegistered(
@@ -199,7 +213,7 @@ async function ensureUserRegisteredOnce(
   }
 
   try {
-    return await createUser({ skipProfile: options?.skipProfile });
+    return await createUser({ skipProfile: options?.skipProfile, name: options?.name });
   } catch (error) {
     if (error instanceof Error && error.message === "user already exists") {
       const existingUsers = await fetchUsers(filter);

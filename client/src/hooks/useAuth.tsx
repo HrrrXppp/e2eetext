@@ -7,12 +7,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { clearIdToken, getIdToken, hasUsableSession, refreshAuthTokensIfNeeded, startTokenRefreshLoop } from "@/lib/auth";
+import { OAUTH_CALLBACK_PATH } from "@/lib/api";
+import {
+  clearIdToken,
+  getAuthProvider,
+  getIdToken,
+  hasUsableSession,
+  refreshAuthTokensIfNeeded,
+  startTokenRefreshLoop,
+} from "@/lib/auth";
 import { parseIdToken } from "@/lib/idToken";
 import { ensureIdentityKeys } from "@/lib/e2ee/session";
 import { clearE2EEState } from "@/lib/e2ee/storage";
 import { fetchAuthProviders, findProviderBySlug } from "@/lib/oidcProviders";
-import { consumeSkipProfileOnCreate } from "@/lib/signInPreferences";
+import { consumePendingSignInName, consumeSkipProfileOnCreate } from "@/lib/signInPreferences";
 import { ensureUserRegistered } from "@/lib/users";
 
 export type AuthUser = {
@@ -47,6 +55,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // AuthCallback.tsx owns this transient route: it stores the session
+    // then immediately calls window.location.replace("/chats"), where a
+    // fresh AuthProvider mount does the real work below. Nothing on this
+    // route reads AuthContext (App.tsx renders only <AuthCallback />
+    // here), and registering here too would race that navigation — the
+    // in-flight fetch gets aborted mid-navigation, which can otherwise
+    // surface as a spurious sign-out immediately after a successful login.
+    if (window.location.pathname === OAUTH_CALLBACK_PATH) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     async function loadAuthState() {
@@ -82,7 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const provider = findProviderBySlug(loadedProviders, tokenUser.provider);
+        // The provider slug is set explicitly at sign-in time (from the
+        // server's OAuth callback redirect — see AuthCallback.tsx) and
+        // persisted across reloads. Falling back to a guess derived from
+        // the ID token's issuer only covers stored sessions predating that
+        // change; it cannot reliably distinguish between multiple
+        // non-Google providers (e.g. two different mock/OIDC providers, or
+        // Apple vs. a generic OIDC provider).
+        const providerSlug = getAuthProvider() ?? tokenUser.provider;
+        const provider = findProviderBySlug(loadedProviders, providerSlug);
         if (!provider) {
           if (loadedProviders.length === 0) {
             setUser(null);
@@ -94,7 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const skipProfile = consumeSkipProfileOnCreate();
-        const dbUser = await ensureUserRegistered(tokenUser, provider.id, { skipProfile });
+        const pendingName = consumePendingSignInName();
+        const dbUser = await ensureUserRegistered(tokenUser, provider.id, {
+          skipProfile,
+          name: pendingName,
+        });
         if (!active) {
           return;
         }

@@ -134,7 +134,65 @@ func TestOAuthForProviderMissingSecret(t *testing.T) {
 	_, err := normalizeOAuthCredentials(map[string]OAuthCredential{
 		"google": {ClientID: "id-only"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "client_secret is required") {
-		t.Fatalf("normalizeOAuthCredentials() error = %v, want client_secret is required", err)
+	if err == nil || !strings.Contains(err.Error(), "client_secret") || !strings.Contains(err.Error(), "is required") {
+		t.Fatalf("normalizeOAuthCredentials() error = %v, want client_secret ... is required", err)
+	}
+}
+
+func TestOAuthForProviderAllowsPrivateKeyJWTInsteadOfSecret(t *testing.T) {
+	credentials, err := normalizeOAuthCredentials(map[string]OAuthCredential{
+		"apple": {
+			ClientID:                "id-only",
+			PrivateKeyJWTIssuer:     "team-id",
+			PrivateKeyJWTKeyID:      "key-id",
+			PrivateKeyJWTPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeOAuthCredentials() error = %v, want nil", err)
+	}
+	if _, ok := credentials["apple"]; !ok {
+		t.Fatalf("normalizeOAuthCredentials() missing apple credential")
+	}
+}
+
+func TestOAuthForProviderRequiresIssuerWithPrivateKeyJWT(t *testing.T) {
+	_, err := normalizeOAuthCredentials(map[string]OAuthCredential{
+		"apple": {
+			ClientID:                "id-only",
+			PrivateKeyJWTKeyID:      "key-id",
+			PrivateKeyJWTPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "private_key_jwt_issuer is required") {
+		t.Fatalf("normalizeOAuthCredentials() error = %v, want private_key_jwt_issuer is required", err)
+	}
+}
+
+func TestOAuthForProviderRequiresKeyIDWithPrivateKeyJWT(t *testing.T) {
+	_, err := normalizeOAuthCredentials(map[string]OAuthCredential{
+		"apple": {
+			ClientID:                "id-only",
+			PrivateKeyJWTIssuer:     "team-id",
+			PrivateKeyJWTPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "private_key_jwt_key_id is required") {
+		t.Fatalf("normalizeOAuthCredentials() error = %v, want private_key_jwt_key_id is required", err)
+	}
+}
+
+func TestOAuthForProviderRejectsUnsupportedAlgorithm(t *testing.T) {
+	_, err := normalizeOAuthCredentials(map[string]OAuthCredential{
+		"apple": {
+			ClientID:                "id-only",
+			PrivateKeyJWTIssuer:     "team-id",
+			PrivateKeyJWTKeyID:      "key-id",
+			PrivateKeyJWTAlgorithm:  "RS256",
+			PrivateKeyJWTPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "private_key_jwt_algorithm") || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("normalizeOAuthCredentials() error = %v, want private_key_jwt_algorithm ... not supported", err)
 	}
 }

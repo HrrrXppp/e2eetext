@@ -35,6 +35,12 @@ func forwardedProto(r *http.Request) string {
 	return "http"
 }
 
+// IsHTTPS reports whether the browser-visible connection for this request is
+// HTTPS, honoring X-Forwarded-Proto behind a reverse proxy/load balancer.
+func IsHTTPS(r *http.Request) bool {
+	return forwardedProto(r) == "https"
+}
+
 func forwardedHost(r *http.Request) string {
 	if v := r.Header.Get("X-Forwarded-Host"); v != "" {
 		return strings.TrimSpace(strings.Split(v, ",")[0])

@@ -40,6 +40,11 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 	mux.HandleFunc("GET /api/v1/auth/providers", authHandler.ListProviders)
 	mux.HandleFunc("GET /api/v1/auth/{provider}/login", authHandler.Login)
 	mux.HandleFunc("GET /api/v1/auth/{provider}/callback", authHandler.Callback)
+	// POST callback: required by providers using response_mode=form_post
+	// (Apple, whenever name/email scopes are requested) — the provider POSTs
+	// code/state/the one-time "user" field to this same URL instead of a
+	// 302 redirect with query params.
+	mux.HandleFunc("POST /api/v1/auth/{provider}/callback", authHandler.Callback)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
 
 	userHandler := handler.NewUserHandler(userService, nodeRegistry)

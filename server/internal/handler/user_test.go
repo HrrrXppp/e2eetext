@@ -425,6 +425,59 @@ func TestUserHandler_Create_SkipProfile(t *testing.T) {
 	}
 }
 
+func TestUserHandler_Create_NameFromRequestBodyFillsMissingTokenName(t *testing.T) {
+	repo := &stubUserRepo{}
+	handler := newUserHandler(repo, testOIDCProviderRepo())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader([]byte(`{"name":"Ada Appleseed"}`)))
+	req = requestWithTokenUser(req, service.TokenUser{
+		Subject:  "apple-subject-1",
+		Provider: "google", // token has no name, like Apple's ID token
+	})
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var user domain.User
+	if err := json.NewDecoder(rec.Body).Decode(&user); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if user.Name != "Ada Appleseed" {
+		t.Errorf("Name = %q, want Ada Appleseed", user.Name)
+	}
+}
+
+func TestUserHandler_Create_RequestBodyNameDoesNotOverrideVerifiedTokenName(t *testing.T) {
+	repo := &stubUserRepo{}
+	handler := newUserHandler(repo, testOIDCProviderRepo())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/user", bytes.NewReader([]byte(`{"name":"Untrusted Name"}`)))
+	req = requestWithTokenUser(req, service.TokenUser{
+		Subject:  "google-subject-1",
+		Name:     "Verified Token Name",
+		Provider: "google",
+	})
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var user domain.User
+	if err := json.NewDecoder(rec.Body).Decode(&user); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if user.Name != "Verified Token Name" {
+		t.Errorf("Name = %q, want Verified Token Name (verified claim wins)", user.Name)
+	}
+}
+
 func TestUserHandler_Create_Conflict(t *testing.T) {
 	repo := &stubUserRepo{
 		users: []domain.User{

@@ -1,6 +1,6 @@
 # Messenger
 
-Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **New chats and messages use end-to-end encryption (E2EE v1)** — the server stores wrapped chat keys and opaque ciphertext only. Authentication uses OIDC providers stored in PostgreSQL (Google is seeded by default).
+Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **New chats and messages use end-to-end encryption (E2EE v1)** — the server stores wrapped chat keys and opaque ciphertext only. Authentication uses OIDC providers stored in PostgreSQL (Google and Apple are seeded by default).
 
 ## Stack
 
@@ -9,7 +9,7 @@ Monorepo messenger (pre-MVP) with a Go HTTP API and a React frontend. **New chat
 | Backend  | Go 1.25, stdlib `net/http`, pgx     |
 | Frontend | React 19, TypeScript, Vite 8        |
 | Database | PostgreSQL 16                       |
-| Auth     | OIDC (Google), stateless ID tokens  |
+| Auth     | OIDC (Google, Apple), stateless ID tokens |
 
 ## Project structure
 
@@ -91,19 +91,33 @@ Edit `.env` — set `DATABASE_URL` (and keep `CONFIG_PATH=server/config.json` fr
     "google": {
       "client_id": "your-client-id",
       "client_secret": "your-client-secret"
+    },
+    "apple": {
+      "client_id": "your-services-id",
+      "private_key_jwt_issuer": "your-team-id",
+      "private_key_jwt_key_id": "your-key-id",
+      "private_key_jwt_algorithm": "ES256",
+      "private_key_jwt_private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
     }
   }
 }
 ```
 
-Get credentials from [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials. Create an **OAuth 2.0 Client ID** (Web application).
+Get Google credentials from [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials. Create an **OAuth 2.0 Client ID** (Web application).
+
+Each provider's `oidc_providers` DB row (see [Database](#database) below) says which of these two shapes it expects, via `client_secret_strategy`:
+
+- **`static`** (Google) — reads `client_secret` as a plain configured secret.
+- **`private_key_jwt`** (Apple, RFC 7523 / OpenID Connect Core §9) — Apple has no static client secret at all; the server signs a short-lived ES256 JWT per request instead, using the PEM-encoded EC private key you generate for your "Sign in with Apple" key. `client_id` is the Services ID; `private_key_jwt_issuer` is your Apple Developer Team ID; `private_key_jwt_key_id` is the Key ID shown when you created the key; `private_key_jwt_algorithm` defaults to `ES256` if omitted. `private_key_jwt_issuer` and `private_key_jwt_key_id` are required whenever `private_key_jwt_private_key` is set, and `private_key_jwt_algorithm` (if given explicitly) must be `ES256` — the server validates this at config load and refuses to start otherwise, rather than minting a JWT the IdP would only reject later at token exchange.
+
+This is a generic OAuth2 client-authentication mechanism (not Apple-specific) — any provider row can opt into it by setting `client_secret_strategy = 'private_key_jwt'`.
 
 **Authorized redirect URIs** — register every origin where the app runs (the server builds the callback URL from the request host):
 
-- Local dev: `http://localhost:5173/api/v1/auth/google/callback`
-- Production: `https://app.example.com/api/v1/auth/google/callback`
+- Local dev: `http://localhost:5173/api/v1/auth/google/callback` (and `/api/v1/auth/apple/callback`)
+- Production: `https://app.example.com/api/v1/auth/google/callback` (and `/api/v1/auth/apple/callback`)
 
-OAuth callbacks are derived from `X-Forwarded-Host` and `X-Forwarded-Proto` on each request (the Vite dev proxy sets these in local dev).
+OAuth callbacks are derived from `X-Forwarded-Host` and `X-Forwarded-Proto` on each request (the Vite dev proxy sets these in local dev). The callback route accepts both `GET` (the default 302-redirect flow, e.g. Google) and `POST` (required by providers using `response_mode=form_post`, e.g. Apple whenever name/email scopes are requested) at the same URL.
 
 The server loads `.env` for runtime settings (`DATABASE_URL`, `CONFIG_PATH`, etc.) and the JSON file at `CONFIG_PATH` for OAuth secrets.
 
@@ -159,8 +173,8 @@ All JSON and WebSocket endpoints are versioned under `/api/v1`. `/health` is unv
 |--------|------|-------------|
 | `GET` | `/health` | Health check (`status`, `version`) |
 | `GET` | `/api/v1/auth/providers` | List OIDC providers |
-| `GET` | `/api/v1/auth/{provider}/login` | Start OIDC login (e.g. `google`) |
-| `GET` | `/api/v1/auth/{provider}/callback` | OAuth callback; redirects to client with tokens |
+| `GET` | `/api/v1/auth/{provider}/login` | Start OIDC login (e.g. `google`, `apple`) |
+| `GET`, `POST` | `/api/v1/auth/{provider}/callback` | OAuth callback; redirects to client with tokens. `POST` is for providers using `response_mode=form_post` (Apple) |
 | `POST` | `/api/v1/auth/refresh` | Refresh tokens (`provider`, `refreshToken` in JSON body) |
 
 ### Protected
@@ -242,13 +256,15 @@ Browser → GET /api/v1/auth/google/login
        → Google consent screen
        → GET /api/v1/auth/google/callback?code=…&state=…
        → Server verifies token
-       → Redirect to /oauth/callback#id_token=…
+       → Redirect to /oauth/callback#id_token=…&provider=google
        → Client stores ID token in localStorage
        → Client GET /api/v1/user?subject=…&oidc_provider_id=…; POST /api/v1/user if missing (identity from token)
        → Subsequent API calls send Authorization: Bearer <id_token>
 ```
 
 The server verifies the ID token against the provider issuer on each protected request and reads user claims (`sub`, `email`, `name`) from the token — no server-side sessions.
+
+Apple follows the same flow with two differences, both driven by its `oidc_providers` row rather than special-cased Go code: the consent screen `POST`s back to the callback URL (`response_mode=form_post`) instead of a 302 redirect, and — only on the very first authorization for a given Apple user — that `POST` carries a one-time `user` JSON field (name only; the server requests just the `name` scope, not `email` — it doesn't keep the user's email address); Apple's ID token itself never carries a name claim at all. The server parses that one-time field and forwards the name to the client via the callback redirect (`&name=…`), which relays it on the next `POST /api/v1/user` call; the server only uses it if the verified ID token didn't already carry a name.
 
 ## Database
 
@@ -260,10 +276,10 @@ server/internal/database/migrations/000001_init.up.sql
 
 Tables:
 
-- **oidc_providers** — `id`, `name`, `link`, `picture` (BYTEA)
+- **oidc_providers** — `id`, `name`, `link`, `picture` (BYTEA), `scopes` (space-separated, e.g. `openid profile`), `response_mode` (nullable, e.g. `form_post`), `client_secret_strategy` (`static` or `private_key_jwt`)
 - **users** — linked to an OIDC provider via `oidc_provider_id` + `subject`
 
-Google is inserted as the default provider on first migration.
+Google and Apple are inserted as the default providers (migrations `000001_init` and `000007_apple_oidc`). Provider-specific OAuth peculiarities (scopes, response mode, client authentication) are data on the row, not hardcoded per-provider branches in Go — a new provider is a migration + `server/config.json` credentials, not a code change.
 
 ## Development
 
@@ -336,6 +352,22 @@ runs. This suite is comprehensive rather than fast (real network round
 trips, real crypto, two full sign-ins) — on a loaded machine, prefer the
 Go integration suite above for quick iteration and treat this one as a
 pre-release sanity check.
+
+`global-setup.ts` also seeds a "GoogleE2E" provider pointing at the same
+Google-shaped default mode as "OIDC" (GET-redirect authorize, static client
+secret, ID token carries a `name` claim directly), kept as its own
+name/slug so `e2e/google-sign-in.spec.ts` — which exercises a person
+authorizing via that provider end-to-end, including that the ID token's
+`name` claim registers as their initial display name — doesn't share
+provider state with `golden-path.spec.ts`'s use of "OIDC".
+
+`mockoidc` also serves an "Apple-like" mode under `/apple` (form_post
+response, one-time name/email payload, `private_key_jwt` client
+authentication) — `global-setup.ts` seeds a second "AppleE2E" provider
+pointing at it and feeds the server a matching EC keypair, so
+`e2e/apple-sign-in.spec.ts` exercises the real `private_key_jwt` code path
+against the mock rather than a bypass. It leaves the default "OIDC"
+provider and `golden-path.spec.ts` untouched.
 
 ### Client dev proxy
 

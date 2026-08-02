@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/ekhrunov/messenger/server/internal/domain"
 	"github.com/ekhrunov/messenger/server/internal/repository"
@@ -21,7 +22,7 @@ var _ repository.OIDCProviderRepository = (*OIDCProviderRepository)(nil)
 
 func (r *OIDCProviderRepository) List(ctx context.Context) ([]domain.OIDCProvider, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, link, picture
+		SELECT id, name, link, picture, scopes, response_mode, client_secret_strategy
 		FROM oidc_providers
 		ORDER BY name`)
 	if err != nil {
@@ -46,7 +47,7 @@ func (r *OIDCProviderRepository) List(ctx context.Context) ([]domain.OIDCProvide
 
 func (r *OIDCProviderRepository) GetByName(ctx context.Context, name string) (domain.OIDCProvider, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, link, picture
+		SELECT id, name, link, picture, scopes, response_mode, client_secret_strategy
 		FROM oidc_providers
 		WHERE lower(name) = lower($1)`, name)
 
@@ -65,8 +66,18 @@ type oidcProviderRow interface {
 func scanOIDCProvider(row oidcProviderRow) (domain.OIDCProvider, error) {
 	var provider domain.OIDCProvider
 	var picture []byte
+	var scopes string
+	var responseMode sql.NullString
 
-	if err := row.Scan(&provider.ID, &provider.Name, &provider.Link, &picture); err != nil {
+	if err := row.Scan(
+		&provider.ID,
+		&provider.Name,
+		&provider.Link,
+		&picture,
+		&scopes,
+		&responseMode,
+		&provider.ClientSecretStrategy,
+	); err != nil {
 		if err == sql.ErrNoRows {
 			return domain.OIDCProvider{}, fmt.Errorf("oidc provider not found")
 		}
@@ -75,6 +86,10 @@ func scanOIDCProvider(row oidcProviderRow) (domain.OIDCProvider, error) {
 
 	if len(picture) > 0 {
 		provider.Picture = picture
+	}
+	provider.Scopes = strings.Fields(scopes)
+	if responseMode.Valid {
+		provider.ResponseMode = responseMode.String
 	}
 
 	return provider, nil
