@@ -10,11 +10,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// supportedPrivateKeyJWTAlgorithm is the only private_key_jwt signing
-// algorithm this server accepts today. Keep in sync with
-// service.allowedPrivateKeyJWTAlgorithms, which enforces the same
-// allowlist at mint time; config validation just fails closed earlier.
-const supportedPrivateKeyJWTAlgorithm = "ES256"
+// SupportedPrivateKeyJWTAlgorithm is the only private_key_jwt signing
+// algorithm this server accepts. It is the single source of truth: config
+// validation (below) fails closed on it early, and
+// service.allowedPrivateKeyJWTAlgorithms is derived from it directly rather
+// than repeating the "ES256" literal, so the two can't drift apart.
+const SupportedPrivateKeyJWTAlgorithm = "ES256"
 
 type OAuthCredential struct {
 	ClientID     string `json:"client_id"`
@@ -143,8 +144,8 @@ func normalizeOAuthCredentials(credentials map[string]OAuthCredential) (map[stri
 			if strings.TrimSpace(credential.PrivateKeyJWTKeyID) == "" {
 				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_key_id is required when private_key_jwt_private_key is set", slug)
 			}
-			if credential.PrivateKeyJWTAlgorithm != "" && credential.PrivateKeyJWTAlgorithm != supportedPrivateKeyJWTAlgorithm {
-				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_algorithm %q is not supported (only %q)", slug, credential.PrivateKeyJWTAlgorithm, supportedPrivateKeyJWTAlgorithm)
+			if credential.PrivateKeyJWTAlgorithm != "" && credential.PrivateKeyJWTAlgorithm != SupportedPrivateKeyJWTAlgorithm {
+				return nil, fmt.Errorf("oauth_credentials.%s.private_key_jwt_algorithm %q is not supported (only %q)", slug, credential.PrivateKeyJWTAlgorithm, SupportedPrivateKeyJWTAlgorithm)
 			}
 		}
 		normalized[slug] = credential

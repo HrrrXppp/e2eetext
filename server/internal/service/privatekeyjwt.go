@@ -9,22 +9,19 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
-)
 
-// defaultPrivateKeyJWTAlgorithm is used whenever a provider credential
-// doesn't specify one explicitly.
-const defaultPrivateKeyJWTAlgorithm = "ES256"
+	"github.com/ekhrunov/messenger/server/internal/config"
+)
 
 // allowedPrivateKeyJWTAlgorithms is the fail-closed set of signing
 // algorithms this server will use to mint a private_key_jwt client
 // assertion. jose.SignatureAlgorithm(algorithm) would otherwise accept any
 // configured string; client authentication should stay on ECDSA
-// (FIPS 186-5) rather than an accidental/misconfigured alg path. Built from
-// defaultPrivateKeyJWTAlgorithm rather than repeating the "ES256" literal.
-// Keep this in sync with config.supportedPrivateKeyJWTAlgorithm, which
-// rejects unsupported algorithms earlier, at config load.
+// (FIPS 186-5) rather than an accidental/misconfigured alg path. Derived
+// from config.SupportedPrivateKeyJWTAlgorithm — the single source of truth
+// shared with config validation — rather than repeating the "ES256" literal.
 var allowedPrivateKeyJWTAlgorithms = map[string]bool{
-	defaultPrivateKeyJWTAlgorithm: true,
+	config.SupportedPrivateKeyJWTAlgorithm: true,
 }
 
 // mintPrivateKeyJWT signs a short-lived client-authentication JWT per the
@@ -48,7 +45,7 @@ func mintPrivateKeyJWT(
 	}
 
 	if algorithm == "" {
-		algorithm = defaultPrivateKeyJWTAlgorithm
+		algorithm = config.SupportedPrivateKeyJWTAlgorithm
 	}
 	if !allowedPrivateKeyJWTAlgorithms[algorithm] {
 		return "", fmt.Errorf("private_key_jwt algorithm %q is not allowed", algorithm)
