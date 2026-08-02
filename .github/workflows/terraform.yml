@@ -74,25 +74,29 @@ jobs:
   # to this workflow file to run arbitrary steps with those OIDC-derived
   # credentials before anyone reviews it.
   #
-  # Matrixed over shared/dev/prod like the validate job above. dev plans
-  # with no tfvars at all — its variable defaults are audited-live values,
-  # and it looks the ALB SG / ACM cert up from the live ALB by name (which
-  # is why its plan needs real AWS credentials). prod still needs its
-  # required-with-no-default variables (ami_id, instance_type,
-  # alb_security_group_id, acm_certificate_arn — see
-  # terraform/envs/prod/terraform.tfvars.example) supplied for `terraform
-  # plan` to run at all; those are intentionally NOT hardcoded here or
-  # given fallback defaults in the .tf files while prod's live status is
-  # unconfirmed (a wrong guess for an import target risks a forced replace
-  # on live resources — the same lesson Phase 1 learned the hard way with
-  # the OIDC role name/thumbprint). They're read from optional DEV_TFVARS /
-  # PROD_TFVARS secrets (full .tfvars-file contents) written to a
-  # gitignored ci.auto.tfvars before plan runs — DEV_TFVARS is now purely
-  # an optional override hook. Until PROD_TFVARS is populated (which
-  # requires first confirming prod's real, live resource identifiers — see
-  # README's import bootstrap section), the prod plan step degrades to a
-  # skipped no-op via the same "not configured yet" pattern already used
-  # for AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
+  # Matrixed over shared/dev/prod like the validate job above. dev's
+  # network/ec2/alb variables still default to audited-live values (Phase
+  # 2), and it looks the ALB SG / ACM cert up from the live ALB by name
+  # (which is why its plan needs real AWS credentials) — but Phase 3's RDS
+  # variables (rds_identifier, rds_engine_version, rds_instance_class, ...
+  # see terraform/envs/dev/terraform.tfvars.example) have no defaults at
+  # all, since Phase 3 was implemented without AWS credentials to audit the
+  # live dev RDS instance. So dev now needs DEV_TFVARS supplied too, the
+  # same way prod always has: prod's required-with-no-default variables
+  # (ami_id, instance_type, alb_security_group_id, acm_certificate_arn,
+  # plus the same rds_* set — see
+  # terraform/envs/prod/terraform.tfvars.example) are intentionally NOT
+  # hardcoded here or given fallback defaults in the .tf files while prod's
+  # live status is unconfirmed (a wrong guess for an import target risks a
+  # forced replace on live resources — the same lesson Phase 1 learned the
+  # hard way with the OIDC role name/thumbprint). Both are read from
+  # optional DEV_TFVARS / PROD_TFVARS secrets (full .tfvars-file contents)
+  # written to a gitignored ci.auto.tfvars before plan runs. Until the
+  # relevant secret is populated (which for dev's rds_* values requires
+  # first auditing the live dev RDS instance — see README's Terraform
+  # section), that environment's plan step degrades to a skipped no-op via
+  # the same "not configured yet" pattern already used for
+  # AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
   plan:
     needs: [fmt, validate]
     runs-on: ubuntu-latest
@@ -137,20 +141,21 @@ jobs:
             echo "written=true" >> "$GITHUB_OUTPUT"
           else
             echo "written=false" >> "$GITHUB_OUTPUT"
-            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — planning terraform/envs/${{ matrix.environment }} with its in-repo defaults (fine for dev, which plans with no tfvars at all; prod has no such defaults yet, so its init/plan steps below are skipped rather than run-and-fail)."
+            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — terraform/envs/${{ matrix.environment }}'s init/plan steps below are skipped rather than run-and-fail (its rds_* variables, and for prod also ami_id/instance_type/alb_security_group_id/acm_certificate_arn, have no defaults)."
           fi
 
-      # prod's ami_id/instance_type/alb_security_group_id/acm_certificate_arn
-      # are required with no defaults (see terraform/envs/prod/variables.tf),
-      # so without PROD_TFVARS a `terraform plan` there can only fail with
-      # "No value for required variable" — continue-on-error would swallow
-      # that at the job level but still leave a failed red step in the Actions
-      # UI, which is exactly what a "skipped no-op" is meant to avoid. So
-      # prod's init/plan only run once PROD_TFVARS actually wrote a tfvars
-      # file; shared/dev are unaffected (their required-tfvars flag is
-      # unset/false via write-tfvars' `if`, but they don't need one).
+      # Both dev and prod now have required-with-no-default variables (see
+      # terraform/envs/{dev,prod}/variables.tf's rds_* block, plus prod's
+      # ami_id/instance_type/alb_security_group_id/acm_certificate_arn), so
+      # without their respective *_TFVARS secret, `terraform plan` there can
+      # only fail with "No value for required variable" — continue-on-error
+      # would swallow that at the job level but still leave a failed red
+      # step in the Actions UI, which is exactly what a "skipped no-op" is
+      # meant to avoid. So dev/prod's init/plan only run once their tfvars
+      # were actually written; shared is unaffected (it has no
+      # required-with-no-default variables, so it needs no tfvars at all).
       - name: terraform init
-        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment != 'prod' || steps.write-tfvars.outputs.written == 'true')
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
         continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform init -input=false
@@ -165,7 +170,7 @@ jobs:
       # nothing in CI ever mutates state. The role's required (read-only)
       # permissions are documented in README's Terraform CI section.
       - name: terraform plan
-        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment != 'prod' || steps.write-tfvars.outputs.written == 'true')
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
         continue-on-error: true
         working-directory: terraform/envs/${{ matrix.environment }}
         run: terraform plan -input=false -lock=false
