@@ -86,3 +86,59 @@ module "alb" {
 
   tags = var.tags
 }
+
+# --- RDS (Phase 3 of #27) ---
+# Same "live status not yet confirmed" treatment as the ec2/alb modules
+# above (see this file's header) — Phase 3 was additionally implemented
+# with no AWS credentials at all, so unlike dev, there isn't even
+# circumstantial evidence (like dev's "ec2-rds-1" security group) here.
+# Confirm whether a live prod RDS instance exists before planning/applying:
+#
+#   aws rds describe-db-instances --filters "Name=db-instance-id,Values=e2eetext-prod*"
+#
+# - If real resources come back: audit them fully (engine version, class,
+#   storage, subnet/parameter groups, ...) and follow the same import
+#   bootstrap as dev (README's Terraform section) with prod's real
+#   identifiers substituted in.
+# - If nothing comes back: `terraform apply` can create the instance fresh
+#   — but get sign-off on instance class/storage/Multi-AZ choices first,
+#   same as any other prod infrastructure decision.
+module "rds" {
+  source = "../../modules/rds"
+
+  identifier     = var.rds_identifier
+  engine_version = var.rds_engine_version
+  instance_class = var.rds_instance_class
+
+  allocated_storage = var.rds_allocated_storage
+  storage_type      = var.rds_storage_type
+  storage_encrypted = var.rds_storage_encrypted
+
+  db_name  = var.rds_db_name
+  username = var.rds_username
+  password = var.rds_password
+
+  vpc_id             = module.network.vpc_id
+  subnet_ids         = length(var.rds_subnet_ids) > 0 ? var.rds_subnet_ids : module.network.subnet_ids
+  subnet_group_name  = var.rds_subnet_group_name
+  security_group_ids = var.rds_security_group_ids
+
+  security_group_name       = var.rds_security_group_name
+  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
+
+  create_parameter_group = var.rds_create_parameter_group
+  parameter_group_name   = var.rds_parameter_group_name
+  parameter_group_family = var.rds_parameter_group_family
+  enable_pg_cron         = var.rds_enable_pg_cron
+  cron_database_name     = var.rds_cron_database_name
+
+  multi_az                = var.rds_multi_az
+  publicly_accessible     = var.rds_publicly_accessible
+  backup_retention_period = var.rds_backup_retention_period
+  backup_window           = var.rds_backup_window
+  maintenance_window      = var.rds_maintenance_window
+  deletion_protection     = var.rds_deletion_protection
+  skip_final_snapshot     = var.rds_skip_final_snapshot
+
+  tags = var.tags
+}

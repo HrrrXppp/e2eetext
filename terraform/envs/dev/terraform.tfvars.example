@@ -47,3 +47,39 @@
 # alb_subnet_ids        = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
 # admin_ssh_cidr_blocks = ["203.0.113.0/32"]
 # tags                  = { Environment = "dev", ManagedBy = "terraform" }
+
+# --- RDS (Phase 3) ---
+# UNLIKE the above, none of this was audited against AWS (Phase 3 was
+# implemented with no AWS credentials available) — every value below is
+# REQUIRED with no default. Audit the live dev RDS instance first:
+#   aws rds describe-db-instances --query \
+#     'DBInstances[].[DBInstanceIdentifier,EngineVersion,DBInstanceClass,AllocatedStorage,StorageType,StorageEncrypted,MultiAZ,BackupRetentionPeriod,PreferredBackupWindow,PreferredMaintenanceWindow,DBSubnetGroup.DBSubnetGroupName]'
+#   aws rds describe-db-parameter-groups
+#
+# rds_identifier             = "e2eetext-dev"
+# rds_engine_version         = "16.4"
+# rds_instance_class         = "db.t3.micro"
+# rds_allocated_storage      = 20
+# rds_storage_type           = "gp2"
+# rds_storage_encrypted      = true
+# rds_username               = "messenger"
+# rds_subnet_group_name      = "<live-subnet-group-name>"
+# rds_multi_az               = false
+# rds_backup_retention_period = 1
+# rds_backup_window          = "03:00-04:00"
+# rds_maintenance_window     = "sun:04:30-sun:05:30"
+#
+# Pre-existing security group(s) if the live instance uses hand-made ones
+# (dev's EC2 instance does — "ec2-rds-1", per Phase 2's audit — the RDS
+# side is likely the same or a paired group):
+# rds_security_group_ids        = ["sg-xxxxxxxx"]
+# rds_ingress_security_group_id = "sg-xxxxxxxx"   # only if letting the rds module create its own SG instead
+#
+# Never put the real master password here — pass it out-of-band:
+#   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
+#
+# If a parameter group with pg_cron already exists live (e.g. #20's manual
+# steps were followed by hand before this module existed), reference it
+# instead of creating a new one:
+# rds_create_parameter_group = false
+# rds_parameter_group_name   = "<live-parameter-group-name>"

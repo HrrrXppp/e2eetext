@@ -236,3 +236,154 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# --- RDS (Phase 3 of #27) ---
+# No confirmed-live defaults here (see main.tf's rds module header) — this
+# phase was built without AWS credentials. Required variables below have no
+# default on purpose, the same "describe reality, don't guess" rule
+# modules/rds and modules/ec2 both follow. Fill in terraform.tfvars from a
+# real AWS audit before planning or importing.
+
+variable "rds_identifier" {
+  description = "DB instance identifier of the live dev RDS instance. Get with `aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier'`."
+  type        = string
+}
+
+variable "rds_engine_version" {
+  description = "Engine version of the live dev RDS instance (e.g. \"16.4\")."
+  type        = string
+}
+
+variable "rds_instance_class" {
+  description = "Instance class of the live dev RDS instance (e.g. \"db.t3.micro\")."
+  type        = string
+}
+
+variable "rds_allocated_storage" {
+  description = "Allocated storage (GiB) of the live dev RDS instance."
+  type        = number
+}
+
+variable "rds_storage_type" {
+  description = "Storage type of the live dev RDS instance (e.g. \"gp2\", \"gp3\")."
+  type        = string
+}
+
+variable "rds_storage_encrypted" {
+  description = "Whether the live dev RDS instance's storage is encrypted at rest."
+  type        = bool
+}
+
+variable "rds_db_name" {
+  description = "Initial database name. Default \"messenger\" — the fixed value used throughout this repo (docker-compose, README's connection string example), not a guess about a specific live instance."
+  type        = string
+  default     = "messenger"
+}
+
+variable "rds_username" {
+  description = "Master username of the live dev RDS instance. No default: README's AWS walkthrough treats this as chosen at creation time, not a fixed convention."
+  type        = string
+}
+
+variable "rds_password" {
+  description = "Master password of the live dev RDS instance. Never commit this — pass via TF_VAR_rds_password or -var, sourced from Secrets Manager/SSM, not terraform.tfvars."
+  type        = string
+  sensitive   = true
+}
+
+variable "rds_subnet_ids" {
+  description = "Subnet IDs for the DB subnet group. Leave empty to fall back to module.network's subnets — fine for a plan, but before `terraform import` set this to the live instance's real subnet-group members (`aws rds describe-db-subnet-groups`); RDS is commonly placed in private subnets, unlike the public default-VPC subnets Phase 2 confirmed for the ALB/EC2."
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_subnet_group_name" {
+  description = "Name of the live dev DB subnet group. Must match exactly for a zero-diff import."
+  type        = string
+}
+
+variable "rds_security_group_ids" {
+  description = "Pre-existing security group IDs for the dev RDS instance (skips creating one). Leave empty to have the rds module create its own SG. If the live instance uses hand-made SGs (as dev's EC2 instance does — \"ec2-rds-1\" per Phase 2's audit), set the real ID(s) here for a zero-diff import."
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_security_group_name" {
+  description = "Name for the dev RDS security group, if the rds module creates one (rds_security_group_ids empty)."
+  type        = string
+  default     = "e2eetext-dev-rds"
+}
+
+variable "rds_ingress_security_group_id" {
+  description = "Security group ID allowed to reach 5432 on the created RDS SG. Leave empty to fall back to module.ec2's own SG (null for dev, since dev's EC2 instance uses pre-existing SGs — see ec2_security_group_names) — set explicitly (e.g. to \"ec2-rds-1\"'s real ID) before import."
+  type        = string
+  default     = ""
+}
+
+variable "rds_create_parameter_group" {
+  description = "Whether the rds module creates/manages the DB parameter group. Default true so Phase 3 folds in #20's pg_cron settings; set false to reference an already-existing one by name without managing its parameters."
+  type        = bool
+  default     = true
+}
+
+variable "rds_parameter_group_name" {
+  description = "Name of the dev DB parameter group — created fresh with this name if rds_create_parameter_group is true and none exists yet, or must match a real live name otherwise."
+  type        = string
+  default     = "e2eetext-dev-rds-pgcron"
+}
+
+variable "rds_parameter_group_family" {
+  description = "Parameter group family. Default \"postgres16\" per README's fixed tech-stack version (\"Database | PostgreSQL 16\") — must match rds_engine_version's major version exactly (no default there, since the minor version is unconfirmed)."
+  type        = string
+  default     = "postgres16"
+}
+
+variable "rds_enable_pg_cron" {
+  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true — folding #20's manual pg_cron step into Terraform is exactly Phase 3's scope."
+  type        = bool
+  default     = true
+}
+
+variable "rds_cron_database_name" {
+  description = "Value for cron.database_name. Leave empty (default) to reuse rds_db_name."
+  type        = string
+  default     = ""
+}
+
+variable "rds_multi_az" {
+  description = "Whether the live dev RDS instance is Multi-AZ. No default — confirm against the live instance before importing."
+  type        = bool
+}
+
+variable "rds_publicly_accessible" {
+  description = "Whether the dev RDS instance has a public IP. Default false — README's AWS walkthrough is explicit that PostgreSQL must not be exposed to the public internet."
+  type        = bool
+  default     = false
+}
+
+variable "rds_backup_retention_period" {
+  description = "Automated backup retention in days for the live dev RDS instance. No default — confirm the real value before importing (0 = disabled)."
+  type        = number
+}
+
+variable "rds_backup_window" {
+  description = "Preferred backup window (UTC) of the live dev RDS instance, e.g. \"03:00-04:00\". No default — must match the live value."
+  type        = string
+}
+
+variable "rds_maintenance_window" {
+  description = "Preferred maintenance window (UTC) of the live dev RDS instance, e.g. \"sun:04:30-sun:05:30\". No default — must match the live value."
+  type        = string
+}
+
+variable "rds_deletion_protection" {
+  description = "Whether the dev RDS instance is protected from `terraform destroy` / console deletion. Default true as a safety net; override to false only deliberately."
+  type        = bool
+  default     = true
+}
+
+variable "rds_skip_final_snapshot" {
+  description = "Whether to skip a final snapshot on destroy. Default false (always snapshot) as a safety net."
+  type        = bool
+  default     = false
+}

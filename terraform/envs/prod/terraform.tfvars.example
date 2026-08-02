@@ -55,3 +55,37 @@ acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxx
 
 # admin_ssh_cidr_blocks = ["203.0.113.0/32"]
 # key_name              = "e2eetext-prod-key"
+
+# --- RDS (Phase 3) ---
+# Confirm whether a live prod RDS instance exists first:
+#   aws rds describe-db-instances --filters "Name=db-instance-id,Values=e2eetext-prod*"
+#
+# If real resources come back, audit them fully and fill in the real
+# values (see envs/dev/terraform.tfvars.example for the equivalent audit
+# commands). If nothing comes back, choose deliberately for a fresh apply
+# — get sign-off on instance class/storage/Multi-AZ first.
+rds_identifier        = "e2eetext-prod"
+rds_engine_version    = "16.4"
+rds_instance_class    = "db.t3.micro"
+rds_allocated_storage = 20
+rds_storage_type      = "gp3"
+rds_storage_encrypted = true
+rds_username           = "messenger"
+rds_subnet_group_name = "e2eetext-prod-rds"
+rds_multi_az                = true
+rds_backup_retention_period = 7
+rds_backup_window           = "03:00-04:00"
+rds_maintenance_window      = "sun:04:30-sun:05:30"
+
+# Never put the real master password here — pass it out-of-band:
+#   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
+
+# If a parameter group with pg_cron already exists live, reference it
+# instead of creating a new one:
+# rds_create_parameter_group = false
+# rds_parameter_group_name   = "<live-parameter-group-name>"
+
+# Pre-existing security group(s), if importing an instance with hand-made
+# SGs:
+# rds_security_group_ids        = ["sg-xxxxxxxx"]
+# rds_ingress_security_group_id = "sg-xxxxxxxx"

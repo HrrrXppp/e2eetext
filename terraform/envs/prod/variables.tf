@@ -169,3 +169,155 @@ variable "tags" {
     ManagedBy   = "terraform"
   }
 }
+
+# --- RDS (Phase 3 of #27) ---
+# Live status not yet confirmed (see main.tf's rds module header) — audit
+# first, then either import real values or apply fresh with deliberate,
+# reviewed choices. Required variables below have no default for the same
+# reason ami_id/instance_type/alb_security_group_id/acm_certificate_arn
+# don't: a wrong guess for an import target risks a forced replace, and for
+# a fresh apply these should be deliberate choices, not defaults.
+
+variable "rds_identifier" {
+  description = "DB instance identifier (real value if importing; a deliberately chosen one, e.g. \"e2eetext-prod\", if applying fresh)."
+  type        = string
+}
+
+variable "rds_engine_version" {
+  description = "Engine version, e.g. \"16.4\" (real value if importing; a deliberately chosen supported PostgreSQL 16.x minor version if applying fresh)."
+  type        = string
+}
+
+variable "rds_instance_class" {
+  description = "Instance class, e.g. \"db.t3.micro\" (real value if importing; sized for expected prod load if applying fresh)."
+  type        = string
+}
+
+variable "rds_allocated_storage" {
+  description = "Allocated storage (GiB)."
+  type        = number
+}
+
+variable "rds_storage_type" {
+  description = "Storage type, e.g. \"gp3\"."
+  type        = string
+}
+
+variable "rds_storage_encrypted" {
+  description = "Whether storage is encrypted at rest. ForceNew if it ever needs to change."
+  type        = bool
+}
+
+variable "rds_db_name" {
+  description = "Initial database name. Default \"messenger\" — the fixed value used throughout this repo, not a guess."
+  type        = string
+  default     = "messenger"
+}
+
+variable "rds_username" {
+  description = "Master username. No default: README's AWS walkthrough treats this as chosen at creation time."
+  type        = string
+}
+
+variable "rds_password" {
+  description = "Master password. Never commit this — pass via TF_VAR_rds_password or -var, sourced from Secrets Manager/SSM, not terraform.tfvars."
+  type        = string
+  sensitive   = true
+}
+
+variable "rds_subnet_ids" {
+  description = "Subnet IDs for the DB subnet group. Leave empty to fall back to module.network's subnets. RDS is commonly placed in private subnets — confirm before importing or applying."
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_subnet_group_name" {
+  description = "Name of the DB subnet group (real live name if importing; a deliberately chosen one if applying fresh)."
+  type        = string
+}
+
+variable "rds_security_group_ids" {
+  description = "Pre-existing security group IDs for the prod RDS instance (skips creating one). Leave empty to have the rds module create its own SG."
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_security_group_name" {
+  description = "Name for the prod RDS security group, if the rds module creates one."
+  type        = string
+  default     = "e2eetext-prod-rds"
+}
+
+variable "rds_ingress_security_group_id" {
+  description = "Security group ID allowed to reach 5432 on the created RDS SG. Leave empty to fall back to module.ec2's own SG (a real value here by default, since prod's ec2 module creates its own SG unless ec2_security_group_ids is overridden)."
+  type        = string
+  default     = ""
+}
+
+variable "rds_create_parameter_group" {
+  description = "Whether the rds module creates/manages the DB parameter group. Default true so Phase 3 folds in #20's pg_cron settings."
+  type        = bool
+  default     = true
+}
+
+variable "rds_parameter_group_name" {
+  description = "Name of the prod DB parameter group."
+  type        = string
+  default     = "e2eetext-prod-rds-pgcron"
+}
+
+variable "rds_parameter_group_family" {
+  description = "Parameter group family. Default \"postgres16\" per README's fixed tech-stack version — must match rds_engine_version's major version exactly."
+  type        = string
+  default     = "postgres16"
+}
+
+variable "rds_enable_pg_cron" {
+  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true."
+  type        = bool
+  default     = true
+}
+
+variable "rds_cron_database_name" {
+  description = "Value for cron.database_name. Leave empty (default) to reuse rds_db_name."
+  type        = string
+  default     = ""
+}
+
+variable "rds_multi_az" {
+  description = "Whether the instance is Multi-AZ. No default — a real availability decision for production, not a guess."
+  type        = bool
+}
+
+variable "rds_publicly_accessible" {
+  description = "Whether the prod RDS instance has a public IP. Default false — README's AWS walkthrough is explicit that PostgreSQL must not be exposed to the public internet."
+  type        = bool
+  default     = false
+}
+
+variable "rds_backup_retention_period" {
+  description = "Automated backup retention in days (0 = disabled)."
+  type        = number
+}
+
+variable "rds_backup_window" {
+  description = "Preferred backup window (UTC), e.g. \"03:00-04:00\"."
+  type        = string
+}
+
+variable "rds_maintenance_window" {
+  description = "Preferred maintenance window (UTC), e.g. \"sun:04:30-sun:05:30\"."
+  type        = string
+}
+
+variable "rds_deletion_protection" {
+  description = "Whether the prod RDS instance is protected from `terraform destroy` / console deletion. Default true as a safety net."
+  type        = bool
+  default     = true
+}
+
+variable "rds_skip_final_snapshot" {
+  description = "Whether to skip a final snapshot on destroy. Default false (always snapshot) as a safety net for production data."
+  type        = bool
+  default     = false
+}

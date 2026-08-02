@@ -122,3 +122,63 @@ module "alb" {
 
   tags = var.tags
 }
+
+# --- RDS (Phase 3 of #27) ---
+# UNLIKE network/ec2/alb above, this section's variables have NO
+# confirmed-live defaults. Phase 2's audit (2026-07-26) found the live dev
+# EC2 instance attached to a security group named "ec2-rds-1" whose own
+# description warns that detaching it can cut RDS connectivity — strong
+# evidence a live dev RDS instance already exists — but this phase was
+# implemented with no AWS credentials available, so none of that instance's
+# actual engine version / instance class / storage / subnet-group /
+# parameter-group details could be verified. Every identifying attribute
+# below is therefore required with no default (rds_subnet_ids and
+# rds_ingress_security_group_id excepted — see their variables.tf comments
+# for the specific, narrower fallback each uses), the same treatment
+# Phase 2 gave envs/prod while its live status was unconfirmed. Fill in
+# terraform.tfvars from a real `aws rds describe-db-instances` /
+# `describe-db-parameter-groups` audit before planning or importing — see
+# README's Terraform section.
+module "rds" {
+  source = "../../modules/rds"
+
+  identifier     = var.rds_identifier
+  engine_version = var.rds_engine_version
+  instance_class = var.rds_instance_class
+
+  allocated_storage = var.rds_allocated_storage
+  storage_type      = var.rds_storage_type
+  storage_encrypted = var.rds_storage_encrypted
+
+  db_name  = var.rds_db_name
+  username = var.rds_username
+  password = var.rds_password
+
+  vpc_id             = module.network.vpc_id
+  subnet_ids         = length(var.rds_subnet_ids) > 0 ? var.rds_subnet_ids : module.network.subnet_ids
+  subnet_group_name  = var.rds_subnet_group_name
+  security_group_ids = var.rds_security_group_ids
+
+  security_group_name = var.rds_security_group_name
+  # module.ec2's own SG is null here (dev's EC2 instance uses pre-existing,
+  # hand-made SGs — see ec2_security_group_names above), so this falls back
+  # to "" (no ingress rule created) unless var.rds_ingress_security_group_id
+  # is set explicitly — do so before import (likely "ec2-rds-1"'s ID).
+  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
+
+  create_parameter_group = var.rds_create_parameter_group
+  parameter_group_name   = var.rds_parameter_group_name
+  parameter_group_family = var.rds_parameter_group_family
+  enable_pg_cron         = var.rds_enable_pg_cron
+  cron_database_name     = var.rds_cron_database_name
+
+  multi_az                = var.rds_multi_az
+  publicly_accessible     = var.rds_publicly_accessible
+  backup_retention_period = var.rds_backup_retention_period
+  backup_window           = var.rds_backup_window
+  maintenance_window      = var.rds_maintenance_window
+  deletion_protection     = var.rds_deletion_protection
+  skip_final_snapshot     = var.rds_skip_final_snapshot
+
+  tags = var.tags
+}
