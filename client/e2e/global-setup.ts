@@ -18,6 +18,7 @@ const MOCK_OIDC_APPLE_URL = `${MOCK_OIDC_URL}/apple`;
 const SERVER_URL = "http://127.0.0.1:8080";
 const CLIENT_URL = "http://127.0.0.1:5173";
 const OAUTH_CLIENT_ID = "e2e-test-client";
+const OAUTH_GOOGLE_CLIENT_ID = "e2e-test-google-client";
 const OAUTH_APPLE_CLIENT_ID = "e2e-test-apple-client";
 const OAUTH_APPLE_KEY_ID = "e2e-apple-key";
 
@@ -102,8 +103,13 @@ async function killAll(children: ChildProcess[]): Promise<void> {
 
 // Seeds an "OIDC" provider pointing at our mockoidc server's default mode,
 // so the client's sign-in dialog offers "Sign in with OIDC" alongside the
-// production "Sign in with Google" entry seeded by migration 000001, and a
-// separate "AppleE2E" provider pointing at mockoidc's Apple-like /apple
+// production "Sign in with Google" entry seeded by migration 000001; a
+// "GoogleE2E" provider pointing at that same default mode under its own
+// name/slug, so a dedicated spec can exercise a person actually authorizing
+// through a Google-shaped ("Sign in with GoogleE2E") button end-to-end
+// without depending on golden-path.spec.ts's use of the "OIDC" one (kept
+// distinct so the two specs' provider state can't accidentally couple); and
+// a separate "AppleE2E" provider pointing at mockoidc's Apple-like /apple
 // mode (see mockoidc/main.go and migration 000007's own production "Apple"
 // row, which points at the real appleid.apple.com and is left untouched —
 // this is a second, E2E-only row so the mock is exercised without needing
@@ -112,7 +118,7 @@ async function killAll(children: ChildProcess[]): Promise<void> {
 // provider from the explicit slug threaded through the OAuth callback
 // redirect (see src/app/AuthCallback.tsx), not by guessing from the ID
 // token issuer, so distinct provider names/slugs are all that's required
-// here — no special-casing needed for a second non-Google provider.
+// here — no special-casing needed for a second non-Google-shaped provider.
 async function seedMockProviders(databaseURL: string): Promise<void> {
   await execFileAsync("psql", [
     databaseURL,
@@ -122,6 +128,9 @@ async function seedMockProviders(databaseURL: string): Promise<void> {
     `INSERT INTO oidc_providers (name, link)
        SELECT 'OIDC', '${MOCK_OIDC_URL}'
        WHERE NOT EXISTS (SELECT 1 FROM oidc_providers WHERE name = 'OIDC');
+     INSERT INTO oidc_providers (name, link)
+       SELECT 'GoogleE2E', '${MOCK_OIDC_URL}'
+       WHERE NOT EXISTS (SELECT 1 FROM oidc_providers WHERE name = 'GoogleE2E');
      INSERT INTO oidc_providers (name, link, scopes, response_mode, client_secret_strategy)
        SELECT 'AppleE2E', '${MOCK_OIDC_APPLE_URL}', 'openid name', 'form_post', 'private_key_jwt'
        WHERE NOT EXISTS (SELECT 1 FROM oidc_providers WHERE name = 'AppleE2E');`,
@@ -169,6 +178,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         // Key must match the seeded providers' slugs (see
         // seedMockProviders below), not the mockoidc binary's own name.
         oidc: { client_id: OAUTH_CLIENT_ID, client_secret: "unused-in-tests" },
+        googlee2e: { client_id: OAUTH_GOOGLE_CLIENT_ID, client_secret: "unused-in-tests" },
         applee2e: {
           client_id: OAUTH_APPLE_CLIENT_ID,
           private_key_jwt_issuer: appleKey.issuer,
