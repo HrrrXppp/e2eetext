@@ -71,6 +71,7 @@ rds_allocated_storage = 20
 rds_storage_type      = "gp3"
 rds_storage_encrypted = true
 rds_username           = "messenger"
+rds_subnet_ids        = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets
 rds_subnet_group_name = "e2eetext-prod-rds"
 rds_multi_az                = true
 rds_backup_retention_period = 7
@@ -85,7 +86,23 @@ rds_maintenance_window      = "sun:04:30-sun:05:30"
 # rds_create_parameter_group = false
 # rds_parameter_group_name   = "<live-parameter-group-name>"
 
+# If the live parameter group already preloads libraries besides pg_cron,
+# list the FULL set here (this module sets shared_preload_libraries
+# verbatim, so a partial list would drop the others on apply):
+# rds_shared_preload_libraries = ["pg_cron", "pg_stat_statements"]
+
 # Pre-existing security group(s), if importing an instance with hand-made
-# SGs:
+# SGs. rds_ingress_security_group_id is REQUIRED if rds_security_group_ids
+# is left empty (module creates its own SG) — a precondition now fails the
+# plan otherwise, rather than silently creating an SG with zero ingress
+# rules (PR #32 review):
 # rds_security_group_ids        = ["sg-xxxxxxxx"]
 # rds_ingress_security_group_id = "sg-xxxxxxxx"
+
+# Optional storage/monitoring detail, useful for a zero-diff import when
+# the live instance uses any of them (all default to AWS's own "not set"/
+# disabled defaults — see terraform/modules/rds/variables.tf for the full
+# set): rds_iops, rds_storage_throughput, rds_kms_key_id,
+# rds_max_allocated_storage, rds_ca_cert_identifier,
+# rds_monitoring_interval, rds_monitoring_role_arn,
+# rds_performance_insights_enabled, rds_enabled_cloudwatch_logs_exports.

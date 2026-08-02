@@ -119,18 +119,19 @@ module "rds" {
   password = var.rds_password
 
   vpc_id             = module.network.vpc_id
-  subnet_ids         = length(var.rds_subnet_ids) > 0 ? var.rds_subnet_ids : module.network.subnet_ids
+  subnet_ids         = var.rds_subnet_ids
   subnet_group_name  = var.rds_subnet_group_name
   security_group_ids = var.rds_security_group_ids
 
   security_group_name       = var.rds_security_group_name
   ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
 
-  create_parameter_group = var.rds_create_parameter_group
-  parameter_group_name   = var.rds_parameter_group_name
-  parameter_group_family = var.rds_parameter_group_family
-  enable_pg_cron         = var.rds_enable_pg_cron
-  cron_database_name     = var.rds_cron_database_name
+  create_parameter_group   = var.rds_create_parameter_group
+  parameter_group_name     = var.rds_parameter_group_name
+  parameter_group_family   = var.rds_parameter_group_family
+  enable_pg_cron           = var.rds_enable_pg_cron
+  cron_database_name       = var.rds_cron_database_name
+  shared_preload_libraries = var.rds_shared_preload_libraries
 
   multi_az                = var.rds_multi_az
   publicly_accessible     = var.rds_publicly_accessible
@@ -139,6 +140,21 @@ module "rds" {
   maintenance_window      = var.rds_maintenance_window
   deletion_protection     = var.rds_deletion_protection
   skip_final_snapshot     = var.rds_skip_final_snapshot
+  copy_tags_to_snapshot   = var.rds_copy_tags_to_snapshot
+  network_type            = var.rds_network_type
+
+  iops                  = var.rds_iops
+  storage_throughput    = var.rds_storage_throughput
+  kms_key_id            = var.rds_kms_key_id
+  max_allocated_storage = var.rds_max_allocated_storage
+  ca_cert_identifier    = var.rds_ca_cert_identifier
+
+  monitoring_interval                   = var.rds_monitoring_interval
+  monitoring_role_arn                   = var.rds_monitoring_role_arn
+  performance_insights_enabled          = var.rds_performance_insights_enabled
+  performance_insights_kms_key_id       = var.rds_performance_insights_kms_key_id
+  performance_insights_retention_period = var.rds_performance_insights_retention_period
+  enabled_cloudwatch_logs_exports       = var.rds_enabled_cloudwatch_logs_exports
 
   tags = var.tags
 }
