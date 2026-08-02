@@ -353,6 +353,14 @@ trips, real crypto, two full sign-ins) — on a loaded machine, prefer the
 Go integration suite above for quick iteration and treat this one as a
 pre-release sanity check.
 
+`global-setup.ts` also seeds a "GoogleE2E" provider pointing at the same
+Google-shaped default mode as "OIDC" (GET-redirect authorize, static client
+secret, ID token carries a `name` claim directly), kept as its own
+name/slug so `e2e/google-sign-in.spec.ts` — which exercises a person
+authorizing via that provider end-to-end, including that the ID token's
+`name` claim registers as their initial display name — doesn't share
+provider state with `golden-path.spec.ts`'s use of "OIDC".
+
 `mockoidc` also serves an "Apple-like" mode under `/apple` (form_post
 response, one-time name/email payload, `private_key_jwt` client
 authentication) — `global-setup.ts` seeds a second "AppleE2E" provider
