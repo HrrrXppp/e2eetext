@@ -379,7 +379,12 @@ func (s *AuthService) VerifyIDToken(ctx context.Context, rawToken string) (Token
 		return TokenUser{}, err
 	}
 
-	provider, err := s.providerByIssuer(ctx, issuer)
+	audience, err := tokenAudience(rawToken)
+	if err != nil {
+		return TokenUser{}, err
+	}
+
+	provider, err := s.providerByIssuerAndAudience(ctx, issuer, audience)
 	if err != nil {
 		return TokenUser{}, err
 	}
@@ -417,19 +422,70 @@ func (s *AuthService) providerBySlug(ctx context.Context, slug string) (domain.O
 	return domain.OIDCProvider{}, fmt.Errorf("oidc provider not found")
 }
 
-func (s *AuthService) providerByIssuer(ctx context.Context, issuer string) (domain.OIDCProvider, error) {
+// providerByIssuerAndAudience resolves the OIDC provider a bearer token was
+// issued for, using both its issuer and its audience.
+//
+// Issuer alone isn't always enough: two provider rows can legitimately
+// share the same issuer link (this repo's own e2e suite seeds an "OIDC"
+// and a "GoogleE2E" provider that both point at the same mock IdP, to
+// exercise two distinct sign-in buttons against it — see
+// client/e2e/global-setup.ts). providerRepo.List returns rows ordered by
+// name, so an issuer-only lookup silently resolves to whichever name
+// sorts first regardless of which provider the token actually came from,
+// which then fails the verifier's own audience check against the wrong
+// provider's client_id (surfacing as an opaque 401 on every authenticated
+// request after an otherwise-successful sign-in). The audience is exactly
+// what distinguishes two providers sharing one issuer, since each
+// provider is configured with a client_id no other provider uses.
+func (s *AuthService) providerByIssuerAndAudience(
+	ctx context.Context,
+	issuer string,
+	audience []string,
+) (domain.OIDCProvider, error) {
 	providers, err := s.providerRepo.List(ctx)
 	if err != nil {
 		return domain.OIDCProvider{}, err
 	}
 
+	var issuerMatches []domain.OIDCProvider
 	for _, provider := range providers {
 		if strings.TrimRight(provider.Link, "/") == strings.TrimRight(issuer, "/") {
+			issuerMatches = append(issuerMatches, provider)
+		}
+	}
+
+	switch len(issuerMatches) {
+	case 0:
+		return domain.OIDCProvider{}, fmt.Errorf("oidc provider not found for issuer")
+	case 1:
+		return issuerMatches[0], nil
+	}
+
+	// More than one provider shares this issuer: disambiguate by matching
+	// the token's audience against each candidate's configured client_id.
+	for _, provider := range issuerMatches {
+		credential, ok := s.cfg.OAuthForProvider(ProviderSlug(provider.Name))
+		if !ok {
+			continue
+		}
+		if containsString(audience, credential.ClientID) {
 			return provider, nil
 		}
 	}
 
-	return domain.OIDCProvider{}, fmt.Errorf("oidc provider not found for issuer")
+	return domain.OIDCProvider{}, fmt.Errorf(
+		"oidc provider not found for issuer %q: audience matched none of %d providers sharing this issuer",
+		issuer, len(issuerMatches),
+	)
+}
+
+func containsString(list []string, target string) bool {
+	for _, v := range list {
+		if v == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *AuthService) oauthConfig(ctx context.Context, provider domain.OIDCProvider, r *http.Request) (*oauth2.Config, *oidc.IDTokenVerifier, error) {
@@ -506,15 +562,29 @@ func tokenUserFromIDToken(idToken *oidc.IDToken, providerName string) (TokenUser
 	}, nil
 }
 
-func tokenIssuer(rawToken string) (string, error) {
+// decodeTokenPayload base64-decodes the (unverified) claims segment of a
+// JWT. Callers only use this to read public claims (issuer, audience)
+// needed to pick which provider's verifier to run the real signature
+// verification with; the signature itself is always checked afterward by
+// oidc.IDTokenVerifier.Verify before any claim is trusted.
+func decodeTokenPayload(rawToken string) ([]byte, error) {
 	parts := strings.Split(rawToken, ".")
 	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid bearer token")
+		return nil, fmt.Errorf("invalid bearer token")
 	}
 
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", fmt.Errorf("decode bearer token: %w", err)
+		return nil, fmt.Errorf("decode bearer token: %w", err)
+	}
+
+	return payload, nil
+}
+
+func tokenIssuer(rawToken string) (string, error) {
+	payload, err := decodeTokenPayload(rawToken)
+	if err != nil {
+		return "", err
 	}
 
 	var claims struct {
@@ -528,6 +598,42 @@ func tokenIssuer(rawToken string) (string, error) {
 	}
 
 	return claims.Issuer, nil
+}
+
+// tokenAudience returns the (unverified) "aud" claim of a JWT, normalized
+// to a slice — the JOSE/OIDC spec allows aud to be either a single string
+// or an array of strings (RFC 7519 §4.1.3). A missing/empty claim returns
+// a nil slice, not an error: callers treat "no audience matched" the same
+// way regardless of whether the claim was absent or simply didn't match.
+func tokenAudience(rawToken string) ([]string, error) {
+	payload, err := decodeTokenPayload(rawToken)
+	if err != nil {
+		return nil, err
+	}
+
+	var claims struct {
+		Audience json.RawMessage `json:"aud"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("parse bearer token claims: %w", err)
+	}
+	if len(claims.Audience) == 0 {
+		return nil, nil
+	}
+
+	var single string
+	if err := json.Unmarshal(claims.Audience, &single); err == nil {
+		if single == "" {
+			return nil, nil
+		}
+		return []string{single}, nil
+	}
+
+	var multiple []string
+	if err := json.Unmarshal(claims.Audience, &multiple); err != nil {
+		return nil, fmt.Errorf("parse bearer token claims: invalid audience")
+	}
+	return multiple, nil
 }
 
 func bearerToken(r *http.Request) (string, error) {

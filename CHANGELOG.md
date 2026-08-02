@@ -55,5 +55,6 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 ### Fixed
 
 - Client dev proxy now forwards `X-Forwarded-Host`/`X-Forwarded-Proto` on WebSocket upgrades too (not just plain HTTP requests), fixing live `chat.added`/`chat.unread` push under `npm run dev` against a local server
+- Bearer ID-token verification now disambiguates OIDC providers that share the same issuer link by the token's audience (`aud`), not issuer alone -- an issuer-only lookup silently resolved to whichever provider name sorted first, authenticating a token against the wrong provider's `client_id` and failing every subsequent request with a 401 right after an otherwise-successful sign-in (surfaced by the e2e suite's "OIDC" and "GoogleE2E" mock providers, which intentionally point at the same mock issuer)
 
 [NEXT RELEASE]: https://github.com/HrrrXppp/e2eetext/compare/main...HEAD
