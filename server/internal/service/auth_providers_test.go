@@ -93,6 +93,9 @@ func TestAuthService_ListProviders_Error(t *testing.T) {
 // whichever name sorts first — authenticating a legitimate "OIDC" token
 // against "GoogleE2E"'s client_id and failing its audience check
 // (surfacing as a 401 on every request right after a successful sign-in).
+// Also exercises an "Apple" provider row sharing the same issuer, since
+// disambiguation must hold for any number of providers sharing an issuer,
+// not just the two the original regression happened to involve.
 func TestAuthService_ProviderByIssuerAndAudience_DisambiguatesSharedIssuer(t *testing.T) {
 	const sharedIssuer = "http://127.0.0.1:9998"
 
@@ -101,13 +104,15 @@ func TestAuthService_ProviderByIssuerAndAudience_DisambiguatesSharedIssuer(t *te
 			// Alphabetically first, so an issuer-only lookup would always
 			// return this one regardless of which provider actually issued
 			// the token.
-			{ID: "1", Name: "GoogleE2E", Link: sharedIssuer},
-			{ID: "2", Name: "OIDC", Link: sharedIssuer},
+			{ID: "1", Name: "Apple", Link: sharedIssuer},
+			{ID: "2", Name: "GoogleE2E", Link: sharedIssuer},
+			{ID: "3", Name: "OIDC", Link: sharedIssuer},
 		},
 	}
 
 	cfg := config.Config{
 		OAuthCredentials: map[string]config.OAuthCredential{
+			"apple":     {ClientID: "e2e-test-apple-client"},
 			"googlee2e": {ClientID: "e2e-test-google-client"},
 			"oidc":      {ClientID: "e2e-test-client"},
 		},
@@ -122,6 +127,7 @@ func TestAuthService_ProviderByIssuerAndAudience_DisambiguatesSharedIssuer(t *te
 	}{
 		{name: "token issued to OIDC", audience: []string{"e2e-test-client"}, want: "OIDC"},
 		{name: "token issued to GoogleE2E", audience: []string{"e2e-test-google-client"}, want: "GoogleE2E"},
+		{name: "token issued to Apple", audience: []string{"e2e-test-apple-client"}, want: "Apple"},
 	}
 
 	for _, tt := range tests {

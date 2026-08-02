@@ -154,7 +154,7 @@ func (s *AuthService) CompleteLogin(w http.ResponseWriter, r *http.Request, prov
 	// every provider, since it can't know a given provider's response_mode
 	// (stored in the DB) until the path is parsed. Enforce the real
 	// restriction here instead, against the provider's own description of
-	// which methods it accepts (domain.OIDCProvider.AllowedCallbackMethods).
+	// which methods it accepts (domain.OIDCProvider.AllowsCallbackMethod).
 	if !provider.AllowsCallbackMethod(r.Method) {
 		return fmt.Errorf("provider %q does not accept a %s callback", providerSlug, r.Method)
 	}
