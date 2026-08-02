@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -93,14 +94,31 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 // params on a GET, so they must come from r.URL.Query(). r.Form isn't used
 // here because it would silently merge both sources instead of picking the
 // one that matches how this request actually arrived.
+//
+// The signal for which source to use is the request's Content-Type, not
+// its HTTP method: the method (GET vs POST) is just what each provider
+// happens to pair with its response_mode, while Content-Type is what
+// actually tells us whether there's an application/x-www-form-urlencoded
+// body to parse.
 func callbackValues(r *http.Request) (url.Values, error) {
-	if r.Method == http.MethodPost {
+	if isFormURLEncoded(r) {
 		if err := r.ParseForm(); err != nil {
 			return nil, err
 		}
 		return r.PostForm, nil
 	}
 	return r.URL.Query(), nil
+}
+
+// isFormURLEncoded reports whether r's body is
+// application/x-www-form-urlencoded, ignoring any charset or other
+// parameters on the media type.
+func isFormURLEncoded(r *http.Request) bool {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/x-www-form-urlencoded"
 }
 
 type refreshTokenRequest struct {
