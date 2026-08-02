@@ -132,10 +132,14 @@ module "alb" {
 # implemented with no AWS credentials available, so none of that instance's
 # actual engine version / instance class / storage / subnet-group /
 # parameter-group details could be verified. Every identifying attribute
-# below is therefore required with no default (rds_subnet_ids and
-# rds_ingress_security_group_id excepted — see their variables.tf comments
-# for the specific, narrower fallback each uses), the same treatment
-# Phase 2 gave envs/prod while its live status was unconfirmed. Fill in
+# below is therefore required with no default (rds_ingress_security_group_id
+# excepted — see its variables.tf comment for its narrower fallback, now
+# backstopped by modules/rds's own precondition — PR #32 review), the same
+# treatment Phase 2 gave envs/prod while its live status was unconfirmed.
+# rds_subnet_ids previously fell back to module.network's (public) subnets
+# when unset; that silent fallback was removed (PR #32 review) since RDS is
+# commonly private — it's now required with no default, same as the rest of
+# this block. Fill in
 # terraform.tfvars from a real `aws rds describe-db-instances` /
 # `describe-db-parameter-groups` audit before planning or importing — see
 # README's Terraform section.
@@ -155,22 +159,26 @@ module "rds" {
   password = var.rds_password
 
   vpc_id             = module.network.vpc_id
-  subnet_ids         = length(var.rds_subnet_ids) > 0 ? var.rds_subnet_ids : module.network.subnet_ids
+  subnet_ids         = var.rds_subnet_ids
   subnet_group_name  = var.rds_subnet_group_name
   security_group_ids = var.rds_security_group_ids
 
   security_group_name = var.rds_security_group_name
   # module.ec2's own SG is null here (dev's EC2 instance uses pre-existing,
   # hand-made SGs — see ec2_security_group_names above), so this falls back
-  # to "" (no ingress rule created) unless var.rds_ingress_security_group_id
-  # is set explicitly — do so before import (likely "ec2-rds-1"'s ID).
+  # to "" unless var.rds_ingress_security_group_id is set explicitly — do
+  # so before import (likely "ec2-rds-1"'s ID). If rds_security_group_ids
+  # is also left empty (module creates its own SG), modules/rds's own
+  # precondition now fails the plan on an empty ingress SG here, rather
+  # than silently creating an SG with zero ingress rules (PR #32 review).
   ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
 
-  create_parameter_group = var.rds_create_parameter_group
-  parameter_group_name   = var.rds_parameter_group_name
-  parameter_group_family = var.rds_parameter_group_family
-  enable_pg_cron         = var.rds_enable_pg_cron
-  cron_database_name     = var.rds_cron_database_name
+  create_parameter_group   = var.rds_create_parameter_group
+  parameter_group_name     = var.rds_parameter_group_name
+  parameter_group_family   = var.rds_parameter_group_family
+  enable_pg_cron           = var.rds_enable_pg_cron
+  cron_database_name       = var.rds_cron_database_name
+  shared_preload_libraries = var.rds_shared_preload_libraries
 
   multi_az                = var.rds_multi_az
   publicly_accessible     = var.rds_publicly_accessible
@@ -179,6 +187,21 @@ module "rds" {
   maintenance_window      = var.rds_maintenance_window
   deletion_protection     = var.rds_deletion_protection
   skip_final_snapshot     = var.rds_skip_final_snapshot
+  copy_tags_to_snapshot   = var.rds_copy_tags_to_snapshot
+  network_type            = var.rds_network_type
+
+  iops                  = var.rds_iops
+  storage_throughput    = var.rds_storage_throughput
+  kms_key_id            = var.rds_kms_key_id
+  max_allocated_storage = var.rds_max_allocated_storage
+  ca_cert_identifier    = var.rds_ca_cert_identifier
+
+  monitoring_interval                   = var.rds_monitoring_interval
+  monitoring_role_arn                   = var.rds_monitoring_role_arn
+  performance_insights_enabled          = var.rds_performance_insights_enabled
+  performance_insights_kms_key_id       = var.rds_performance_insights_kms_key_id
+  performance_insights_retention_period = var.rds_performance_insights_retention_period
+  enabled_cloudwatch_logs_exports       = var.rds_enabled_cloudwatch_logs_exports
 
   tags = var.tags
 }

@@ -292,9 +292,17 @@ variable "rds_password" {
 }
 
 variable "rds_subnet_ids" {
-  description = "Subnet IDs for the DB subnet group. Leave empty to fall back to module.network's subnets — fine for a plan, but before `terraform import` set this to the live instance's real subnet-group members (`aws rds describe-db-subnet-groups`); RDS is commonly placed in private subnets, unlike the public default-VPC subnets Phase 2 confirmed for the ALB/EC2."
+  description = <<-EOT
+    Subnet IDs for the DB subnet group. No default (PR #32 review): this
+    used to fall back to module.network's subnets when unset, but those
+    are the account's public default-VPC subnets (confirmed live for the
+    ALB/EC2 in Phase 2) — RDS is commonly placed in PRIVATE subnets
+    instead, and silently defaulting to public ones risked pairing a
+    future publicly_accessible mistake with an already-public subnet
+    group. Get the live instance's real subnet-group members with
+    `aws rds describe-db-subnet-groups` before planning or importing.
+  EOT
   type        = list(string)
-  default     = []
 }
 
 variable "rds_subnet_group_name" {
@@ -386,4 +394,94 @@ variable "rds_skip_final_snapshot" {
   description = "Whether to skip a final snapshot on destroy. Default false (always snapshot) as a safety net."
   type        = bool
   default     = false
+}
+
+# --- RDS storage / monitoring detail (PR #32 review) ---
+# All default to AWS's own "not set"/disabled behavior — genuinely optional
+# unless the live dev instance actually uses them; set to match before
+# import if it does. See terraform/modules/rds/variables.tf for the full
+# rationale on each.
+
+variable "rds_shared_preload_libraries" {
+  description = "Full shared_preload_libraries list for the dev parameter group (only used when rds_enable_pg_cron is true) — REPLACES the live value, doesn't append. Default [\"pg_cron\"]; list the live instance's complete preload set here if it has others."
+  type        = list(string)
+  default     = ["pg_cron"]
+}
+
+variable "rds_iops" {
+  description = "Provisioned IOPS for the dev instance. Null (default) lets AWS use storage_type's default."
+  type        = number
+  default     = null
+}
+
+variable "rds_storage_throughput" {
+  description = "gp3 storage throughput (MiBps) for the dev instance. Null (default) lets AWS use gp3's baseline."
+  type        = number
+  default     = null
+}
+
+variable "rds_kms_key_id" {
+  description = "KMS key ARN/ID for the dev instance's storage encryption. Null (default) uses the account default key."
+  type        = string
+  default     = null
+}
+
+variable "rds_max_allocated_storage" {
+  description = "Storage autoscaling ceiling (GiB) for the dev instance. 0 (default) matches AWS's own \"disabled\" default."
+  type        = number
+  default     = 0
+}
+
+variable "rds_ca_cert_identifier" {
+  description = "CA certificate identifier for the dev instance. Null (default) lets AWS use its own default CA."
+  type        = string
+  default     = null
+}
+
+variable "rds_copy_tags_to_snapshot" {
+  description = "Whether dev instance snapshots inherit its tags. Default true."
+  type        = bool
+  default     = true
+}
+
+variable "rds_network_type" {
+  description = "Network type (\"IPV4\" or \"DUAL\") for the dev instance. Null (default) lets AWS use IPV4."
+  type        = string
+  default     = null
+}
+
+variable "rds_monitoring_interval" {
+  description = "Enhanced monitoring interval (seconds) for the dev instance. 0 (default) disables it."
+  type        = number
+  default     = 0
+}
+
+variable "rds_monitoring_role_arn" {
+  description = "IAM role ARN for enhanced monitoring on the dev instance. Required by AWS only when rds_monitoring_interval > 0."
+  type        = string
+  default     = null
+}
+
+variable "rds_performance_insights_enabled" {
+  description = "Whether Performance Insights is enabled on the dev instance. Default false (AWS default)."
+  type        = bool
+  default     = false
+}
+
+variable "rds_performance_insights_kms_key_id" {
+  description = "KMS key for Performance Insights on the dev instance, when enabled. Null (default) uses the account default key."
+  type        = string
+  default     = null
+}
+
+variable "rds_performance_insights_retention_period" {
+  description = "Performance Insights retention (days) on the dev instance, when enabled. Default 7 (AWS's own default)."
+  type        = number
+  default     = 7
+}
+
+variable "rds_enabled_cloudwatch_logs_exports" {
+  description = "Log types the dev instance exports to CloudWatch Logs. Empty (default) matches AWS's own default of no log exports."
+  type        = list(string)
+  default     = []
 }

@@ -63,6 +63,7 @@
 # rds_storage_type           = "gp2"
 # rds_storage_encrypted      = true
 # rds_username               = "messenger"
+# rds_subnet_ids             = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets, unlike the public ones Phase 2 confirmed for ALB/EC2
 # rds_subnet_group_name      = "<live-subnet-group-name>"
 # rds_multi_az               = false
 # rds_backup_retention_period = 1
@@ -73,7 +74,7 @@
 # (dev's EC2 instance does — "ec2-rds-1", per Phase 2's audit — the RDS
 # side is likely the same or a paired group):
 # rds_security_group_ids        = ["sg-xxxxxxxx"]
-# rds_ingress_security_group_id = "sg-xxxxxxxx"   # only if letting the rds module create its own SG instead
+# rds_ingress_security_group_id = "sg-xxxxxxxx"   # REQUIRED if rds_security_group_ids is left empty (module creates its own SG) — a precondition now fails the plan otherwise, rather than silently creating an SG with zero ingress rules (PR #32 review)
 #
 # Never put the real master password here — pass it out-of-band:
 #   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
@@ -83,3 +84,16 @@
 # instead of creating a new one:
 # rds_create_parameter_group = false
 # rds_parameter_group_name   = "<live-parameter-group-name>"
+#
+# If the live parameter group already preloads libraries besides pg_cron,
+# list the FULL set here (this module sets shared_preload_libraries
+# verbatim, so a partial list would drop the others on apply):
+# rds_shared_preload_libraries = ["pg_cron", "pg_stat_statements"]
+#
+# Optional storage/monitoring detail, useful for a zero-diff import when
+# the live instance uses any of them (all default to AWS's own "not set"/
+# disabled defaults — see terraform/modules/rds/variables.tf for the full
+# set): rds_iops, rds_storage_throughput, rds_kms_key_id,
+# rds_max_allocated_storage, rds_ca_cert_identifier,
+# rds_monitoring_interval, rds_monitoring_role_arn,
+# rds_performance_insights_enabled, rds_enabled_cloudwatch_logs_exports.
