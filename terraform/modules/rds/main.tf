@@ -71,6 +71,20 @@ resource "aws_security_group" "this" {
   }
 
   tags = var.tags
+
+  lifecycle {
+    # PR #32 review: on dev, module.ec2's own security_group_id output is
+    # null (dev's EC2 instance uses pre-existing, hand-made SGs), so an
+    # unset var.ingress_security_group_id combined with an empty
+    # var.security_group_ids silently creates this SG with ZERO ingress
+    # rules — an accidental apply would cut the app tier off from its own
+    # database instead of failing loudly. Require the ingress SG explicitly
+    # whenever this module is the one creating the security group.
+    precondition {
+      condition     = var.ingress_security_group_id != ""
+      error_message = "modules/rds is creating its own security group (var.security_group_ids is empty) but var.ingress_security_group_id is unset — that would create an RDS security group with no ingress rule at all. Set ingress_security_group_id explicitly (e.g. the app tier's SG id), or pass pre-existing security_group_ids instead of letting this module create one."
+    }
+  }
 }
 
 # #20's plan: "create or modify a custom DB parameter group with
@@ -87,11 +101,17 @@ resource "aws_db_parameter_group" "this" {
   family      = var.parameter_group_family
   description = "e2eetext RDS parameter group${var.enable_pg_cron ? " (pg_cron enabled per #20)" : ""}"
 
+  # PR #32 review: shared_preload_libraries is a full replace, not an
+  # append — if the live parameter group already preloads other libraries,
+  # managing this group with a hardcoded "pg_cron" would silently drop
+  # them on apply. var.shared_preload_libraries defaults to just
+  # ["pg_cron"] (this module's own scope, #20's plan) but let brownfield
+  # imports list the live instance's complete preload set instead.
   dynamic "parameter" {
     for_each = var.enable_pg_cron ? [1] : []
     content {
       name         = "shared_preload_libraries"
-      value        = "pg_cron"
+      value        = join(",", var.shared_preload_libraries)
       apply_method = "pending-reboot"
     }
   }
@@ -125,6 +145,20 @@ resource "aws_db_instance" "this" {
   allocated_storage = var.allocated_storage
   storage_type      = var.storage_type
   storage_encrypted = var.storage_encrypted
+  # gp3-only knobs and a customer KMS key — all null (provider/AWS default:
+  # "not set" / account default key) unless the live instance actually uses
+  # them. PR #32 review: these were previously absent entirely, which is
+  # fine for gp2 default-KMS instances but leaves plan noise/ForceNew risk
+  # for anything using gp3 IOPS/throughput or a custom key — now they're
+  # available to set for a zero-diff import instead of being unmanageable.
+  iops               = var.iops
+  storage_throughput = var.storage_throughput
+  kms_key_id         = var.kms_key_id
+  # Autoscaling ceiling for storage. 0 (this module's default) matches
+  # AWS's own "disabled" default — only meaningfully diverges from live
+  # once someone sets it, same "describe reality" rule as the required
+  # block above.
+  max_allocated_storage = var.max_allocated_storage
 
   db_name  = var.db_name
   username = var.username
@@ -133,6 +167,7 @@ resource "aws_db_instance" "this" {
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = local.security_group_ids
   parameter_group_name   = local.parameter_group_name_effective
+  ca_cert_identifier     = var.ca_cert_identifier
 
   multi_az                   = var.multi_az
   publicly_accessible        = var.publicly_accessible
@@ -142,6 +177,20 @@ resource "aws_db_instance" "this" {
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   apply_immediately          = var.apply_immediately
   deletion_protection        = var.deletion_protection
+  copy_tags_to_snapshot      = var.copy_tags_to_snapshot
+  network_type               = var.network_type
+
+  # Enhanced monitoring / Performance Insights — both off (AWS defaults) in
+  # this module's own defaults; set to match the live instance before
+  # import rather than leaving them as post-import plan noise (PR #32
+  # review: "Incomplete aws_db_instance attrs -> post-import drift risk").
+  monitoring_interval                   = var.monitoring_interval
+  monitoring_role_arn                   = var.monitoring_role_arn
+  performance_insights_enabled          = var.performance_insights_enabled
+  performance_insights_kms_key_id       = var.performance_insights_kms_key_id
+  performance_insights_retention_period = var.performance_insights_enabled ? var.performance_insights_retention_period : null
+
+  enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
 
   skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : local.final_snapshot_identifier
