@@ -48,6 +48,42 @@ variable "storage_encrypted" {
   type        = bool
 }
 
+# --- Storage detail (PR #32 review: reduce post-import plan/ForceNew risk) ---
+# Genuinely optional on AWS's side (unset = AWS's own default behavior), so
+# these get real defaults matching "not set" rather than joining the
+# required, no-default block above — but they're still real live-instance
+# facts to confirm before import, not policy choices.
+
+variable "iops" {
+  description = "Provisioned IOPS, for io1/io2 storage or a gp3 instance that overrides the baseline. Null (default) lets AWS use its own default for storage_type; set to match the live instance's real value before import if it diverges."
+  type        = number
+  default     = null
+}
+
+variable "storage_throughput" {
+  description = "gp3 storage throughput (MiBps). Null (default) lets AWS use gp3's baseline throughput; set to match the live instance before import if it was provisioned with a custom throughput."
+  type        = number
+  default     = null
+}
+
+variable "kms_key_id" {
+  description = "KMS key ARN/ID for storage encryption, when storage_encrypted is true and the live instance uses a customer-managed key rather than the account's default aws/rds key. Null (default) lets AWS use the default key."
+  type        = string
+  default     = null
+}
+
+variable "max_allocated_storage" {
+  description = "Ceiling (GiB) for RDS storage autoscaling. 0 (default) matches AWS's own \"autoscaling disabled\" default; set to the live instance's real value before import if storage autoscaling is enabled there."
+  type        = number
+  default     = 0
+}
+
+variable "ca_cert_identifier" {
+  description = "CA certificate identifier for the instance (e.g. \"rds-ca-rsa2048-g1\"). Null (default) lets AWS use its own default CA; set explicitly to match the live instance before import if it uses a non-default CA (a mismatch here is a plan diff, not ForceNew, but still breaks the zero-diff bar)."
+  type        = string
+  default     = null
+}
+
 variable "db_name" {
   description = "Initial database name (README: \"messenger\"). ForceNew — ignored by AWS on import (RDS doesn't expose the original CREATE DATABASE name for re-verification), but must still be set to avoid Terraform proposing to recreate the database on a future replace."
   type        = string
@@ -179,6 +215,24 @@ variable "cron_database_name" {
   default     = ""
 }
 
+variable "shared_preload_libraries" {
+  description = <<-EOT
+    Full value for the parameter group's shared_preload_libraries
+    (only set when enable_pg_cron is true) — this module sets it verbatim
+    as a comma-joined list, which REPLACES whatever the live parameter
+    group currently has, it does not append. Defaults to just ["pg_cron"]
+    (this module's own scope, #20's plan). PR #32 review: if the live
+    parameter group already preloads other libraries (audit with
+    `aws rds describe-db-parameter-groups` /
+    `describe-db-parameters`), list ALL of them here before import/apply —
+    otherwise applying this module silently drops them. For a brownfield
+    parameter group whose full preload set isn't confirmed yet, prefer
+    create_parameter_group = false instead of guessing here.
+  EOT
+  type        = list(string)
+  default     = ["pg_cron"]
+}
+
 # --- Safety / operational defaults ---
 # Unlike the block above, these are genuine policy choices documented
 # elsewhere in this repo (or conservative, non-guessy safe defaults), not
@@ -240,6 +294,60 @@ variable "final_snapshot_identifier" {
   description = "Final snapshot identifier, used when skip_final_snapshot is false. Leave empty (default) to derive \"<identifier>-final\"."
   type        = string
   default     = ""
+}
+
+variable "copy_tags_to_snapshot" {
+  description = "Whether snapshots (including the final one) inherit the instance's tags. Defaults to true — matches AWS's console default and avoids untagged snapshots by accident."
+  type        = bool
+  default     = true
+}
+
+variable "network_type" {
+  description = "Network type (\"IPV4\" or \"DUAL\"). Null (default) lets AWS use its own default (IPV4). Set to match the live instance before import if it's dual-stack."
+  type        = string
+  default     = null
+}
+
+# --- Enhanced monitoring / Performance Insights / log exports ---
+# All off/empty by AWS's own default — PR #32 review flagged these as
+# entirely absent, which is fine for an instance that genuinely has none of
+# them enabled, but leaves plan noise (or an unmanageable diff) for one
+# that does. Audit with `aws rds describe-db-instances` before import.
+
+variable "monitoring_interval" {
+  description = "Enhanced monitoring interval in seconds (0 disables it — the AWS default). Set to the live instance's real value (e.g. 60) before import if enhanced monitoring is enabled there."
+  type        = number
+  default     = 0
+}
+
+variable "monitoring_role_arn" {
+  description = "IAM role ARN enhanced monitoring assumes to publish to CloudWatch Logs. Required by AWS only when monitoring_interval > 0; null otherwise."
+  type        = string
+  default     = null
+}
+
+variable "performance_insights_enabled" {
+  description = "Whether Performance Insights is enabled. Defaults to false (AWS default) — set to match the live instance before import."
+  type        = bool
+  default     = false
+}
+
+variable "performance_insights_kms_key_id" {
+  description = "KMS key for Performance Insights data, when performance_insights_enabled is true. Null (default) lets AWS use the default key."
+  type        = string
+  default     = null
+}
+
+variable "performance_insights_retention_period" {
+  description = "Performance Insights retention in days (7, or a multiple of 31 up to 731), only meaningful when performance_insights_enabled is true. Defaults to 7 (AWS's own default retention)."
+  type        = number
+  default     = 7
+}
+
+variable "enabled_cloudwatch_logs_exports" {
+  description = "Log types exported to CloudWatch Logs (e.g. [\"postgresql\", \"upgrade\"]). Empty (default) matches AWS's own default of no log exports — set to match the live instance before import if any are enabled there."
+  type        = list(string)
+  default     = []
 }
 
 variable "tags" {
