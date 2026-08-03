@@ -154,9 +154,9 @@ variable "server_target_group_name" {
 }
 
 variable "client_target_group_name" {
-  description = "Name of the live client (8080) target group (confirmed live: \"client\"). Same ForceNew caveat."
+  description = "Name of the live client (8080) target group (confirmed live: \"dev-client\"). Same ForceNew caveat."
   type        = string
-  default     = "client"
+  default     = "dev-client"
 }
 
 variable "alb_idle_timeout" {
@@ -223,9 +223,15 @@ variable "server_health_check_port" {
 }
 
 variable "client_health_check_port" {
-  description = "Client TG health-check port (confirmed live: pinned to \"8080\")."
+  description = "Client TG health-check port (confirmed live: \"traffic-port\", not pinned to \"8080\")."
   type        = string
-  default     = "8080"
+  default     = "traffic-port"
+}
+
+variable "client_health_check_path" {
+  description = "Client TG health-check path (confirmed live: \"/\", not \"/health\")."
+  type        = string
+  default     = "/"
 }
 
 variable "create_health_rule" {
@@ -334,14 +340,12 @@ variable "rds_subnet_group_name" {
 variable "rds_create_subnet_group" {
   description = <<-EOT
     Whether the rds module creates/manages the DB subnet group. Default
-    true; set false when rds_subnet_group_name is a pre-existing group this
-    module shouldn't try to create — including the AWS-implicit "default"
-    DB subnet group every default VPC has, which the provider refuses to
-    create (name "default" is reserved). Confirmed needed live for dev
-    (PR #32 comment: "Fix error in terraform plan dev").
+    false for envs/dev: live uses the AWS-implicit "default" DB subnet
+    group, which the provider refuses to create (name "default" is
+    reserved). Set true only for a greenfield custom subnet group name.
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "rds_security_group_ids" {

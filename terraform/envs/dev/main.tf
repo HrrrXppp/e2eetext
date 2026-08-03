@@ -108,7 +108,7 @@ module "alb" {
   # defaults) in all of the following, audited 2026-07-26 — these values
   # describe what's actually live:
   server_target_group_name = var.server_target_group_name # live: "dev-server"
-  client_target_group_name = var.client_target_group_name # live: "client"
+  client_target_group_name = var.client_target_group_name # live: "dev-client"
   idle_timeout             = var.alb_idle_timeout         # live: 60, not 3600
   https_default_action     = var.https_default_action     # live: fixed 404, not forward-to-client
   api_rule_priority        = var.api_rule_priority        # live: 100, not 10
@@ -119,7 +119,8 @@ module "alb" {
   health_check_healthy_threshold   = var.health_check_healthy_threshold   # live: 5, not 3
   health_check_unhealthy_threshold = var.health_check_unhealthy_threshold # live: 2, not 3
   server_health_check_port         = var.server_health_check_port         # live: "8081", not "traffic-port"
-  client_health_check_port         = var.client_health_check_port         # live: "8080", not "traffic-port"
+  client_health_check_port         = var.client_health_check_port         # live: "traffic-port"
+  client_health_check_path         = var.client_health_check_path         # live: "/"
 
   tags = var.tags
 }

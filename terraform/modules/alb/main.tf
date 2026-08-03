@@ -63,7 +63,7 @@ resource "aws_lb_target_group" "client" {
   target_type = "instance"
 
   health_check {
-    path                = "/health"
+    path                = var.client_health_check_path
     interval            = 30
     port                = var.client_health_check_port
     healthy_threshold   = var.health_check_healthy_threshold

@@ -69,9 +69,15 @@ variable "server_health_check_port" {
 }
 
 variable "client_health_check_port" {
-  description = "Health-check port for the client TG. Default \"traffic-port\"; the live dev TG pins it to \"8080\" explicitly."
+  description = "Health-check port for the client TG. Default \"traffic-port\"; the live dev TG uses \"traffic-port\" (not pinned to 8080)."
   type        = string
   default     = "traffic-port"
+}
+
+variable "client_health_check_path" {
+  description = "Health-check path for the client TG. Default \"/health\" (script-shaped); live-dev uses \"/\"."
+  type        = string
+  default     = "/health"
 }
 
 variable "idle_timeout" {
