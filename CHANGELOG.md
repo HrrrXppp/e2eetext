@@ -59,6 +59,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 
 - Terraform ALB module manages additional HTTPS listener rules via `additional_https_rules` (live-dev SPA routes at priorities 10–14: `/`, `/assets/*`, `/oauth/*`, `/chats`, `/instance.json`)
 - Terraform `envs/dev` ALB defaults match live target groups (`dev-client` / health check `/` + `traffic-port`) and skip creating the reserved `"default"` DB subnet group
+- Terraform AWS provider bumped to `>= 6.34.0, < 7.0.0` so `aws_lb_target_group_attachment` can be imported
 
 ### Fixed
 
