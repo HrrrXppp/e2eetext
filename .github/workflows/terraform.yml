@@ -62,11 +62,18 @@ jobs:
   # IAM/ECR/S3 read access `terraform plan` needs, so reusing it would just
   # trade one AccessDenied failure mode for another. Instead this job looks
   # for a separate AWS_TERRAFORM_PLAN_ROLE_ARN secret pointing at a
-  # dedicated, read-only "terraform-plan" role — until that's provisioned,
-  # the job skips cleanly rather than failing (or erroring red) on every
-  # Terraform PR. `continue-on-error` on the AWS-touching steps is a second
-  # safety net so a misconfigured/under-scoped plan role degrades this
-  # optional job to a warning instead of a hard failure.
+  # dedicated, read-only "terraform-plan" role. `continue-on-error` stays
+  # only on the AWS-credentials step, so a misconfigured/under-scoped plan
+  # role doesn't abort the job outright on that one step — but the job as a
+  # whole must NOT report green when `terraform plan` doesn't actually run:
+  # a skipped plan on a PR touching live infrastructure is exactly the kind
+  # of thing that should block a reviewer's attention, not hide behind a
+  # green check (owner feedback on PR #32: "if stage terraform plan doesn't
+  # run pipeline should be red"). The "Fail if terraform plan did not run"
+  # step at the end of this job enforces that: whenever
+  # AWS_TERRAFORM_PLAN_ROLE_ARN/AWS_REGION, or (for dev/prod)
+  # DEV_TFVARS/PROD_TFVARS, aren't configured, the job now fails instead of
+  # every remaining step just skipping quietly.
   #
   # Gated behind the "terraform-plan" GitHub Environment (must be created in
   # repo Settings > Environments, ideally with required reviewers) so that,
@@ -94,9 +101,10 @@ jobs:
   # written to a gitignored ci.auto.tfvars before plan runs. Until the
   # relevant secret is populated (which for dev's rds_* values requires
   # first auditing the live dev RDS instance — see README's Terraform
-  # section), that environment's plan step degrades to a skipped no-op via
-  # the same "not configured yet" pattern already used for
-  # AWS_TERRAFORM_PLAN_ROLE_ARN, rather than failing the workflow.
+  # section), that environment's plan step is skipped — but per the "Fail
+  # if terraform plan did not run" step below, the job itself now fails
+  # rather than reporting green, the same way an unconfigured
+  # AWS_TERRAFORM_PLAN_ROLE_ARN does.
   plan:
     needs: [fmt, validate]
     runs-on: ubuntu-latest
@@ -159,7 +167,9 @@ jobs:
       # would swallow that at the job level but still leave a failed red
       # step in the Actions UI, which is exactly what a "skipped no-op" is
       # meant to avoid. So dev/prod's init/plan only run once their tfvars
-      # were actually written; shared is unaffected (it has no
+      # were actually written; if they weren't, the "Fail if terraform plan
+      # did not run" step at the end of this job fails the job instead of
+      # leaving it green. shared is unaffected (it has no
       # required-with-no-default variables, so it needs no tfvars at all).
       #
       # No `continue-on-error` on init/plan themselves (PR #32 review):
@@ -203,3 +213,23 @@ jobs:
         env:
           TF_VAR_rds_password: ${{ matrix.environment == 'dev' && secrets.DEV_RDS_PASSWORD || (matrix.environment == 'prod' && secrets.PROD_RDS_PASSWORD || '') }}
         run: terraform plan -input=false -lock=false
+
+      # Owner feedback on PR #32: a skipped `terraform plan` must fail the
+      # job, not report green. Runs regardless of earlier steps'
+      # outcome (`if: always()`) so it still executes when the steps above
+      # were skipped entirely (missing AWS_TERRAFORM_PLAN_ROLE_ARN/
+      # AWS_REGION, or missing DEV_TFVARS/PROD_TFVARS). If `terraform plan`
+      # above actually ran, both checks below pass trivially and this step
+      # is a no-op — a genuine plan failure already failed the job via that
+      # step itself, this only covers the "silently never ran" case.
+      - name: Fail if terraform plan did not run
+        if: always()
+        run: |
+          if [ "${{ steps.secrets-check.outputs.configured }}" != "true" ]; then
+            echo "::error::terraform plan did not run for '${{ matrix.environment }}': AWS_TERRAFORM_PLAN_ROLE_ARN and/or AWS_REGION are not configured (terraform-plan GitHub Environment). See README's Terraform CI section."
+            exit 1
+          fi
+          if [ "${{ matrix.environment }}" != "shared" ] && [ "${{ steps.write-tfvars.outputs.written }}" != "true" ]; then
+            echo "::error::terraform plan did not run for '${{ matrix.environment }}': ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret is not configured. See README's Terraform CI section."
+            exit 1
+          fi
