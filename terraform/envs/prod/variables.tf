@@ -156,6 +156,21 @@ variable "create_health_rule" {
   default     = true
 }
 
+variable "additional_https_rules" {
+  description = <<-EOT
+    Extra HTTPS listener rules (path → client or server TG). Default empty
+    for script-shaped greenfield (HTTPS default action forwards to client).
+    If importing a live prod stack that uses explicit SPA path rules like
+    dev, set the same shape as envs/dev's additional_https_rules default.
+  EOT
+  type = list(object({
+    priority      = number
+    path_patterns = list(string)
+    target        = string
+  }))
+  default = []
+}
+
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for the prod ALB's HTTPS listener (production domain)."
   type        = string

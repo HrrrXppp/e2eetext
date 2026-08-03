@@ -133,6 +133,30 @@ variable "health_rule_priority" {
   default     = 20
 }
 
+variable "additional_https_rules" {
+  description = <<-EOT
+    Extra HTTPS listener rules beyond the built-in /api (and optional
+    /health) rules. Each entry needs a unique priority, path pattern(s),
+    and target ("client" or "server"). Used on live-dev to manage the
+    hand-made SPA routes at priorities 10–14 (/, /assets/*, /oauth/*,
+    /chats, /instance.json → client TG). Leave empty for script-shaped
+    prod greenfield (default catch-all forward covers SPA routes).
+  EOT
+  type = list(object({
+    priority      = number
+    path_patterns = list(string)
+    target        = string
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for r in var.additional_https_rules : contains(["client", "server"], r.target)
+    ])
+    error_message = "additional_https_rules[].target must be \"client\" or \"server\"."
+  }
+}
+
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for the HTTPS listener (must be in the same region as the ALB)."
   type        = string

@@ -53,6 +53,12 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Terraform (Phase 2 of #27): `terraform/modules/{network,alb,ec2}` and `terraform/envs/{dev,prod}`, codifying per-environment networking (default-VPC data source), ALB (matching `create-alb.example.sh`'s target groups/listener rules), and EC2 (instance + security group + IAM instance profile); `terraform.yml` CI matrixed over `shared`/`dev`/`prod`
 - Terraform (Phase 3 of #27, final phase): `terraform/modules/rds` and its wiring in `terraform/envs/{dev,prod}` — DB instance, subnet group, security group, and a parameter group folding in #20's `pg_cron` settings (`shared_preload_libraries=pg_cron`, `cron.database_name`); built without AWS credentials to audit the live RDS instances, so every identifying variable is required with no default and the module is not yet imported
 
+### Changed
+
+#### Tooling & deployment
+
+- Terraform ALB module manages additional HTTPS listener rules via `additional_https_rules` (live-dev SPA routes at priorities 10–14: `/`, `/assets/*`, `/oauth/*`, `/chats`, `/instance.json`)
+
 ### Fixed
 
 - Client dev proxy now forwards `X-Forwarded-Host`/`X-Forwarded-Proto` on WebSocket upgrades too (not just plain HTTP requests), fixing live `chat.added`/`chat.unread` push under `npm run dev` against a local server

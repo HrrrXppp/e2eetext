@@ -114,6 +114,7 @@ module "alb" {
   api_rule_priority        = var.api_rule_priority        # live: 100, not 10
   api_path_patterns        = var.api_path_patterns        # live: ["/api/*"], not ["/api*"]
   create_health_rule       = var.create_health_rule       # live: no /health rule
+  additional_https_rules   = var.additional_https_rules   # live: SPA rules 10–14
 
   health_check_healthy_threshold   = var.health_check_healthy_threshold   # live: 5, not 3
   health_check_unhealthy_threshold = var.health_check_unhealthy_threshold # live: 2, not 3

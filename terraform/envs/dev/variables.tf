@@ -172,7 +172,7 @@ variable "https_default_action" {
 }
 
 variable "api_rule_priority" {
-  description = "Priority of the /api listener rule (confirmed live: 100; priorities 10-14 are taken by hand-made client rules Terraform doesn't manage yet)."
+  description = "Priority of the /api listener rule (confirmed live: 100; priorities 10-14 are the client SPA rules in additional_https_rules)."
   type        = number
   default     = 100
 }
@@ -181,6 +181,27 @@ variable "api_path_patterns" {
   description = "Path patterns of the /api listener rule (confirmed live: [\"/api/*\"])."
   type        = list(string)
   default     = ["/api/*"]
+}
+
+variable "additional_https_rules" {
+  description = <<-EOT
+    Extra HTTPS listener rules managed by Terraform. Confirmed live on
+    2026-07-26 / README: priorities 10–14 forward SPA paths to the client
+    TG (default listener action is fixed-404). Import each as
+    module.alb.aws_lb_listener_rule.extra["<priority>"].
+  EOT
+  type = list(object({
+    priority      = number
+    path_patterns = list(string)
+    target        = string
+  }))
+  default = [
+    { priority = 10, path_patterns = ["/"], target = "client" },
+    { priority = 11, path_patterns = ["/assets/*"], target = "client" },
+    { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
+    { priority = 13, path_patterns = ["/chats"], target = "client" },
+    { priority = 14, path_patterns = ["/instance.json"], target = "client" },
+  ]
 }
 
 variable "health_check_healthy_threshold" {

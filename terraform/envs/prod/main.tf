@@ -83,6 +83,7 @@ module "alb" {
   api_rule_priority        = var.api_rule_priority
   api_path_patterns        = var.api_path_patterns
   create_health_rule       = var.create_health_rule
+  additional_https_rules   = var.additional_https_rules
 
   tags = var.tags
 }

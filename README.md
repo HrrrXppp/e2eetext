@@ -695,12 +695,19 @@ terraform import module.alb.aws_lb_target_group.server <DEV_SERVER_TG_ARN>
 terraform import module.alb.aws_lb_target_group.client <DEV_CLIENT_TG_ARN>
 terraform import module.alb.aws_lb_listener.https <DEV_HTTPS_LISTENER_ARN>
 terraform import module.alb.aws_lb_listener.http_redirect <DEV_HTTP_LISTENER_ARN>
-terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # the priority-100 /api/* rule
+terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # priority-100 /api/*
+# Client SPA rules (priorities 10–14 → client TG). Look up ARNs with
+# `aws elbv2 describe-rules --listener-arn <HTTPS_LISTENER_ARN>`.
+terraform import 'module.alb.aws_lb_listener_rule.extra["10"]' <RULE_ARN_PRIO_10>   # /
+terraform import 'module.alb.aws_lb_listener_rule.extra["11"]' <RULE_ARN_PRIO_11>   # /assets/*
+terraform import 'module.alb.aws_lb_listener_rule.extra["12"]' <RULE_ARN_PRIO_12>   # /oauth/*
+terraform import 'module.alb.aws_lb_listener_rule.extra["13"]' <RULE_ARN_PRIO_13>   # /chats
+terraform import 'module.alb.aws_lb_listener_rule.extra["14"]' <RULE_ARN_PRIO_14>   # /instance.json
 ```
 
 Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing, `terraform plan` should show **no changes except** two `aws_lb_target_group_attachment` creates — the AWS provider (5.x) cannot import target-group attachments, and `RegisterTargets` on an already-registered target/port is an idempotent no-op, so those two "creates" are safe. Everything else must be diff-free — the same acceptance bar as Phase 1; this exact import sequence was verified clean against the live stack on 2026-07-26. If plan shows anything else (drift since then), fix the `.tf`/`.tfvars` to match reality rather than accepting the diff; don't `apply` until it's clean.
 
-Known, deliberate gaps for follow-up (each currently unmanaged by Terraform, so plan stays clean either way): the hand-made client routing rules at priorities 10–14 (`/`, `/assets/*`, `/oauth/*`, `/chats`, `/instance.json`); the absent IAM instance profile (the "ECR pull via instance profile" setup this README documents — flip `create_ec2_iam_instance_profile = true` to migrate); and tags (defaults are `{}` to match the untagged live stack — set `tags`/`name_prefix` post-import to start tagging).
+Known, deliberate gaps for follow-up (each currently unmanaged by Terraform, so plan stays clean either way): the absent IAM instance profile (the "ECR pull via instance profile" setup this README documents — flip `create_ec2_iam_instance_profile = true` to migrate); and tags (defaults are `{}` to match the untagged live stack — set `tags`/`name_prefix` post-import to start tagging).
 
 ### `envs/prod` (Phase 2) — live status not yet confirmed
 
