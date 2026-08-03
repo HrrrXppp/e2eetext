@@ -1,5 +1,5 @@
 output "endpoint" {
-  description = "Connection endpoint (\"address:port\") — build DATABASE_URL from this plus var.username/db_name and the real password."
+  description = "Connection endpoint (\"address:port\") — build DATABASE_URL from this plus var.username/app_database_name and the real password."
   value       = aws_db_instance.this.endpoint
 }
 
@@ -19,8 +19,13 @@ output "arn" {
 }
 
 output "db_name" {
-  description = "Initial database name."
+  description = "CreateDBInstance DBName attribute (often null on brownfield imports). Prefer app_database_name for DATABASE_URL."
   value       = aws_db_instance.this.db_name
+}
+
+output "app_database_name" {
+  description = "PostgreSQL database name for DATABASE_URL / cron.database_name (may differ from CreateDBInstance DBName)."
+  value       = local.app_database_name_effective
 }
 
 output "security_group_id" {

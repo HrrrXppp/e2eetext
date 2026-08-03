@@ -9,6 +9,11 @@ output "instance_id" {
 }
 
 output "rds_endpoint" {
-  description = "Prod RDS connection endpoint (\"address:port\") — build DATABASE_URL from this plus rds_username/rds_db_name and the real password."
+  description = "Prod RDS connection endpoint (\"address:port\") — build DATABASE_URL from this plus rds_username/rds_app_database_name and the real password."
   value       = module.rds.endpoint
+}
+
+output "rds_app_database_name" {
+  description = "PostgreSQL database name for DATABASE_URL on the prod instance."
+  value       = module.rds.app_database_name
 }

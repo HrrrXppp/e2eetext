@@ -305,12 +305,23 @@ variable "rds_db_name" {
   description = <<-EOT
     Initial CreateDBInstance DBName. ForceNew — leave null (default) when
     the live instance has no initial DBName (AWS returns null; common for
-    brownfield imports). Set to "messenger" only when the live/greenfield
-    instance was actually created with that name.
+    brownfield imports). Set to a name only when the live/greenfield
+    instance was actually created with that name. For the PostgreSQL
+    database the app uses, see rds_app_database_name.
   EOT
   type        = string
   default     = null
   nullable    = true
+}
+
+variable "rds_app_database_name" {
+  description = <<-EOT
+    PostgreSQL database the app connects to (DATABASE_URL path). Not
+    ForceNew. Live-dev default "dev_e2eetext" (created after the instance;
+    CreateDBInstance DBName is null).
+  EOT
+  type        = string
+  default     = "dev_e2eetext"
 }
 
 variable "rds_username" {

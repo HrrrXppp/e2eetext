@@ -115,9 +115,10 @@ module "rds" {
   storage_type      = var.rds_storage_type
   storage_encrypted = var.rds_storage_encrypted
 
-  db_name  = var.rds_db_name
-  username = var.rds_username
-  password = var.rds_password
+  db_name           = var.rds_db_name
+  app_database_name = var.rds_app_database_name
+  username          = var.rds_username
+  password          = var.rds_password
 
   vpc_id              = module.network.vpc_id
   subnet_ids          = var.rds_subnet_ids

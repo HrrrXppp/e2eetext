@@ -86,12 +86,25 @@ variable "ca_cert_identifier" {
 
 variable "db_name" {
   description = <<-EOT
-    Initial database name created with the instance (README: "messenger").
-    ForceNew — must match the live CreateDBInstance DBName exactly. Many
-    brownfield instances were created with no initial DBName (AWS returns
-    null); in that case leave this null / unset so plan does not propose
-    +db_name and force a destroy/recreate. The app database can still exist
-    as a later CREATE DATABASE (migrations) without being this attribute.
+    Initial database name created with the instance (CreateDBInstance DBName).
+    ForceNew — must match the live attribute exactly. Many brownfield
+    instances were created with no initial DBName (AWS returns null); leave
+    this null / unset in that case. The PostgreSQL database the app actually
+    uses may still exist via a later CREATE DATABASE — set that via
+    var.app_database_name (not this attribute) so plan does not ForceNew.
+  EOT
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "app_database_name" {
+  description = <<-EOT
+    PostgreSQL database name the app connects to (DATABASE_URL path) and the
+    default for cron.database_name. Not ForceNew — independent of
+    CreateDBInstance DBName. Use when the live DB was created after the
+    instance (e.g. live-dev: CreateDBInstance DBName null, app DB
+    "dev_e2eetext"). Null falls back to var.db_name, then "messenger".
   EOT
   type        = string
   default     = null
@@ -232,7 +245,7 @@ variable "enable_pg_cron" {
 }
 
 variable "cron_database_name" {
-  description = "Value for the parameter group's cron.database_name (only set when enable_pg_cron is true). Leave empty (default) to reuse var.db_name — issue #20's plan expects this to equal the app's own database, \"messenger\"."
+  description = "Value for the parameter group's cron.database_name (only set when enable_pg_cron is true). Leave empty (default) to reuse var.app_database_name / var.db_name / \"messenger\"."
   type        = string
   default     = ""
 }

@@ -63,10 +63,12 @@
 # rds_storage_type           = "gp2"
 # rds_storage_encrypted      = true
 # Live CreateDBInstance DBName is ForceNew. If `aws rds describe-db-instances`
-# shows DBName as null, leave this unset / null — setting "messenger" forces
-# destroy/recreate of the instance. The app DB can still be created later via
-# migrations.
+# shows DBName as null, leave this unset / null — setting a name forces
+# destroy/recreate of the instance. The app's PostgreSQL database (often
+# created later) is rds_app_database_name instead — live-dev uses
+# "dev_e2eetext".
 # rds_db_name                = null
+# rds_app_database_name      = "dev_e2eetext"
 # rds_username               = "messenger"
 # rds_subnet_ids             = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets, unlike the public ones Phase 2 confirmed for ALB/EC2
 # rds_subnet_group_name      = "<live-subnet-group-name>"

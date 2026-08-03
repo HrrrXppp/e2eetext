@@ -226,12 +226,19 @@ variable "rds_storage_encrypted" {
 variable "rds_db_name" {
   description = <<-EOT
     Initial CreateDBInstance DBName. ForceNew — leave null (default) when
-    the live instance has no initial DBName (AWS returns null). Set to
-    "messenger" only when the instance was actually created with that name.
+    the live instance has no initial DBName (AWS returns null). Set only
+    when the instance was actually created with that name. For the app's
+    PostgreSQL database, see rds_app_database_name.
   EOT
   type        = string
   default     = null
   nullable    = true
+}
+
+variable "rds_app_database_name" {
+  description = "PostgreSQL database the app connects to (DATABASE_URL path). Not ForceNew. Default \"messenger\" until prod's live DB name is audited."
+  type        = string
+  default     = "messenger"
 }
 
 variable "rds_username" {
