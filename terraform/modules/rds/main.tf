@@ -18,11 +18,11 @@ locals {
   create_security_group = length(var.security_group_ids) == 0
   security_group_ids    = local.create_security_group ? [aws_security_group.this[0].id] : var.security_group_ids
 
-  # cron.database_name defaults to the app's own database (var.db_name) —
-  # issue #20's plan calls out "cron.database_name=messenger if settable",
-  # and messenger is exactly what var.db_name is expected to be, so this
-  # avoids requiring the same value twice.
-  cron_database_name = var.cron_database_name != "" ? var.cron_database_name : var.db_name
+  # cron.database_name defaults to the app DB (var.db_name) when set —
+  # issue #20's plan calls out "cron.database_name=messenger if settable".
+  # Fall back to "messenger" when db_name is null (common for brownfield
+  # imports where CreateDBInstance had no initial DBName).
+  cron_database_name = var.cron_database_name != "" ? var.cron_database_name : coalesce(var.db_name, "messenger")
 
   final_snapshot_identifier      = var.final_snapshot_identifier != "" ? var.final_snapshot_identifier : "${var.identifier}-final"
   parameter_group_name_effective = var.create_parameter_group ? aws_db_parameter_group.this[0].name : var.parameter_group_name

@@ -70,6 +70,8 @@ rds_instance_class    = "db.t3.micro"
 rds_allocated_storage = 20
 rds_storage_type      = "gp3"
 rds_storage_encrypted = true
+# ForceNew: leave null if live CreateDBInstance had no DBName (AWS returns null).
+# rds_db_name           = null
 rds_username           = "messenger"
 rds_subnet_ids        = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets
 rds_subnet_group_name = "e2eetext-prod-rds"

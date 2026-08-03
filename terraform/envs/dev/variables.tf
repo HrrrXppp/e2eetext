@@ -302,9 +302,15 @@ variable "rds_storage_encrypted" {
 }
 
 variable "rds_db_name" {
-  description = "Initial database name. Default \"messenger\" — the fixed value used throughout this repo (docker-compose, README's connection string example), not a guess about a specific live instance."
+  description = <<-EOT
+    Initial CreateDBInstance DBName. ForceNew — leave null (default) when
+    the live instance has no initial DBName (AWS returns null; common for
+    brownfield imports). Set to "messenger" only when the live/greenfield
+    instance was actually created with that name.
+  EOT
   type        = string
-  default     = "messenger"
+  default     = null
+  nullable    = true
 }
 
 variable "rds_username" {

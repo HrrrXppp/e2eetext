@@ -224,9 +224,14 @@ variable "rds_storage_encrypted" {
 }
 
 variable "rds_db_name" {
-  description = "Initial database name. Default \"messenger\" — the fixed value used throughout this repo, not a guess."
+  description = <<-EOT
+    Initial CreateDBInstance DBName. ForceNew — leave null (default) when
+    the live instance has no initial DBName (AWS returns null). Set to
+    "messenger" only when the instance was actually created with that name.
+  EOT
   type        = string
-  default     = "messenger"
+  default     = null
+  nullable    = true
 }
 
 variable "rds_username" {

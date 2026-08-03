@@ -85,8 +85,17 @@ variable "ca_cert_identifier" {
 }
 
 variable "db_name" {
-  description = "Initial database name (README: \"messenger\"). ForceNew — ignored by AWS on import (RDS doesn't expose the original CREATE DATABASE name for re-verification), but must still be set to avoid Terraform proposing to recreate the database on a future replace."
+  description = <<-EOT
+    Initial database name created with the instance (README: "messenger").
+    ForceNew — must match the live CreateDBInstance DBName exactly. Many
+    brownfield instances were created with no initial DBName (AWS returns
+    null); in that case leave this null / unset so plan does not propose
+    +db_name and force a destroy/recreate. The app database can still exist
+    as a later CREATE DATABASE (migrations) without being this attribute.
+  EOT
   type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "username" {
