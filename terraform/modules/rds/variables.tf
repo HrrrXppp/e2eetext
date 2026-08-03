@@ -131,6 +131,19 @@ variable "subnet_group_name" {
   type        = string
 }
 
+variable "create_subnet_group" {
+  description = <<-EOT
+    Whether this module creates/manages the DB subnet group. Default true.
+    Set false to reference an already-existing subnet group by name
+    (var.subnet_group_name) without trying to create it — required when the
+    live instance sits in the AWS-implicit "default" DB subnet group every
+    default VPC has, since the provider rejects creating a group literally
+    named "default" ("Default" is not allowed as "name").
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "security_group_ids" {
   description = <<-EOT
     Pre-existing security group IDs to attach to the instance instead of

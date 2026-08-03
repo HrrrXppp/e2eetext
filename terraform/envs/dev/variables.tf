@@ -310,6 +310,19 @@ variable "rds_subnet_group_name" {
   type        = string
 }
 
+variable "rds_create_subnet_group" {
+  description = <<-EOT
+    Whether the rds module creates/manages the DB subnet group. Default
+    true; set false when rds_subnet_group_name is a pre-existing group this
+    module shouldn't try to create — including the AWS-implicit "default"
+    DB subnet group every default VPC has, which the provider refuses to
+    create (name "default" is reserved). Confirmed needed live for dev
+    (PR #32 comment: "Fix error in terraform plan dev").
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "rds_security_group_ids" {
   description = "Pre-existing security group IDs for the dev RDS instance (skips creating one). Leave empty to have the rds module create its own SG. If the live instance uses hand-made SGs (as dev's EC2 instance does — \"ec2-rds-1\" per Phase 2's audit), set the real ID(s) here for a zero-diff import."
   type        = list(string)

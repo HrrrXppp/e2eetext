@@ -241,6 +241,19 @@ variable "rds_subnet_group_name" {
   type        = string
 }
 
+variable "rds_create_subnet_group" {
+  description = <<-EOT
+    Whether the rds module creates/manages the DB subnet group. Default
+    true; set false when rds_subnet_group_name is a pre-existing group this
+    module shouldn't try to create — including the AWS-implicit "default"
+    DB subnet group every default VPC has, which the provider refuses to
+    create (name "default" is reserved). See envs/dev's identical variable
+    for the live failure this was confirmed against.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "rds_security_group_ids" {
   description = "Pre-existing security group IDs for the prod RDS instance (skips creating one). Leave empty to have the rds module create its own SG."
   type        = list(string)

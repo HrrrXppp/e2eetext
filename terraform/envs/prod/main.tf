@@ -118,10 +118,11 @@ module "rds" {
   username = var.rds_username
   password = var.rds_password
 
-  vpc_id             = module.network.vpc_id
-  subnet_ids         = var.rds_subnet_ids
-  subnet_group_name  = var.rds_subnet_group_name
-  security_group_ids = var.rds_security_group_ids
+  vpc_id              = module.network.vpc_id
+  subnet_ids          = var.rds_subnet_ids
+  subnet_group_name   = var.rds_subnet_group_name
+  create_subnet_group = var.rds_create_subnet_group
+  security_group_ids  = var.rds_security_group_ids
 
   security_group_name = var.rds_security_group_name
   # See envs/dev/main.tf for why this isn't coalesce(...) — coalesce()

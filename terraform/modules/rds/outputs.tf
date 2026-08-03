@@ -29,8 +29,8 @@ output "security_group_id" {
 }
 
 output "subnet_group_name" {
-  description = "Name of the DB subnet group."
-  value       = aws_db_subnet_group.this.name
+  description = "Name of the DB subnet group in use (created by this module, or the pre-existing one referenced by var.subnet_group_name when create_subnet_group is false)."
+  value       = local.subnet_group_name_effective
 }
 
 output "parameter_group_name" {

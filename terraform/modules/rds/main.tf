@@ -26,6 +26,7 @@ locals {
 
   final_snapshot_identifier      = var.final_snapshot_identifier != "" ? var.final_snapshot_identifier : "${var.identifier}-final"
   parameter_group_name_effective = var.create_parameter_group ? aws_db_parameter_group.this[0].name : var.parameter_group_name
+  subnet_group_name_effective    = var.create_subnet_group ? aws_db_subnet_group.this[0].name : var.subnet_group_name
 }
 
 # Not data-source-only like modules/network (an RDS instance is far more
@@ -33,7 +34,17 @@ locals {
 # module is to bring it under management) — but subnet group membership
 # follows the same "describe what's real" spirit: pass the live instance's
 # actual subnets, not a guess.
+#
+# count, not unconditional, because the AWS-implicit "default" DB subnet
+# group (every default VPC has one) can't be created via this resource — the
+# provider rejects `name = "default"` outright ("Default" is not allowed as
+# "name", PR #32 comment: real terraform plan (dev) failure once live
+# credentials/tfvars were configured, dev's live instance sits in that
+# implicit default group). Set create_subnet_group = false to reference an
+# existing group (default or otherwise) by name without trying to create it.
 resource "aws_db_subnet_group" "this" {
+  count = var.create_subnet_group ? 1 : 0
+
   name        = var.subnet_group_name
   subnet_ids  = var.subnet_ids
   description = "e2eetext RDS subnet group"
@@ -164,7 +175,7 @@ resource "aws_db_instance" "this" {
   username = var.username
   password = var.password
 
-  db_subnet_group_name   = aws_db_subnet_group.this.name
+  db_subnet_group_name   = local.subnet_group_name_effective
   vpc_security_group_ids = local.security_group_ids
   parameter_group_name   = local.parameter_group_name_effective
   ca_cert_identifier     = var.ca_cert_identifier

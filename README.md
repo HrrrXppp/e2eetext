@@ -735,11 +735,13 @@ aws rds describe-db-subnet-groups
   cd terraform/envs/dev   # or prod
   terraform init
 
-  terraform import module.rds.aws_db_subnet_group.this <SUBNET_GROUP_NAME>
+  terraform import 'module.rds.aws_db_subnet_group.this[0]' <SUBNET_GROUP_NAME>   # only if rds_create_subnet_group = true (default) — see below if the live instance uses the account's implicit "default" group
   terraform import module.rds.aws_security_group.this[0] <RDS_SECURITY_GROUP_ID>   # only if letting the module create/manage the SG
   terraform import 'module.rds.aws_db_parameter_group.this[0]' <PARAMETER_GROUP_NAME>  # only if rds_create_parameter_group = true
   terraform import module.rds.aws_db_instance.this <DB_INSTANCE_IDENTIFIER>
   ```
+
+  If `aws rds describe-db-subnet-groups` shows the live instance in the account's implicit **default** DB subnet group (name literally `default` — every default VPC has one), set `rds_subnet_group_name = "default"` and `rds_create_subnet_group = false`, and skip the `aws_db_subnet_group` import above entirely — the AWS provider refuses to *create* a group named `default` (`"Default" is not allowed as "name"`), since it isn't a resource Terraform can own, only reference by name. This surfaced as a real `terraform plan (dev)` failure once live tfvars were configured against dev (PR #32).
 
   If the live instance's parameter group does not yet have `pg_cron` configured (i.e. #20 hasn't been done manually), applying after import will propose the `shared_preload_libraries=pg_cron` / `cron.database_name` changes — both are static parameters (`apply_method = "pending-reboot"`), so **the instance needs a reboot after `apply`** for them to take effect, and that reboot must happen before migration `000006` (which runs `CREATE EXTENSION pg_cron`) is ever applied against this instance — the same ordering warning #20's plan calls out.
 - **If nothing comes back:** `terraform apply` can create the instance fresh — but get sign-off on instance class/storage/Multi-AZ choices first, same as any other production infrastructure decision, and doubly so for a database holding real user data.

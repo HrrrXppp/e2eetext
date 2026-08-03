@@ -73,6 +73,10 @@ rds_storage_encrypted = true
 rds_username           = "messenger"
 rds_subnet_ids        = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets
 rds_subnet_group_name = "e2eetext-prod-rds"
+# If the live instance instead sits in the account's implicit default VPC
+# subnet group (name literally "default"), set BOTH of:
+# rds_subnet_group_name   = "default"
+# rds_create_subnet_group = false   # AWS rejects creating a group named "default" ("Default" is not allowed as "name")
 rds_multi_az                = true
 rds_backup_retention_period = 7
 rds_backup_window           = "03:00-04:00"
