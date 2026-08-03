@@ -171,7 +171,14 @@ module "rds" {
   # is also left empty (module creates its own SG), modules/rds's own
   # precondition now fails the plan on an empty ingress SG here, rather
   # than silently creating an SG with zero ingress rules (PR #32 review).
-  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
+  # coalesce(module.ec2.security_group_id, "") used to error here: when
+  # module.ec2.security_group_id is null (dev's real case), coalesce()
+  # rejects "" as a fallback too — it only accepts non-null, NON-EMPTY-STRING
+  # arguments, so an all-empty/null argument list is a hard plan error, not a
+  # graceful "". Confirmed live once DEV_TFVARS/credentials were configured
+  # (PR #32 comment: "Fix error in terraform plan dev") — the ternary below
+  # doesn't have that restriction.
+  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : (module.ec2.security_group_id != null ? module.ec2.security_group_id : "")
 
   create_parameter_group   = var.rds_create_parameter_group
   parameter_group_name     = var.rds_parameter_group_name

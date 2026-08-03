@@ -123,8 +123,15 @@ module "rds" {
   subnet_group_name  = var.rds_subnet_group_name
   security_group_ids = var.rds_security_group_ids
 
-  security_group_name       = var.rds_security_group_name
-  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : coalesce(module.ec2.security_group_id, "")
+  security_group_name = var.rds_security_group_name
+  # See envs/dev/main.tf for why this isn't coalesce(...) — coalesce()
+  # errors when ALL arguments are null/empty-string, which is exactly what
+  # happens whenever module.ec2.security_group_id is null (PR #32 comment:
+  # real "Fix error in terraform plan dev" failure once live tfvars were
+  # configured; prod's own module.ec2 currently creates its SG so this
+  # branch hasn't fired live here, but the expression is identical and just
+  # as capable of erroring).
+  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : (module.ec2.security_group_id != null ? module.ec2.security_group_id : "")
 
   create_parameter_group   = var.rds_create_parameter_group
   parameter_group_name     = var.rds_parameter_group_name
