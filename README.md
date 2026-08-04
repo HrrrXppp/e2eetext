@@ -404,6 +404,8 @@ The server reads `X-Forwarded-Host` and `X-Forwarded-Proto` from the ALB for OAu
 - Security group: allow **inbound TCP 5432** from the EC2 security group (or EC2 private IP)
 - Keep RDS in the same VPC as EC2; do not expose PostgreSQL to the public internet
 
+`terraform/modules/rds` ([Infrastructure as code (Terraform)](#infrastructure-as-code-terraform) below) can manage this instance's subnet group, security group, and `pg_cron` parameter group going forward, but is not yet imported against either environment — this manual walkthrough remains the documented path until that import is confirmed zero-diff. See [#20](https://github.com/HrrrXppp/e2eetext/issues/20) for the full `pg_cron`-on-RDS parameter-group/reboot procedure this step still requires today.
+
 Connection string example:
 
 ```text
@@ -588,7 +590,9 @@ AWS infrastructure is being migrated from the manual/scripted setup above to Ter
 
 - **Phase 1 (done):** `terraform/envs/shared` — the two ECR repositories and the GitHub Actions OIDC role/policy, all account-wide with no dev/prod split.
 - **Phase 2 (done):** `terraform/envs/{dev,prod}` — networking, ALB, and EC2, which are genuinely per-environment.
-- **Phase 3 (planned):** RDS, same per-environment split.
+- **Phase 3 (module built, not yet imported):** `terraform/modules/rds` and `terraform/envs/{dev,prod}` — RDS PostgreSQL, its subnet group, security group, and a parameter group carrying the `pg_cron` settings from [#20](https://github.com/HrrrXppp/e2eetext/issues/20)'s plan (`shared_preload_libraries=pg_cron`, `cron.database_name`). Unlike Phases 1/2, this phase was implemented with **no AWS credentials available**, so none of the live RDS instance's real config (engine version, instance class, storage, subnet/parameter group names, ...) could be audited or verified. Every identifying RDS variable in `terraform/envs/{dev,prod}` is therefore required with no default — see [Phase 3 — RDS: not yet imported](#phase-3--rds-not-yet-imported) below for what's needed before the first `terraform import`/`apply`.
+
+This repo is the last phase tracked by #27 — once Phase 3's import is confirmed zero-diff and merged, #27 closes.
 
 ```
 terraform/
@@ -597,21 +601,23 @@ terraform/
 │   ├── github-oidc/    # OIDC provider + IAM role/policy for build-images.yml
 │   ├── network/         # data-source lookup of the VPC/subnets to deploy into
 │   ├── alb/              # ALB + target groups + listener rules (matches create-alb.example.sh)
-│   └── ec2/              # instance + security group + IAM instance profile
+│   ├── ec2/              # instance + security group + IAM instance profile
+│   └── rds/              # DB instance + subnet group + security group + pg_cron parameter group
 └── envs/
     ├── shared/          # root config instantiating ecr + github-oidc (Phase 1)
-    ├── dev/              # root config instantiating network + alb + ec2 for dev (Phase 2)
-    └── prod/             # same, for prod (Phase 2)
+    ├── dev/              # root config instantiating network + alb + ec2 + rds for dev (Phase 2/3)
+    └── prod/             # same, for prod (Phase 2/3)
 ```
 
-`terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/alb` also does not create the ALB's own security group; like `create-alb.example.sh`, it takes an existing security group ID as input. The `alb` and `ec2` modules default to the topology `create-alb.example.sh` describes, but expose overrides (target-group names, idle timeout, listener default action, rule priority/patterns, pre-existing instance SGs, optional IAM instance profile) because the live, hand-made dev stack diverges from the script on all of those — `terraform/envs/dev`'s defaults record the audited live values.
+`terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/alb` also does not create the ALB's own security group; like `create-alb.example.sh`, it takes an existing security group ID as input. The `alb` and `ec2` modules default to the topology `create-alb.example.sh` describes, but expose overrides (target-group names, idle timeout, listener default action, rule priority/patterns, pre-existing instance SGs, optional IAM instance profile) because the live, hand-made dev stack diverges from the script on all of those — `terraform/envs/dev`'s defaults record the audited live values. `terraform/modules/rds` has no such audited defaults for identifying attributes (engine version, instance class, storage, subnet/parameter group names, master username, ...) — every one is a required variable, the same "describe reality, don't guess" pattern `modules/ec2` uses for `ami_id`/`instance_type`, because no live RDS audit was possible while writing it.
 
 ### One-time backend bootstrap
 
 State is stored in S3 with native S3 state locking (Terraform >= 1.10, no DynamoDB table needed). The bucket referenced in `terraform/envs/shared/versions.tf` (`e2eetext-terraform-state`) does not exist yet — create it once, with versioning enabled, before the first `terraform init`:
 
 ```bash
-aws s3api create-bucket --bucket e2eetext-terraform-state --region us-east-1
+aws s3api create-bucket --bucket e2eetext-terraform-state --region us-east-2 \
+  --create-bucket-configuration LocationConstraint=us-east-2
 aws s3api put-bucket-versioning --bucket e2eetext-terraform-state \
   --versioning-configuration Status=Enabled
 
@@ -689,12 +695,19 @@ terraform import module.alb.aws_lb_target_group.server <DEV_SERVER_TG_ARN>
 terraform import module.alb.aws_lb_target_group.client <DEV_CLIENT_TG_ARN>
 terraform import module.alb.aws_lb_listener.https <DEV_HTTPS_LISTENER_ARN>
 terraform import module.alb.aws_lb_listener.http_redirect <DEV_HTTP_LISTENER_ARN>
-terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # the priority-100 /api/* rule
+terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # priority-100 /api/*
+# Client SPA rules (priorities 10–14 → client TG). Look up ARNs with
+# `aws elbv2 describe-rules --listener-arn <HTTPS_LISTENER_ARN>`.
+terraform import 'module.alb.aws_lb_listener_rule.extra["10"]' <RULE_ARN_PRIO_10>   # /
+terraform import 'module.alb.aws_lb_listener_rule.extra["11"]' <RULE_ARN_PRIO_11>   # /assets/*
+terraform import 'module.alb.aws_lb_listener_rule.extra["12"]' <RULE_ARN_PRIO_12>   # /oauth/*
+terraform import 'module.alb.aws_lb_listener_rule.extra["13"]' <RULE_ARN_PRIO_13>   # /chats
+terraform import 'module.alb.aws_lb_listener_rule.extra["14"]' <RULE_ARN_PRIO_14>   # /instance.json
 ```
 
-Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing, `terraform plan` should show **no changes except** two `aws_lb_target_group_attachment` creates — the AWS provider (5.x) cannot import target-group attachments, and `RegisterTargets` on an already-registered target/port is an idempotent no-op, so those two "creates" are safe. Everything else must be diff-free — the same acceptance bar as Phase 1; this exact import sequence was verified clean against the live stack on 2026-07-26. If plan shows anything else (drift since then), fix the `.tf`/`.tfvars` to match reality rather than accepting the diff; don't `apply` until it's clean.
+Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing ALB/EC2/RDS, also import target-group attachments (AWS provider ≥ 6.34) with `terraform import module.alb.aws_lb_target_group_attachment.client '<tg-arn>,<instance-id>,8080'` and the same for `.server` with port `8081`. Everything else must be diff-free — the same acceptance bar as Phase 1. If plan shows anything else (drift since then), fix the `.tf`/`.tfvars` to match reality rather than accepting the diff; don't `apply` until it's clean.
 
-Known, deliberate gaps for follow-up (each currently unmanaged by Terraform, so plan stays clean either way): the hand-made client routing rules at priorities 10–14 (`/`, `/assets/*`, `/oauth/*`, `/chats`, `/instance.json`); the absent IAM instance profile (the "ECR pull via instance profile" setup this README documents — flip `create_ec2_iam_instance_profile = true` to migrate); and tags (defaults are `{}` to match the untagged live stack — set `tags`/`name_prefix` post-import to start tagging).
+Known, deliberate gaps for follow-up (each currently unmanaged by Terraform, so plan stays clean either way): the absent IAM instance profile (the "ECR pull via instance profile" setup this README documents — flip `create_ec2_iam_instance_profile = true` to migrate); and tags (defaults are `{}` to match the untagged live stack — set `tags`/`name_prefix` post-import to start tagging).
 
 ### `envs/prod` (Phase 2) — live status not yet confirmed
 
@@ -710,11 +723,47 @@ aws elbv2 describe-load-balancers --names e2eetext-prod
 - **If real resources come back:** follow the same import bootstrap as dev above, substituting prod's real identifiers.
 - **If nothing comes back:** `terraform apply` can create the stack fresh — but get sign-off on instance size, domain, and ACM certificate choices first, since this would be standing up production infrastructure for real users.
 
+### Phase 3 — RDS: not yet imported
+
+`terraform/modules/rds` and its wiring in `terraform/envs/{dev,prod}` are written, `terraform fmt`/`validate` clean, but **not yet imported against either environment** — this phase was implemented with no AWS credentials available, so unlike dev's EC2/ALB/VPC stack in Phase 2, nothing about either environment's live RDS instance could actually be audited. Phase 2's dev audit did turn up circumstantial evidence a live dev RDS instance exists (the dev EC2 instance's hand-made `ec2-rds-1` security group, whose own description warns that detaching it can cut RDS connectivity), but that's not a substitute for reading the instance's real config.
+
+Before running `terraform import` or `terraform apply` against either environment's `rds` module, audit the live instance (if one exists) and fill in `terraform.tfvars` accordingly:
+
+```bash
+aws rds describe-db-instances \
+  --query 'DBInstances[].[DBInstanceIdentifier,EngineVersion,DBInstanceClass,AllocatedStorage,StorageType,StorageEncrypted,MasterUsername,DBName,MultiAZ,PubliclyAccessible,BackupRetentionPeriod,PreferredBackupWindow,PreferredMaintenanceWindow,DBSubnetGroup.DBSubnetGroupName,VpcSecurityGroups]'
+aws rds describe-db-parameter-groups
+aws rds describe-db-subnet-groups
+```
+
+- **If real resources come back:** fill in `terraform/envs/<env>/terraform.tfvars` with the audited values (see `terraform.tfvars.example` in each env for the full list and an `aws rds describe-db-instances` one-liner), pass the real master password out-of-band (`TF_VAR_rds_password`, never in `.tfvars`), confirm `terraform plan` is zero-diff, then import:
+
+  ```bash
+  cd terraform/envs/dev   # or prod
+  terraform init
+
+  terraform import 'module.rds.aws_db_subnet_group.this[0]' <SUBNET_GROUP_NAME>   # only if rds_create_subnet_group = true (default) — see below if the live instance uses the account's implicit "default" group
+  terraform import module.rds.aws_security_group.this[0] <RDS_SECURITY_GROUP_ID>   # only if letting the module create/manage the SG
+  terraform import 'module.rds.aws_db_parameter_group.this[0]' <PARAMETER_GROUP_NAME>  # only if rds_create_parameter_group = true
+  terraform import module.rds.aws_db_instance.this <DB_INSTANCE_IDENTIFIER>
+  ```
+
+  If `aws rds describe-db-subnet-groups` shows the live instance in the account's implicit **default** DB subnet group (name literally `default` — every default VPC has one), set `rds_subnet_group_name = "default"` and `rds_create_subnet_group = false`, and skip the `aws_db_subnet_group` import above entirely — the AWS provider refuses to *create* a group named `default` (`"Default" is not allowed as "name"`), since it isn't a resource Terraform can own, only reference by name. This surfaced as a real `terraform plan (dev)` failure once live tfvars were configured against dev (PR #32).
+
+  If `describe-db-instances` shows **`DBName` null** (instance created with no initial database), leave `rds_db_name` unset / `null`. Setting a name is ForceNew and will propose destroy/recreate of the live instance (observed on live-dev after import). Put the real PostgreSQL database the app uses in `rds_app_database_name` instead (live-dev: `dev_e2eetext`) — that attribute is not ForceNew.
+
+  If the live instance's parameter group does not yet have `pg_cron` configured (i.e. #20 hasn't been done manually), applying after import will propose the `shared_preload_libraries=pg_cron` / `cron.database_name` changes — both are static parameters (`apply_method = "pending-reboot"`), so **the instance needs a reboot after `apply`** for them to take effect, and that reboot must happen before migration `000006` (which runs `CREATE EXTENSION pg_cron`) is ever applied against this instance — the same ordering warning #20's plan calls out.
+- **If nothing comes back:** `terraform apply` can create the instance fresh — but get sign-off on instance class/storage/Multi-AZ choices first, same as any other production infrastructure decision, and doubly so for a database holding real user data.
+
 ### CI
 
-`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` always (whole tree), and `terraform init -backend=false` + `terraform validate` for each of `envs/shared`, `envs/dev`, `envs/prod` (matrixed — validate doesn't need variable values, so this needs no secrets). A `terraform plan` (never `apply`, given the blast radius) runs too, matrixed the same way, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job; until then (or if it's under-scoped) the job either skips cleanly or, thanks to `continue-on-error` on its AWS steps, degrades to a warning instead of a hard failure — **note that `continue-on-error` means a failed plan step shows inline as an error in the logs while the job/check still reports green**, so check the step output, not just the checkmark. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.
+`.github/workflows/terraform.yml` runs on PRs touching `terraform/`: `terraform fmt -check` always (whole tree), and `terraform init -backend=false` + `terraform validate` for each of `envs/shared`, `envs/dev`, `envs/prod` (matrixed — validate doesn't need variable values, so this needs no secrets). A `terraform plan` (never `apply`, given the blast radius) runs too, matrixed the same way, but only once repo secrets are configured and only against the state already bootstrapped above. The plan job deliberately uses its own `AWS_TERRAFORM_PLAN_ROLE_ARN` secret rather than reusing `build-images.yml`'s `AWS_ROLE_ARN` — that role is scoped to ECR push only (matching the manually-created policy exactly, for a zero-diff import) and does not have the IAM/ECR/S3 read access `terraform plan` needs. Provision a separate, read-only `terraform-plan` IAM role/OIDC trust and set it as `AWS_TERRAFORM_PLAN_ROLE_ARN` to enable this job. The `AWS_TERRAFORM_PLAN_ROLE_ARN`/`AWS_REGION` credentials step keeps `continue-on-error` so a misconfigured/under-scoped role doesn't abort the job on that one step alone, but the job as a whole is **not** allowed to report green when `terraform plan` doesn't actually run: a final "Fail if terraform plan did not run" step fails the job whenever `AWS_TERRAFORM_PLAN_ROLE_ARN`/`AWS_REGION`, or (for dev/prod) `DEV_TFVARS`/`PROD_TFVARS`, aren't configured — a skipped plan on a live-infra PR should block a reviewer's attention, not hide behind a green check (owner feedback on PR #32). Once tfvars *and* credentials are both present, `terraform init`/`terraform plan` themselves run **without** `continue-on-error` (PR #32 review) — a real failure there (bad tfvars, an under-scoped role, a genuine config error) fails the check the same way. The `plan` job also runs under the `terraform-plan` GitHub Environment — create it in repo Settings > Environments (ideally with required reviewers) so that, once real AWS credentials are wired up, a same-repo PR can't abuse edits to the workflow file itself to run arbitrary steps with those credentials ahead of review.
 
-CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role needs only reads — this is the full policy it runs with (state reads for every `envs/*` key; ECR/IAM reads scoped to the Phase 1 resources; EC2/ELBv2/ACM describes for Phase 2's instance/ALB and the dev root's live-ALB lookups):
+`DEV_TFVARS` / `PROD_TFVARS` are read with an explicit three-way expression (`matrix.environment == 'dev' && secrets.DEV_TFVARS || (matrix.environment == 'prod' && secrets.PROD_TFVARS || '')`), not the shorter `dev && X || Y` form — the shorter form treats an empty/unset `DEV_TFVARS` as falsy and falls through to `secrets.PROD_TFVARS`, which would plan **dev** state using **prod's** tfvars (including prod's RDS identity). This bug was introduced in Phase 2 and fixed there; PR #32's review caught the same bug reintroduced for the `dev`/`prod` RDS block and it's now fixed in both places the same way.
+
+The live RDS master password is intentionally **not** part of `DEV_TFVARS`/`PROD_TFVARS` (each `rds_password` variable's own description already says never put it in a `.tfvars` file) — it's sourced from its own dedicated `DEV_RDS_PASSWORD` / `PROD_RDS_PASSWORD` secret instead, exported as `TF_VAR_rds_password` only for the `terraform plan` step. This keeps the full tfvars-blob secret shareable/rotatable without also carrying the database password.
+
+CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role needs only reads — this is the full policy it runs with (state reads for every `envs/*` key; ECR/IAM reads scoped to the Phase 1 resources; EC2/ELBv2/ACM describes for Phase 2's instance/ALB and the dev root's live-ALB lookups; RDS describes for Phase 3's instance/parameter/subnet groups):
 
 ```json
 {
@@ -773,9 +822,19 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
         "acm:DescribeCertificate", "acm:ListCertificates", "acm:ListTagsForCertificate"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "RdsRead",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances", "rds:DescribeDBSubnetGroups",
+        "rds:DescribeDBParameterGroups", "rds:DescribeDBParameters",
+        "rds:ListTagsForResource"
+      ],
+      "Resource": "*"
     }
   ]
 }
 ```
 
-`envs/dev` plans with no variables at all — its defaults are the audited live values, and it looks up the ALB security group / ACM cert from the live ALB by name (so its plan does need real AWS credentials, which the plan job's role provides). `envs/prod` still needs its required-with-no-default variables (`ami_id`, `instance_type`, `alb_security_group_id`, `acm_certificate_arn`) supplied for `terraform plan` to run — deliberately not defaulted, since prod's live status is unconfirmed and a wrong guess for an import target risks a forced replace on live resources. The plan job reads them from the optional `PROD_TFVARS` secret (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning; `DEV_TFVARS` remains supported for overrides but is no longer required); until that's populated — which requires first confirming prod's real, live resource identifiers per the sections above — the prod plan step degrades to a skipped no-op the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case does.
+`envs/dev`'s network/ec2/alb variables still default to the audited live values, and it looks up the ALB security group / ACM cert from the live ALB by name — but as of Phase 3, its `rds_*` variables (`rds_identifier`, `rds_engine_version`, `rds_instance_class`, ...) are required with no default, the same as `envs/prod`'s `ami_id`/`instance_type`/`alb_security_group_id`/`acm_certificate_arn` (plus prod's own `rds_*` set) — deliberately not defaulted, since neither environment's live RDS status was confirmed while writing Phase 3, and a wrong guess for an import target risks a forced replace on live resources. Both environments now need their tfvars supplied for `terraform plan` to run at all: the plan job reads them from the optional `DEV_TFVARS` / `PROD_TFVARS` secrets (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning); until the relevant secret is populated — which for dev's `rds_*` values requires first auditing the live dev RDS instance, and for prod requires first confirming prod's real, live resource identifiers, per the sections above — that environment's `terraform plan` step is skipped, the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case is — and, per the CI section above, the job now fails rather than reporting green in that case.

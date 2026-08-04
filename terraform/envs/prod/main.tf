@@ -83,6 +83,94 @@ module "alb" {
   api_rule_priority        = var.api_rule_priority
   api_path_patterns        = var.api_path_patterns
   create_health_rule       = var.create_health_rule
+  additional_https_rules   = var.additional_https_rules
+
+  health_check_healthy_threshold   = var.health_check_healthy_threshold
+  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold
+  server_health_check_port         = var.server_health_check_port
+  client_health_check_port         = var.client_health_check_port
+  client_health_check_path         = var.client_health_check_path
+
+  tags = var.tags
+}
+
+# --- RDS (Phase 3 of #27) ---
+# Same "live status not yet confirmed" treatment as the ec2/alb modules
+# above (see this file's header) — Phase 3 was additionally implemented
+# with no AWS credentials at all, so unlike dev, there isn't even
+# circumstantial evidence (like dev's "ec2-rds-1" security group) here.
+# Confirm whether a live prod RDS instance exists before planning/applying:
+#
+#   aws rds describe-db-instances --filters "Name=db-instance-id,Values=e2eetext-prod*"
+#
+# - If real resources come back: audit them fully (engine version, class,
+#   storage, subnet/parameter groups, ...) and follow the same import
+#   bootstrap as dev (README's Terraform section) with prod's real
+#   identifiers substituted in.
+# - If nothing comes back: `terraform apply` can create the instance fresh
+#   — but get sign-off on instance class/storage/Multi-AZ choices first,
+#   same as any other prod infrastructure decision.
+module "rds" {
+  source = "../../modules/rds"
+
+  identifier     = var.rds_identifier
+  engine_version = var.rds_engine_version
+  instance_class = var.rds_instance_class
+
+  allocated_storage = var.rds_allocated_storage
+  storage_type      = var.rds_storage_type
+  storage_encrypted = var.rds_storage_encrypted
+
+  db_name           = var.rds_db_name
+  app_database_name = var.rds_app_database_name
+  username          = var.rds_username
+  password          = var.rds_password
+
+  vpc_id              = module.network.vpc_id
+  subnet_ids          = var.rds_subnet_ids
+  subnet_group_name   = var.rds_subnet_group_name
+  create_subnet_group = var.rds_create_subnet_group
+  security_group_ids  = var.rds_security_group_ids
+
+  security_group_name = var.rds_security_group_name
+  # See envs/dev/main.tf for why this isn't coalesce(...) — coalesce()
+  # errors when ALL arguments are null/empty-string, which is exactly what
+  # happens whenever module.ec2.security_group_id is null (PR #32 comment:
+  # real "Fix error in terraform plan dev" failure once live tfvars were
+  # configured; prod's own module.ec2 currently creates its SG so this
+  # branch hasn't fired live here, but the expression is identical and just
+  # as capable of erroring).
+  ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : (module.ec2.security_group_id != null ? module.ec2.security_group_id : "")
+
+  create_parameter_group   = var.rds_create_parameter_group
+  parameter_group_name     = var.rds_parameter_group_name
+  parameter_group_family   = var.rds_parameter_group_family
+  enable_pg_cron           = var.rds_enable_pg_cron
+  cron_database_name       = var.rds_cron_database_name
+  shared_preload_libraries = var.rds_shared_preload_libraries
+
+  multi_az                = var.rds_multi_az
+  publicly_accessible     = var.rds_publicly_accessible
+  backup_retention_period = var.rds_backup_retention_period
+  backup_window           = var.rds_backup_window
+  maintenance_window      = var.rds_maintenance_window
+  deletion_protection     = var.rds_deletion_protection
+  skip_final_snapshot     = var.rds_skip_final_snapshot
+  copy_tags_to_snapshot   = var.rds_copy_tags_to_snapshot
+  network_type            = var.rds_network_type
+
+  iops                  = var.rds_iops
+  storage_throughput    = var.rds_storage_throughput
+  kms_key_id            = var.rds_kms_key_id
+  max_allocated_storage = var.rds_max_allocated_storage
+  ca_cert_identifier    = var.rds_ca_cert_identifier
+
+  monitoring_interval                   = var.rds_monitoring_interval
+  monitoring_role_arn                   = var.rds_monitoring_role_arn
+  performance_insights_enabled          = var.rds_performance_insights_enabled
+  performance_insights_kms_key_id       = var.rds_performance_insights_kms_key_id
+  performance_insights_retention_period = var.rds_performance_insights_retention_period
+  enabled_cloudwatch_logs_exports       = var.rds_enabled_cloudwatch_logs_exports
 
   tags = var.tags
 }

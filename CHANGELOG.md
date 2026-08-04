@@ -51,10 +51,27 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Cursor rule requiring `CHANGELOG.md` updates for notable changes
 - Terraform (Phase 1 of #27): `terraform/modules/{ecr,github-oidc}` and `terraform/envs/shared`, codifying the account-wide ECR repositories and GitHub Actions OIDC role/policy already created manually; plan-only `terraform.yml` CI workflow (`fmt`, `validate`, gated `plan`)
 - Terraform (Phase 2 of #27): `terraform/modules/{network,alb,ec2}` and `terraform/envs/{dev,prod}`, codifying per-environment networking (default-VPC data source), ALB (matching `create-alb.example.sh`'s target groups/listener rules), and EC2 (instance + security group + IAM instance profile); `terraform.yml` CI matrixed over `shared`/`dev`/`prod`
+- Terraform (Phase 3 of #27, final phase): `terraform/modules/rds` and its wiring in `terraform/envs/{dev,prod}` — DB instance, subnet group, security group, and a parameter group folding in #20's `pg_cron` settings (`shared_preload_libraries=pg_cron`, `cron.database_name`); built without AWS credentials to audit the live RDS instances, so every identifying variable is required with no default and the module is not yet imported
+
+### Changed
+
+#### Tooling & deployment
+
+- Terraform ALB module manages additional HTTPS listener rules via `additional_https_rules` (live-dev SPA routes at priorities 10–14: `/`, `/assets/*`, `/oauth/*`, `/chats`, `/instance.json`)
+- Terraform `envs/dev` ALB defaults match live target groups (`dev-client` / health check `/` + `traffic-port`) and skip creating the reserved `"default"` DB subnet group
+- Terraform `envs/prod` ALB defaults now match `envs/dev` / live-dev shape (`fixed-404`, SPA rules 10–14, api priority 100, no `/health` listener rule, idle timeout 60, TG health thresholds 5/2, client health path `/`, server health port `8081`) instead of the script-shaped greenfield defaults
+- Terraform AWS provider bumped to `>= 6.34.0, < 7.0.0` so `aws_lb_target_group_attachment` can be imported
+- Terraform RDS `db_name` is nullable (default null): brownfield instances created with no initial `DBName` no longer ForceNew-replace when config defaulted to `"messenger"`
+- Terraform RDS `app_database_name` / `rds_app_database_name` records the PostgreSQL DB used in `DATABASE_URL` without touching ForceNew CreateDBInstance `DBName` (live-dev: `dev_e2eetext`)
 
 ### Fixed
 
+#### Client
+
 - Client dev proxy now forwards `X-Forwarded-Host`/`X-Forwarded-Proto` on WebSocket upgrades too (not just plain HTTP requests), fixing live `chat.added`/`chat.unread` push under `npm run dev` against a local server
+
+#### Server
+
 - Bearer ID-token verification now disambiguates OIDC providers that share the same issuer link by the token's audience (`aud`), not issuer alone -- an issuer-only lookup silently resolved to whichever provider name sorted first, authenticating a token against the wrong provider's `client_id` and failing every subsequent request with a 401 right after an otherwise-successful sign-in (surfaced by the e2e suite's "OIDC" and "GoogleE2E" mock providers, which intentionally point at the same mock issuer)
 
 [NEXT RELEASE]: https://github.com/HrrrXppp/e2eetext/compare/main...HEAD

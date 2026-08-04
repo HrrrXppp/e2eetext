@@ -63,7 +63,7 @@ resource "aws_lb_target_group" "client" {
   target_type = "instance"
 
   health_check {
-    path                = "/health"
+    path                = var.client_health_check_path
     interval            = 30
     port                = var.client_health_check_port
     healthy_threshold   = var.health_check_healthy_threshold
@@ -151,6 +151,44 @@ resource "aws_lb_listener_rule" "api" {
   condition {
     path_pattern {
       values = var.api_path_patterns
+    }
+  }
+}
+
+# Extra HTTPS path rules (e.g. live-dev client SPA routing at priorities
+# 10–14). Keyed by priority so `terraform import
+# 'module.alb.aws_lb_listener_rule.extra["10"]' <arn>` works. Default
+# action / "default" rule is still the listener's default_action, not a
+# listener_rule resource.
+resource "aws_lb_listener_rule" "extra" {
+  for_each = { for r in var.additional_https_rules : tostring(r.priority) => r }
+
+  listener_arn = aws_lb_listener.https.arn
+  priority     = each.value.priority
+
+  action {
+    type = "forward"
+
+    forward {
+      target_group {
+        arn = (
+          each.value.target == "server"
+          ? aws_lb_target_group.server.arn
+          : aws_lb_target_group.client.arn
+        )
+        weight = 1
+      }
+
+      stickiness {
+        enabled  = false
+        duration = 3600
+      }
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = each.value.path_patterns
     }
   }
 }

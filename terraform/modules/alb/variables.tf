@@ -69,9 +69,15 @@ variable "server_health_check_port" {
 }
 
 variable "client_health_check_port" {
-  description = "Health-check port for the client TG. Default \"traffic-port\"; the live dev TG pins it to \"8080\" explicitly."
+  description = "Health-check port for the client TG. Default \"traffic-port\"; the live dev TG uses \"traffic-port\" (not pinned to 8080)."
   type        = string
   default     = "traffic-port"
+}
+
+variable "client_health_check_path" {
+  description = "Health-check path for the client TG. Default \"/health\" (script-shaped); live-dev uses \"/\"."
+  type        = string
+  default     = "/health"
 }
 
 variable "idle_timeout" {
@@ -131,6 +137,30 @@ variable "health_rule_priority" {
   description = "Priority of the /health listener rule (when created)."
   type        = number
   default     = 20
+}
+
+variable "additional_https_rules" {
+  description = <<-EOT
+    Extra HTTPS listener rules beyond the built-in /api (and optional
+    /health) rules. Each entry needs a unique priority, path pattern(s),
+    and target ("client" or "server"). Used on live-dev to manage the
+    hand-made SPA routes at priorities 10–14 (/, /assets/*, /oauth/*,
+    /chats, /instance.json → client TG). Leave empty for script-shaped
+    prod greenfield (default catch-all forward covers SPA routes).
+  EOT
+  type = list(object({
+    priority      = number
+    path_patterns = list(string)
+    target        = string
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for r in var.additional_https_rules : contains(["client", "server"], r.target)
+    ])
+    error_message = "additional_https_rules[].target must be \"client\" or \"server\"."
+  }
 }
 
 variable "acm_certificate_arn" {

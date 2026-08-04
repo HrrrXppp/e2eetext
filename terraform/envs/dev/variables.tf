@@ -154,9 +154,9 @@ variable "server_target_group_name" {
 }
 
 variable "client_target_group_name" {
-  description = "Name of the live client (8080) target group (confirmed live: \"client\"). Same ForceNew caveat."
+  description = "Name of the live client (8080) target group (confirmed live: \"dev-client\"). Same ForceNew caveat."
   type        = string
-  default     = "client"
+  default     = "dev-client"
 }
 
 variable "alb_idle_timeout" {
@@ -172,7 +172,7 @@ variable "https_default_action" {
 }
 
 variable "api_rule_priority" {
-  description = "Priority of the /api listener rule (confirmed live: 100; priorities 10-14 are taken by hand-made client rules Terraform doesn't manage yet)."
+  description = "Priority of the /api listener rule (confirmed live: 100; priorities 10-14 are the client SPA rules in additional_https_rules)."
   type        = number
   default     = 100
 }
@@ -181,6 +181,27 @@ variable "api_path_patterns" {
   description = "Path patterns of the /api listener rule (confirmed live: [\"/api/*\"])."
   type        = list(string)
   default     = ["/api/*"]
+}
+
+variable "additional_https_rules" {
+  description = <<-EOT
+    Extra HTTPS listener rules managed by Terraform. Confirmed live on
+    2026-07-26 / README: priorities 10–14 forward SPA paths to the client
+    TG (default listener action is fixed-404). Import each as
+    module.alb.aws_lb_listener_rule.extra["<priority>"].
+  EOT
+  type = list(object({
+    priority      = number
+    path_patterns = list(string)
+    target        = string
+  }))
+  default = [
+    { priority = 10, path_patterns = ["/"], target = "client" },
+    { priority = 11, path_patterns = ["/assets/*"], target = "client" },
+    { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
+    { priority = 13, path_patterns = ["/chats"], target = "client" },
+    { priority = 14, path_patterns = ["/instance.json"], target = "client" },
+  ]
 }
 
 variable "health_check_healthy_threshold" {
@@ -202,9 +223,15 @@ variable "server_health_check_port" {
 }
 
 variable "client_health_check_port" {
-  description = "Client TG health-check port (confirmed live: pinned to \"8080\")."
+  description = "Client TG health-check port (confirmed live: \"traffic-port\", not pinned to \"8080\")."
   type        = string
-  default     = "8080"
+  default     = "traffic-port"
+}
+
+variable "client_health_check_path" {
+  description = "Client TG health-check path (confirmed live: \"/\", not \"/health\")."
+  type        = string
+  default     = "/"
 }
 
 variable "create_health_rule" {
@@ -235,4 +262,281 @@ variable "tags" {
   EOT
   type        = map(string)
   default     = {}
+}
+
+# --- RDS (Phase 3 of #27) ---
+# No confirmed-live defaults here (see main.tf's rds module header) — this
+# phase was built without AWS credentials. Required variables below have no
+# default on purpose, the same "describe reality, don't guess" rule
+# modules/rds and modules/ec2 both follow. Fill in terraform.tfvars from a
+# real AWS audit before planning or importing.
+
+variable "rds_identifier" {
+  description = "DB instance identifier of the live dev RDS instance. Get with `aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier'`."
+  type        = string
+}
+
+variable "rds_engine_version" {
+  description = "Engine version of the live dev RDS instance (e.g. \"16.4\")."
+  type        = string
+}
+
+variable "rds_instance_class" {
+  description = "Instance class of the live dev RDS instance (e.g. \"db.t3.micro\")."
+  type        = string
+}
+
+variable "rds_allocated_storage" {
+  description = "Allocated storage (GiB) of the live dev RDS instance."
+  type        = number
+}
+
+variable "rds_storage_type" {
+  description = "Storage type of the live dev RDS instance (e.g. \"gp2\", \"gp3\")."
+  type        = string
+}
+
+variable "rds_storage_encrypted" {
+  description = "Whether the live dev RDS instance's storage is encrypted at rest."
+  type        = bool
+}
+
+variable "rds_db_name" {
+  description = <<-EOT
+    Initial CreateDBInstance DBName. ForceNew — leave null (default) when
+    the live instance has no initial DBName (AWS returns null; common for
+    brownfield imports). Set to a name only when the live/greenfield
+    instance was actually created with that name. For the PostgreSQL
+    database the app uses, see rds_app_database_name.
+  EOT
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "rds_app_database_name" {
+  description = <<-EOT
+    PostgreSQL database the app connects to (DATABASE_URL path). Not
+    ForceNew. Live-dev default "dev_e2eetext" (created after the instance;
+    CreateDBInstance DBName is null).
+  EOT
+  type        = string
+  default     = "dev_e2eetext"
+}
+
+variable "rds_username" {
+  description = "Master username of the live dev RDS instance. No default: README's AWS walkthrough treats this as chosen at creation time, not a fixed convention."
+  type        = string
+}
+
+variable "rds_password" {
+  description = "Master password of the live dev RDS instance. Never commit this — pass via TF_VAR_rds_password or -var, sourced from Secrets Manager/SSM, not terraform.tfvars."
+  type        = string
+  sensitive   = true
+}
+
+variable "rds_subnet_ids" {
+  description = <<-EOT
+    Subnet IDs for the DB subnet group. No default (PR #32 review): this
+    used to fall back to module.network's subnets when unset, but those
+    are the account's public default-VPC subnets (confirmed live for the
+    ALB/EC2 in Phase 2) — RDS is commonly placed in PRIVATE subnets
+    instead, and silently defaulting to public ones risked pairing a
+    future publicly_accessible mistake with an already-public subnet
+    group. Get the live instance's real subnet-group members with
+    `aws rds describe-db-subnet-groups` before planning or importing.
+  EOT
+  type        = list(string)
+}
+
+variable "rds_subnet_group_name" {
+  description = "Name of the live dev DB subnet group. Must match exactly for a zero-diff import."
+  type        = string
+}
+
+variable "rds_create_subnet_group" {
+  description = <<-EOT
+    Whether the rds module creates/manages the DB subnet group. Default
+    false for envs/dev: live uses the AWS-implicit "default" DB subnet
+    group, which the provider refuses to create (name "default" is
+    reserved). Set true only for a greenfield custom subnet group name.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "rds_security_group_ids" {
+  description = "Pre-existing security group IDs for the dev RDS instance (skips creating one). Leave empty to have the rds module create its own SG. If the live instance uses hand-made SGs (as dev's EC2 instance does — \"ec2-rds-1\" per Phase 2's audit), set the real ID(s) here for a zero-diff import."
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_security_group_name" {
+  description = "Name for the dev RDS security group, if the rds module creates one (rds_security_group_ids empty)."
+  type        = string
+  default     = "e2eetext-dev-rds"
+}
+
+variable "rds_ingress_security_group_id" {
+  description = "Security group ID allowed to reach 5432 on the created RDS SG. Leave empty to fall back to module.ec2's own SG (null for dev, since dev's EC2 instance uses pre-existing SGs — see ec2_security_group_names) — set explicitly (e.g. to \"ec2-rds-1\"'s real ID) before import."
+  type        = string
+  default     = ""
+}
+
+variable "rds_create_parameter_group" {
+  description = "Whether the rds module creates/manages the DB parameter group. Default true so Phase 3 folds in #20's pg_cron settings; set false to reference an already-existing one by name without managing its parameters."
+  type        = bool
+  default     = true
+}
+
+variable "rds_parameter_group_name" {
+  description = "Name of the dev DB parameter group — created fresh with this name if rds_create_parameter_group is true and none exists yet, or must match a real live name otherwise."
+  type        = string
+  default     = "e2eetext-dev-rds-pgcron"
+}
+
+variable "rds_parameter_group_family" {
+  description = "Parameter group family. Default \"postgres16\" per README's fixed tech-stack version (\"Database | PostgreSQL 16\") — must match rds_engine_version's major version exactly (no default there, since the minor version is unconfirmed)."
+  type        = string
+  default     = "postgres16"
+}
+
+variable "rds_enable_pg_cron" {
+  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true — folding #20's manual pg_cron step into Terraform is exactly Phase 3's scope."
+  type        = bool
+  default     = true
+}
+
+variable "rds_cron_database_name" {
+  description = "Value for cron.database_name. Leave empty (default) to reuse rds_db_name."
+  type        = string
+  default     = ""
+}
+
+variable "rds_multi_az" {
+  description = "Whether the live dev RDS instance is Multi-AZ. No default — confirm against the live instance before importing."
+  type        = bool
+}
+
+variable "rds_publicly_accessible" {
+  description = "Whether the dev RDS instance has a public IP. Default false — README's AWS walkthrough is explicit that PostgreSQL must not be exposed to the public internet."
+  type        = bool
+  default     = false
+}
+
+variable "rds_backup_retention_period" {
+  description = "Automated backup retention in days for the live dev RDS instance. No default — confirm the real value before importing (0 = disabled)."
+  type        = number
+}
+
+variable "rds_backup_window" {
+  description = "Preferred backup window (UTC) of the live dev RDS instance, e.g. \"03:00-04:00\". No default — must match the live value."
+  type        = string
+}
+
+variable "rds_maintenance_window" {
+  description = "Preferred maintenance window (UTC) of the live dev RDS instance, e.g. \"sun:04:30-sun:05:30\". No default — must match the live value."
+  type        = string
+}
+
+variable "rds_deletion_protection" {
+  description = "Whether the dev RDS instance is protected from `terraform destroy` / console deletion. Default true as a safety net; override to false only deliberately."
+  type        = bool
+  default     = true
+}
+
+variable "rds_skip_final_snapshot" {
+  description = "Whether to skip a final snapshot on destroy. Default false (always snapshot) as a safety net."
+  type        = bool
+  default     = false
+}
+
+# --- RDS storage / monitoring detail (PR #32 review) ---
+# All default to AWS's own "not set"/disabled behavior — genuinely optional
+# unless the live dev instance actually uses them; set to match before
+# import if it does. See terraform/modules/rds/variables.tf for the full
+# rationale on each.
+
+variable "rds_shared_preload_libraries" {
+  description = "Full shared_preload_libraries list for the dev parameter group (only used when rds_enable_pg_cron is true) — REPLACES the live value, doesn't append. Default [\"pg_cron\"]; list the live instance's complete preload set here if it has others."
+  type        = list(string)
+  default     = ["pg_cron"]
+}
+
+variable "rds_iops" {
+  description = "Provisioned IOPS for the dev instance. Null (default) lets AWS use storage_type's default."
+  type        = number
+  default     = null
+}
+
+variable "rds_storage_throughput" {
+  description = "gp3 storage throughput (MiBps) for the dev instance. Null (default) lets AWS use gp3's baseline."
+  type        = number
+  default     = null
+}
+
+variable "rds_kms_key_id" {
+  description = "KMS key ARN/ID for the dev instance's storage encryption. Null (default) uses the account default key."
+  type        = string
+  default     = null
+}
+
+variable "rds_max_allocated_storage" {
+  description = "Storage autoscaling ceiling (GiB) for the dev instance. 0 (default) matches AWS's own \"disabled\" default."
+  type        = number
+  default     = 0
+}
+
+variable "rds_ca_cert_identifier" {
+  description = "CA certificate identifier for the dev instance. Null (default) lets AWS use its own default CA."
+  type        = string
+  default     = null
+}
+
+variable "rds_copy_tags_to_snapshot" {
+  description = "Whether dev instance snapshots inherit its tags. Default true."
+  type        = bool
+  default     = true
+}
+
+variable "rds_network_type" {
+  description = "Network type (\"IPV4\" or \"DUAL\") for the dev instance. Null (default) lets AWS use IPV4."
+  type        = string
+  default     = null
+}
+
+variable "rds_monitoring_interval" {
+  description = "Enhanced monitoring interval (seconds) for the dev instance. 0 (default) disables it."
+  type        = number
+  default     = 0
+}
+
+variable "rds_monitoring_role_arn" {
+  description = "IAM role ARN for enhanced monitoring on the dev instance. Required by AWS only when rds_monitoring_interval > 0."
+  type        = string
+  default     = null
+}
+
+variable "rds_performance_insights_enabled" {
+  description = "Whether Performance Insights is enabled on the dev instance. Default false (AWS default)."
+  type        = bool
+  default     = false
+}
+
+variable "rds_performance_insights_kms_key_id" {
+  description = "KMS key for Performance Insights on the dev instance, when enabled. Null (default) uses the account default key."
+  type        = string
+  default     = null
+}
+
+variable "rds_performance_insights_retention_period" {
+  description = "Performance Insights retention (days) on the dev instance, when enabled. Default 7 (AWS's own default)."
+  type        = number
+  default     = 7
+}
+
+variable "rds_enabled_cloudwatch_logs_exports" {
+  description = "Log types the dev instance exports to CloudWatch Logs. Empty (default) matches AWS's own default of no log exports."
+  type        = list(string)
+  default     = []
 }
