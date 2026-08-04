@@ -61,15 +61,17 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - Terraform `envs/dev` ALB defaults match live target groups (`dev-client` / health check `/` + `traffic-port`) and skip creating the reserved `"default"` DB subnet group
 - Terraform `envs/prod` ALB defaults now match `envs/dev` / live-dev shape (`fixed-404`, SPA rules 10–14, api priority 100, no `/health` listener rule, idle timeout 60, TG health thresholds 5/2, client health path `/`, server health port `8081`) instead of the script-shaped greenfield defaults
 - Terraform AWS provider bumped to `>= 6.34.0, < 7.0.0` so `aws_lb_target_group_attachment` can be imported
-
-### Fixed
-
-#### Tooling & deployment
-
 - Terraform RDS `db_name` is nullable (default null): brownfield instances created with no initial `DBName` no longer ForceNew-replace when config defaulted to `"messenger"`
 - Terraform RDS `app_database_name` / `rds_app_database_name` records the PostgreSQL DB used in `DATABASE_URL` without touching ForceNew CreateDBInstance `DBName` (live-dev: `dev_e2eetext`)
 
+### Fixed
+
+#### Client
+
 - Client dev proxy now forwards `X-Forwarded-Host`/`X-Forwarded-Proto` on WebSocket upgrades too (not just plain HTTP requests), fixing live `chat.added`/`chat.unread` push under `npm run dev` against a local server
+
+#### Server
+
 - Bearer ID-token verification now disambiguates OIDC providers that share the same issuer link by the token's audience (`aud`), not issuer alone -- an issuer-only lookup silently resolved to whichever provider name sorted first, authenticating a token against the wrong provider's `client_id` and failing every subsequent request with a 401 right after an otherwise-successful sign-in (surfaced by the e2e suite's "OIDC" and "GoogleE2E" mock providers, which intentionally point at the same mock issuer)
 
 [NEXT RELEASE]: https://github.com/HrrrXppp/e2eetext/compare/main...HEAD
