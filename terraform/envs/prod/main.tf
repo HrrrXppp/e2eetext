@@ -85,6 +85,12 @@ module "alb" {
   create_health_rule       = var.create_health_rule
   additional_https_rules   = var.additional_https_rules
 
+  health_check_healthy_threshold   = var.health_check_healthy_threshold
+  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold
+  server_health_check_port         = var.server_health_check_port
+  client_health_check_port         = var.client_health_check_port
+  client_health_check_path         = var.client_health_check_path
+
   tags = var.tags
 }
 

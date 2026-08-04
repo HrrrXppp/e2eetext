@@ -45,11 +45,17 @@ acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxx
 # alb_name                 = "<live-alb-name>"
 # server_target_group_name = "<live-server-tg-name>"
 # client_target_group_name = "<live-client-tg-name>"
-# alb_idle_timeout         = 60
-# https_default_action     = "fixed-404"   # or "forward-client"
-# api_rule_priority        = 100
-# api_path_patterns        = ["/api/*"]
-# create_health_rule       = false
+# ALB routing + TG health defaults now match live-dev / envs/dev
+# (fixed-404, SPA rules 10–14, api priority 100, idle 60, TG thresholds
+# 5/2, client health path "/", server health port 8081). Override only if
+# prod intentionally differs:
+# https_default_action     = "forward-client"
+# additional_https_rules   = []
+# api_rule_priority        = 10
+# api_path_patterns        = ["/api*"]
+# create_health_rule       = true
+# alb_idle_timeout         = 3600
+# client_health_check_path = "/health"
 # ec2_security_group_ids   = ["sg-xxxxxxxx"]  # live instance's real SGs
 # create_ec2_iam_instance_profile = false     # if the live instance has none
 

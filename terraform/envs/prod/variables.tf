@@ -127,48 +127,85 @@ variable "client_target_group_name" {
 }
 
 variable "alb_idle_timeout" {
-  description = "ALB idle timeout in seconds. Default 3600 per create-alb.example.sh (websockets); check what's actually live before importing."
+  description = "ALB idle timeout in seconds. Default 60 to match live-dev / envs/dev (AWS default; create-alb.example.sh's 3600 was never applied on dev)."
   type        = number
-  default     = 3600
+  default     = 60
 }
 
 variable "https_default_action" {
-  description = "HTTPS listener default action: \"forward-client\" (the script's shape, default) or \"fixed-404\" (what live dev has)."
+  description = "HTTPS listener default action. Default \"fixed-404\" to match live-dev / envs/dev (SPA traffic is explicit path rules in additional_https_rules, not a catch-all forward)."
   type        = string
-  default     = "forward-client"
+  default     = "fixed-404"
 }
 
 variable "api_rule_priority" {
-  description = "Priority of the /api listener rule (script default 10; live dev uses 100)."
+  description = "Priority of the /api listener rule. Default 100 to match live-dev / envs/dev (priorities 10–14 are the client SPA rules)."
   type        = number
-  default     = 10
+  default     = 100
 }
 
 variable "api_path_patterns" {
-  description = "Path patterns for the /api listener rule (script default [\"/api*\"]; live dev uses [\"/api/*\"])."
+  description = "Path patterns for the /api listener rule. Default [\"/api/*\"] to match live-dev / envs/dev."
   type        = list(string)
-  default     = ["/api*"]
+  default     = ["/api/*"]
 }
 
 variable "create_health_rule" {
-  description = "Whether to create the /health -> server listener rule (script default true; live dev has no such rule)."
+  description = "Whether to create the /health -> server listener rule. Default false to match live-dev / envs/dev (TG health checks hit the instance directly)."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "additional_https_rules" {
   description = <<-EOT
-    Extra HTTPS listener rules (path → client or server TG). Default empty
-    for script-shaped greenfield (HTTPS default action forwards to client).
-    If importing a live prod stack that uses explicit SPA path rules like
-    dev, set the same shape as envs/dev's additional_https_rules default.
+    Extra HTTPS listener rules (path → client or server TG). Default matches
+    live-dev / envs/dev SPA routes (priorities 10–14) with HTTPS default
+    action fixed-404. Override to [] only if prod intentionally uses
+    forward-client as the HTTPS default instead.
   EOT
   type = list(object({
     priority      = number
     path_patterns = list(string)
     target        = string
   }))
-  default = []
+  default = [
+    { priority = 10, path_patterns = ["/"], target = "client" },
+    { priority = 11, path_patterns = ["/assets/*"], target = "client" },
+    { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
+    { priority = 13, path_patterns = ["/chats"], target = "client" },
+    { priority = 14, path_patterns = ["/instance.json"], target = "client" },
+  ]
+}
+
+
+variable "health_check_healthy_threshold" {
+  description = "TG healthy threshold. Default 5 to match live-dev / envs/dev (not the provider default of 3)."
+  type        = number
+  default     = 5
+}
+
+variable "health_check_unhealthy_threshold" {
+  description = "TG unhealthy threshold. Default 2 to match live-dev / envs/dev (not the provider default of 3)."
+  type        = number
+  default     = 2
+}
+
+variable "server_health_check_port" {
+  description = "Server TG health-check port. Default \"8081\" to match live-dev / envs/dev."
+  type        = string
+  default     = "8081"
+}
+
+variable "client_health_check_port" {
+  description = "Client TG health-check port. Default \"traffic-port\" to match live-dev / envs/dev."
+  type        = string
+  default     = "traffic-port"
+}
+
+variable "client_health_check_path" {
+  description = "Client TG health-check path. Default \"/\" to match live-dev / envs/dev (not \"/health\")."
+  type        = string
+  default     = "/"
 }
 
 variable "acm_certificate_arn" {
