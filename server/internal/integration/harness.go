@@ -114,6 +114,7 @@ func resetData(t *testing.T, db *sql.DB) {
 			messages,
 			user_chat_key_wraps,
 			chat_key_versions,
+			chat_admins,
 			user_chats,
 			chats,
 			user_identity_keys,

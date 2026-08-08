@@ -60,7 +60,7 @@ func (s *stubMessageChatRepo) List(_ context.Context, _ repository.ChatFilter) (
 	return nil, nil
 }
 
-func (s *stubMessageChatRepo) Create(_ context.Context, _ string, _ []string, _ int) (domain.Chat, error) {
+func (s *stubMessageChatRepo) Create(_ context.Context, _ string, _ []string, _ int, _ string) (domain.Chat, error) {
 	return domain.Chat{}, nil
 }
 

@@ -24,13 +24,16 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 		SELECT c.id,
 			uc.name,
 			c.disappear_after_minutes,
+			c.created_by,
+			(ca.user_id IS NOT NULL) AS is_admin,
 			c.created_at,
 			c.updated_at,
 			COUNT(um.message_id)::int AS unread_message_count
 		FROM chats c
 		INNER JOIN user_chats uc ON uc.chat_id = c.id AND uc.user_id = $1
 		LEFT JOIN unread_messages um ON um.chat_id = c.id AND um.user_id = $1
-		GROUP BY c.id, uc.name, c.disappear_after_minutes, c.created_at, c.updated_at
+		LEFT JOIN chat_admins ca ON ca.chat_id = c.id AND ca.user_id = $1
+		GROUP BY c.id, uc.name, c.disappear_after_minutes, c.created_by, ca.user_id, c.created_at, c.updated_at
 		ORDER BY c.updated_at DESC`, filter.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("list chats: %w", err)
@@ -52,7 +55,7 @@ func (r *ChatRepository) List(ctx context.Context, filter repository.ChatFilter)
 	return chats, nil
 }
 
-func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []string, disappearAfterMinutes int) (domain.Chat, error) {
+func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []string, disappearAfterMinutes int, createdBy string) (domain.Chat, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.Chat{}, fmt.Errorf("begin create chat tx: %w", err)
@@ -61,13 +64,15 @@ func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []stri
 
 	var chat domain.Chat
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO chats (disappear_after_minutes)
-		VALUES ($1)
-		RETURNING id, disappear_after_minutes, created_at, updated_at`, disappearAfterMinutes)
+		INSERT INTO chats (disappear_after_minutes, created_by)
+		VALUES ($1, $2)
+		RETURNING id, disappear_after_minutes, created_by, created_at, updated_at`, disappearAfterMinutes, createdBy)
 
-	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
+	var chatCreatedBy sql.NullString
+	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chatCreatedBy, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
 		return domain.Chat{}, fmt.Errorf("insert chat: %w", err)
 	}
+	chat.CreatedBy = chatCreatedBy.String
 
 	chat.Name = name
 
@@ -78,6 +83,13 @@ func (r *ChatRepository) Create(ctx context.Context, name string, userIDs []stri
 			return domain.Chat{}, fmt.Errorf("insert user_chat: %w", err)
 		}
 	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chat_admins (chat_id, user_id)
+		VALUES ($1, $2)`, chat.ID, createdBy); err != nil {
+		return domain.Chat{}, fmt.Errorf("insert chat admin: %w", err)
+	}
+	chat.IsAdmin = true
 
 	if err := tx.Commit(); err != nil {
 		return domain.Chat{}, fmt.Errorf("commit create chat tx: %w", err)
@@ -163,11 +175,14 @@ type chatRow interface {
 func scanChat(row chatRow) (domain.Chat, error) {
 	var chat domain.Chat
 	var name sql.NullString
+	var createdBy sql.NullString
 
 	if err := row.Scan(
 		&chat.ID,
 		&name,
 		&chat.DisappearAfterMinutes,
+		&createdBy,
+		&chat.IsAdmin,
 		&chat.CreatedAt,
 		&chat.UpdatedAt,
 		&chat.UnreadMessageCount,
@@ -176,6 +191,7 @@ func scanChat(row chatRow) (domain.Chat, error) {
 	}
 
 	chat.Name = name.String
+	chat.CreatedBy = createdBy.String
 
 	return chat, nil
 }

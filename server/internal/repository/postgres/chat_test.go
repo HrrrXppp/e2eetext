@@ -20,9 +20,9 @@ func TestChatRepository_List_ByUserID(t *testing.T) {
 	createdAt := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	userID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
-	rows := sqlmock.NewRows([]string{"id", "name", "disappear_after_minutes", "created_at", "updated_at", "unread_message_count"}).
-		AddRow("11111111-1111-1111-1111-111111111111", "General", 86400, createdAt, createdAt, 3).
-		AddRow("22222222-2222-2222-2222-222222222222", "Random", 86400, createdAt, createdAt, 0)
+	rows := sqlmock.NewRows([]string{"id", "name", "disappear_after_minutes", "created_by", "is_admin", "created_at", "updated_at", "unread_message_count"}).
+		AddRow("11111111-1111-1111-1111-111111111111", "General", 86400, userID, true, createdAt, createdAt, 3).
+		AddRow("22222222-2222-2222-2222-222222222222", "Random", 86400, nil, false, createdAt, createdAt, 0)
 
 	mock.ExpectQuery(`SELECT c\.id,[\s\S]+uc\.name,[\s\S]+c\.disappear_after_minutes,[\s\S]+ORDER BY c\.updated_at DESC`).
 		WithArgs(userID).
@@ -44,8 +44,14 @@ func TestChatRepository_List_ByUserID(t *testing.T) {
 	if chats[0].UnreadMessageCount != 3 {
 		t.Errorf("first chat UnreadMessageCount = %d, want 3", chats[0].UnreadMessageCount)
 	}
+	if !chats[0].IsAdmin {
+		t.Error("first chat IsAdmin = false, want true")
+	}
 	if chats[1].UnreadMessageCount != 0 {
 		t.Errorf("second chat UnreadMessageCount = %d, want 0", chats[1].UnreadMessageCount)
+	}
+	if chats[1].IsAdmin {
+		t.Error("second chat IsAdmin = true, want false")
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -66,12 +72,12 @@ func TestChatRepository_Create(t *testing.T) {
 	userID1 := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	userID2 := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
-	rows := sqlmock.NewRows([]string{"id", "disappear_after_minutes", "created_at", "updated_at"}).
-		AddRow(chatID, 86400, createdAt, createdAt)
+	rows := sqlmock.NewRows([]string{"id", "disappear_after_minutes", "created_by", "created_at", "updated_at"}).
+		AddRow(chatID, 86400, userID1, createdAt, createdAt)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO chats \(disappear_after_minutes\)\s+VALUES \(\$1\)\s+RETURNING id, disappear_after_minutes, created_at, updated_at`).
-		WithArgs(86400).
+	mock.ExpectQuery(`INSERT INTO chats \(disappear_after_minutes, created_by\)\s+VALUES \(\$1, \$2\)\s+RETURNING id, disappear_after_minutes, created_by, created_at, updated_at`).
+		WithArgs(86400, userID1).
 		WillReturnRows(rows)
 	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name\)\s+VALUES \(\$1, \$2, \$3\)`).
 		WithArgs(chatID, userID1, "Project Chat").
@@ -79,9 +85,12 @@ func TestChatRepository_Create(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO user_chats \(chat_id, user_id, name\)\s+VALUES \(\$1, \$2, \$3\)`).
 		WithArgs(chatID, userID2, "Project Chat").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`INSERT INTO chat_admins \(chat_id, user_id\)\s+VALUES \(\$1, \$2\)`).
+		WithArgs(chatID, userID1).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	chat, err := repo.Create(context.Background(), "Project Chat", []string{userID1, userID2}, 86400)
+	chat, err := repo.Create(context.Background(), "Project Chat", []string{userID1, userID2}, 86400, userID1)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -93,6 +102,12 @@ func TestChatRepository_Create(t *testing.T) {
 	}
 	if chat.DisappearAfterMinutes != 86400 {
 		t.Errorf("DisappearAfterMinutes = %d, want 86400", chat.DisappearAfterMinutes)
+	}
+	if chat.CreatedBy != userID1 {
+		t.Errorf("CreatedBy = %q, want %q", chat.CreatedBy, userID1)
+	}
+	if !chat.IsAdmin {
+		t.Error("IsAdmin = false, want true for the creator")
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -137,10 +152,10 @@ func TestChatRepository_UnreadCountsForChat(t *testing.T) {
 	otherChatID := "22222222-2222-2222-2222-222222222222"
 
 	tests := []struct {
-		name    string
-		chatID  string
-		rows    []repository.ChatUnreadCount
-		want    []repository.ChatUnreadCount
+		name   string
+		chatID string
+		rows   []repository.ChatUnreadCount
+		want   []repository.ChatUnreadCount
 	}{
 		{
 			name:   "two members mixed unread",

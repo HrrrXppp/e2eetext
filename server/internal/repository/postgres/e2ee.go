@@ -72,12 +72,14 @@ func (r *E2EERepository) CreateChatWithKeys(
 
 	var chat domain.Chat
 	row := tx.QueryRowContext(ctx, `
-		INSERT INTO chats (disappear_after_minutes)
-		VALUES ($1)
-		RETURNING id, disappear_after_minutes, created_at, updated_at`, disappearAfterMinutes)
-	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
+		INSERT INTO chats (disappear_after_minutes, created_by)
+		VALUES ($1, $2)
+		RETURNING id, disappear_after_minutes, created_by, created_at, updated_at`, disappearAfterMinutes, createdBy)
+	var chatCreatedBy sql.NullString
+	if err := row.Scan(&chat.ID, &chat.DisappearAfterMinutes, &chatCreatedBy, &chat.CreatedAt, &chat.UpdatedAt); err != nil {
 		return domain.Chat{}, fmt.Errorf("insert chat: %w", err)
 	}
+	chat.CreatedBy = chatCreatedBy.String
 	chat.Name = name
 
 	for _, userID := range userIDs {
@@ -87,6 +89,13 @@ func (r *E2EERepository) CreateChatWithKeys(
 			return domain.Chat{}, fmt.Errorf("insert user_chat: %w", err)
 		}
 	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chat_admins (chat_id, user_id)
+		VALUES ($1, $2)`, chat.ID, createdBy); err != nil {
+		return domain.Chat{}, fmt.Errorf("insert chat admin: %w", err)
+	}
+	chat.IsAdmin = true
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO chat_key_versions (id, chat_id, created_by)

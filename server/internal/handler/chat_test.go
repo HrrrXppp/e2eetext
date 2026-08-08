@@ -29,13 +29,11 @@ func (s *stubChatRepo) List(_ context.Context, filter repository.ChatFilter) ([]
 }
 
 func (s *stubChatRepo) UserBelongsToChat(_ context.Context, chatID, userID string) (bool, error) {
-	chats, ok := s.chatsByUserID[userID]
-	if !ok {
-		return false, nil
-	}
-	for _, chat := range chats {
-		if chat.ID == chatID {
-			return true, nil
+	if chats, ok := s.chatsByUserID[userID]; ok {
+		for _, chat := range chats {
+			if chat.ID == chatID {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
@@ -49,7 +47,7 @@ func (s *stubChatRepo) ListUnreadChatsForUser(_ context.Context, _ string) ([]re
 	return nil, nil
 }
 
-func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string, disappearAfterMinutes int) (domain.Chat, error) {
+func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string, disappearAfterMinutes int, createdBy string) (domain.Chat, error) {
 	if disappearAfterMinutes == 0 {
 		disappearAfterMinutes = domain.DefaultDisappearAfterMinutes
 	}
@@ -58,6 +56,8 @@ func (s *stubChatRepo) Create(_ context.Context, name string, userIDs []string, 
 		ID:                    "33333333-3333-3333-3333-333333333333",
 		Name:                  name,
 		DisappearAfterMinutes: disappearAfterMinutes,
+		CreatedBy:             createdBy,
+		IsAdmin:               true,
 		CreatedAt:             createdAt,
 		UpdatedAt:             createdAt,
 	}
@@ -130,8 +130,8 @@ func (s *stubE2EERepo) GetIdentityKey(context.Context, string) (domain.UserIdent
 	return domain.UserIdentityKey{}, errors.New("identity key not found")
 }
 
-func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, userIDs []string, _, _ string, _ map[string]json.RawMessage, disappearAfterMinutes int) (domain.Chat, error) {
-	return s.chatRepo.Create(ctx, name, userIDs, disappearAfterMinutes)
+func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, userIDs []string, _, createdBy string, _ map[string]json.RawMessage, disappearAfterMinutes int) (domain.Chat, error) {
+	return s.chatRepo.Create(ctx, name, userIDs, disappearAfterMinutes, createdBy)
 }
 
 func (s *stubE2EERepo) ListKeyWrapsForUser(context.Context, string, string) ([]domain.UserChatKeyWrap, error) {

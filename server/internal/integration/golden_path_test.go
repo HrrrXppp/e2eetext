@@ -30,7 +30,8 @@ type apiUser struct {
 }
 
 type apiChat struct {
-	ID string `json:"id"`
+	ID      string `json:"id"`
+	IsAdmin bool   `json:"isAdmin"`
 }
 
 type apiMessage struct {
@@ -202,6 +203,22 @@ func TestGoldenPath_KeyWrapsOnlyVisibleToMembers(t *testing.T) {
 	resp = h.do(http.MethodGet, "/api/v1/chat/"+chat.ID+"/key-wraps", nil, carol, nil)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("GET key-wraps as non-member carol: status %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestGoldenPath_ChatAdmins(t *testing.T) {
+	h := newHarness(t)
+
+	alice := registerUser(t, h, "alice")
+	bob := registerUser(t, h, "bob")
+
+	keyID := randomUUID(t)
+	chat, err := createChat(h, alice, "Alice & Bob", []*user{alice, bob}, keyID)
+	if err != nil {
+		t.Fatalf("create chat: %v", err)
+	}
+	if !chat.IsAdmin {
+		t.Fatal("creator alice should be admin on the chat she just created")
 	}
 }
 
