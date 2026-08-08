@@ -29,6 +29,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 - E2EE identity-key and chat key-wrap APIs; chat create requires per-member wraps
 - Disappearing messages: chat-level TTL (`disappear_after_minutes`, default 60 days) using `messages.created_at`; `pg_cron` schedules `purge_expired_messages()` in migration `000006`
 - Real integration test suite (`server/internal/integration`, `go test -tags=integration`) exercising real Postgres, real HTTP handlers, and real OIDC auth verification against a mock identity provider
+- Chat admins (#11): `chat_admins` table (migration `000008`) recording who's an admin, populated with the chat's creator at creation time; `Chat.isAdmin`/`Chat.createdBy` expose it via the existing chat APIs. Only the creator is an admin for now — a members-listing endpoint and promote/demote admin management are deferred to future changes. `chat_admins.user_id` is `ON DELETE RESTRICT`, so a user account can't be deleted while still an admin of a chat (#36); reassigning/demoting first is deferred to a future change
 
 #### Client
 
