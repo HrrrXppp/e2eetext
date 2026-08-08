@@ -33,7 +33,8 @@ messenger/
 ├── maintenance/
 │   ├── ecr/               # build + push images to AWS ECR
 │   ├── alb/               # ALB setup example (AWS CLI)
-│   └── ec2/               # single-EC2 production compose
+│   ├── ec2/               # single-EC2 production compose
+│   └── claude-runner/     # containerized Claude ticket-processing runner
 └── terraform/
     ├── modules/           # reusable ecr, github-oidc (more in later phases)
     └── envs/
@@ -836,5 +837,38 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
   ]
 }
 ```
+
+## Containerized Claude ticket-processing runner
+
+`maintenance/claude-runner/` packages the recurring "GitHub ticket processing" cycle described in `CLAUDE.md` (list changed issues/PRs, dispatch one agent per ticket, report) into a self-contained Docker image that runs unattended in a loop instead of needing someone to type the cycle prompt interactively.
+
+```
+maintenance/claude-runner/
+├── Dockerfile          # node:22-bookworm-slim + go, docker CLI, aws-cli, git, curl, the claude-code npm package
+├── entrypoint.sh        # clone/fetch dev, run `claude -p` on a timer, exec passthrough for ad hoc commands
+├── docker-compose.yml   # standalone compose service (not the app's root docker-compose.yml)
+└── .env.example          # runtime config template
+```
+
+Build and run:
+
+```bash
+cp maintenance/claude-runner/.env.example maintenance/claude-runner/.env
+# edit maintenance/claude-runner/.env: GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN, GIT_AUTHOR_EMAIL, ...
+
+docker compose -f maintenance/claude-runner/docker-compose.yml up -d --build
+docker compose -f maintenance/claude-runner/docker-compose.yml logs -f
+```
+
+`docker run --rm <image> <cmd>` (or any command passed to the container) is exec'd directly instead of starting the loop — e.g. `docker run --rm claude-runner claude --version` — which is how the image itself is smoke-tested. With no command, the entrypoint clones/fetches the repo into a persistent `/workspace` volume and runs `claude -p "Run the GitHub issue/PR ticket-processing cycle described in CLAUDE.md."` every `CYCLE_INTERVAL_SECONDS` (default 300), logging and retrying on the next interval if a cycle fails rather than crash-looping the container.
+
+The container runs with `docker.sock` mounted from the host (Docker-outside-of-Docker, not a nested `dockerd`) so `maintenance/ecr/build-and-push.sh` can build/push images using the host's Docker daemon and build cache — this grants the container host-root-equivalent access via that socket, which is acceptable only because this is the repo owner's own trusted automation on their own host.
+
+### Permissions
+
+Claude Code needs to run non-interactively (no "may I run this?" prompt blocking the loop), which this repo handles two ways:
+
+- **`.claude/settings.json`** (committed, not a secret — it's tool-call patterns, not credentials) carries a curated `permissions.allow` allowlist for the `gh`/`git`/`go`/`npm`/`docker`/`aws`/`terraform`/`maintenance/*` commands the ticket-processing workflow actually uses, plus `worktree.bgIsolation: "worktree"` (per-agent isolated git worktrees) and `attribution.commit: ""` (no commit-message attribution trailer). `.claude/settings.local.json` stays gitignored for personal/machine-specific overrides — it can and does accumulate literal secrets (e.g. exact `curl -H "Authorization: Bearer <token>" ...` invocations get allow-listed verbatim), which is exactly why only the generalized, secret-free patterns from it were promoted into the committed file, not its content wholesale.
+- `entrypoint.sh` runs `claude -p` with `--permission-mode dontAsk` **by default**, which relies on that allowlist rather than disabling the permission system. `CLAUDE_PERMISSION_MODE=bypassPermissions` (`--dangerously-skip-permissions`) is available as an explicit, owner-chosen opt-in escape hatch via the `.env` file if the allowlist ever proves too narrow for some new ticket shape — it is never the container's default.
 
 `envs/dev`'s network/ec2/alb variables still default to the audited live values, and it looks up the ALB security group / ACM cert from the live ALB by name — but as of Phase 3, its `rds_*` variables (`rds_identifier`, `rds_engine_version`, `rds_instance_class`, ...) are required with no default, the same as `envs/prod`'s `ami_id`/`instance_type`/`alb_security_group_id`/`acm_certificate_arn` (plus prod's own `rds_*` set) — deliberately not defaulted, since neither environment's live RDS status was confirmed while writing Phase 3, and a wrong guess for an import target risks a forced replace on live resources. Both environments now need their tfvars supplied for `terraform plan` to run at all: the plan job reads them from the optional `DEV_TFVARS` / `PROD_TFVARS` secrets (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning); until the relevant secret is populated — which for dev's `rds_*` values requires first auditing the live dev RDS instance, and for prod requires first confirming prod's real, live resource identifiers, per the sections above — that environment's `terraform plan` step is skipped, the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case is — and, per the CI section above, the job now fails rather than reporting green in that case.

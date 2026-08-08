@@ -1,0 +1,24 @@
+# Standalone compose file for the Claude ticket-processing runner. Separate
+# from the app's root docker-compose.yml, which is for the messenger app
+# itself (postgres/server/client), not this automation.
+#
+# From repo root:
+#   cp maintenance/claude-runner/.env.example maintenance/claude-runner/.env
+#   # edit maintenance/claude-runner/.env with real values
+#   docker compose -f maintenance/claude-runner/docker-compose.yml up -d --build
+
+services:
+  claude-runner:
+    build:
+      context: ../..
+      dockerfile: maintenance/claude-runner/Dockerfile
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - claude-runner-workspace:/workspace
+      - claude-runner-state:/home/claude/.claude
+    restart: unless-stopped
+
+volumes:
+  claude-runner-workspace:
+  claude-runner-state:

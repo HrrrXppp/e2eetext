@@ -42,6 +42,9 @@ maintenance/ec2/config/config.json
 # ECR build env
 maintenance/ecr/.env
 
+# Claude runner env (GitHub token, Claude Code auth)
+maintenance/claude-runner/.env
+
 maintenance/alb/create-alb.sh
 
 # Terraform (commit .terraform.lock.hcl for reproducible provider versions)
