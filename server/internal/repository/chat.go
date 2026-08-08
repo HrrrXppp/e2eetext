@@ -28,6 +28,4 @@ type ChatRepository interface {
 	UserBelongsToChat(ctx context.Context, chatID, userID string) (bool, error)
 	UnreadCountsForChat(ctx context.Context, chatID string) ([]ChatUnreadCount, error)
 	ListUnreadChatsForUser(ctx context.Context, userID string) ([]UserChatUnread, error)
-
-	ListMembers(ctx context.Context, chatID string) ([]domain.ChatMember, error)
 }

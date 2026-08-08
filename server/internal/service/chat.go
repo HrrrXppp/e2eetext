@@ -82,5 +82,5 @@ func (s *ChatService) Create(ctx context.Context, input CreateChatInput, tokenUs
 		return domain.Chat{}, ErrChatAccessDenied
 	}
 
-	return s.repo.Create(ctx, name, userIDs, disappearAfterMinutes)
+	return s.repo.Create(ctx, name, userIDs, disappearAfterMinutes, currentUserID)
 }

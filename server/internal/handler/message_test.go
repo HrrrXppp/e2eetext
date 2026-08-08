@@ -80,10 +80,6 @@ func (s *stubMessageChatRepo) ListUnreadChatsForUser(_ context.Context, _ string
 	return nil, nil
 }
 
-func (s *stubMessageChatRepo) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
-	return nil, nil
-}
-
 type stubMessageUserRepo struct {
 	users []domain.User
 }

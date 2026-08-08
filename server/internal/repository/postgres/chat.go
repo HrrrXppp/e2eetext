@@ -168,33 +168,6 @@ func (r *ChatRepository) ListUnreadChatsForUser(ctx context.Context, userID stri
 	return chats, nil
 }
 
-func (r *ChatRepository) ListMembers(ctx context.Context, chatID string) ([]domain.ChatMember, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT uc.user_id, (ca.user_id IS NOT NULL) AS is_admin, uc.created_at
-		FROM user_chats uc
-		LEFT JOIN chat_admins ca ON ca.chat_id = uc.chat_id AND ca.user_id = uc.user_id
-		WHERE uc.chat_id = $1
-		ORDER BY uc.created_at ASC`, chatID)
-	if err != nil {
-		return nil, fmt.Errorf("list chat members: %w", err)
-	}
-	defer rows.Close()
-
-	var members []domain.ChatMember
-	for rows.Next() {
-		var member domain.ChatMember
-		if err := rows.Scan(&member.UserID, &member.IsAdmin, &member.JoinedAt); err != nil {
-			return nil, fmt.Errorf("scan chat member: %w", err)
-		}
-		members = append(members, member)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate chat members: %w", err)
-	}
-
-	return members, nil
-}
-
 type chatRow interface {
 	Scan(dest ...any) error
 }

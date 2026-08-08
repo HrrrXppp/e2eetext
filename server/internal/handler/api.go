@@ -21,6 +21,8 @@ type apiChat struct {
 	ID                    string    `json:"id"`
 	Name                  string    `json:"name,omitempty"`
 	DisappearAfterMinutes int       `json:"disappearAfterMinutes"`
+	CreatedBy             string    `json:"createdBy,omitempty"`
+	IsAdmin               bool      `json:"isAdmin"`
 	CreatedAt             time.Time `json:"createdAt"`
 	UpdatedAt             time.Time `json:"updatedAt"`
 	UnreadMessageCount    int       `json:"unreadMessageCount"`
@@ -61,10 +63,17 @@ func toAPIUsers(n node.Registry, users []domain.User) []apiUser {
 }
 
 func toAPIChat(n node.Registry, chat domain.Chat) apiChat {
+	createdBy := ""
+	if chat.CreatedBy != "" {
+		createdBy = n.ScopeID(chat.CreatedBy)
+	}
+
 	return apiChat{
 		ID:                    n.ScopeID(chat.ID),
 		Name:                  chat.Name,
 		DisappearAfterMinutes: chat.DisappearAfterMinutes,
+		CreatedBy:             createdBy,
+		IsAdmin:               chat.IsAdmin,
 		CreatedAt:             chat.CreatedAt,
 		UpdatedAt:             chat.UpdatedAt,
 		UnreadMessageCount:    chat.UnreadMessageCount,

@@ -56,10 +56,6 @@ func (s *messageChatRepoStub) ListUnreadChatsForUser(_ context.Context, _ string
 	return nil, nil
 }
 
-func (s *messageChatRepoStub) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
-	return nil, nil
-}
-
 type messageUserRepoStub struct {
 	users []domain.User
 }
