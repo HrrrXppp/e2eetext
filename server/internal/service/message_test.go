@@ -36,7 +36,7 @@ func (s *messageChatRepoStub) List(_ context.Context, _ repository.ChatFilter) (
 	return nil, nil
 }
 
-func (s *messageChatRepoStub) Create(_ context.Context, _ string, _ []string, _ int) (domain.Chat, error) {
+func (s *messageChatRepoStub) Create(_ context.Context, _ string, _ []string, _ int, _ string) (domain.Chat, error) {
 	return domain.Chat{}, nil
 }
 
@@ -53,6 +53,10 @@ func (s *messageChatRepoStub) UnreadCountsForChat(_ context.Context, _ string) (
 }
 
 func (s *messageChatRepoStub) ListUnreadChatsForUser(_ context.Context, _ string) ([]repository.UserChatUnread, error) {
+	return nil, nil
+}
+
+func (s *messageChatRepoStub) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
 	return nil, nil
 }
 
