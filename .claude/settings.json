@@ -93,7 +93,6 @@
       "Bash(cd *)",
       "Bash(awk *)",
       "Read(.github/**)",
-      "Write(.github/workflows/**)",
       "Edit(.github/workflows/**)"
     ]
   },
