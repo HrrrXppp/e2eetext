@@ -1,0 +1,15 @@
+---
+description: Feature branches created by Cursor must end with -cursor
+alwaysApply: true
+---
+
+# Branch naming (Cursor)
+
+When creating a new git feature branch for work done in this Cursor session, **always** suffix the name with `-cursor`.
+
+Examples:
+
+- `alpha-disappearing-messages-cursor`
+- `alpha-we-add-encryption-cursor`
+
+Do this every time a branch is created or renamed for Cursor work. Do not use a bare name like `alpha-disappearing-messages` without the suffix.

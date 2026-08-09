@@ -1,0 +1,122 @@
+# Copy to terraform.tfvars.
+#
+# IMPORTANT: unlike dev, whether a live prod stack already exists has not
+# been confirmed. Before filling this in, run something like:
+#
+#   aws ec2 describe-instances --filters "Name=tag:Name,Values=e2eetext-prod*"
+#   aws elbv2 describe-load-balancers --names e2eetext-prod
+#
+# If real resources come back, fill this in with their actual identifiers
+# and follow README.md's import bootstrap (adapted for prod) before
+# `terraform apply`. If nothing comes back, this is a fresh deployment —
+# get sign-off on instance size/domain/ACM cert before applying.
+
+aws_region = "us-east-2"
+
+# Leave unset to use the account's default VPC unless prod uses a custom one.
+# vpc_id     = "vpc-xxxxxxxx"
+# subnet_ids = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+
+# If importing: get real values from `aws ec2 describe-instances`.
+# If applying fresh: choose deliberately (t3.small is the README's minimum).
+ami_id        = "ami-xxxxxxxxxxxxxxxxx"
+instance_type = "t3.small"
+# ec2_subnet_id = "subnet-xxxxxxxx"
+
+# The prod ALB's security group ID (pre-existing if importing; create one
+# allowing 80/443 from 0.0.0.0/0 first if applying fresh).
+alb_security_group_id = "sg-xxxxxxxx"
+
+# Production domain's ACM certificate:
+#   aws acm list-certificates --region us-east-2
+acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxxxx"
+
+# Optional — only if the live (or intended) security group/role/instance
+# profile names differ from this module's defaults.
+# ec2_security_group_name       = "<actual-sg-name>"
+# ec2_iam_role_name             = "<actual-role-name>"
+# ec2_iam_instance_profile_name = "<actual-instance-profile-name>"
+
+# If importing a live, hand-made stack: audit it first and override the
+# script-shaped defaults to match reality — the dev audit (2026-07-26)
+# found every one of these diverged there, and ALB/TG names are ForceNew
+# (a mismatch means replacement, i.e. downtime). See envs/dev/variables.tf
+# for the dev values as a worked example.
+# alb_name                 = "<live-alb-name>"
+# server_target_group_name = "<live-server-tg-name>"
+# client_target_group_name = "<live-client-tg-name>"
+# ALB routing + TG health defaults now match live-dev / envs/dev
+# (fixed-404, SPA rules 10–14, api priority 100, idle 60, TG thresholds
+# 5/2, client health path "/", server health port 8081). Override only if
+# prod intentionally differs:
+# https_default_action     = "forward-client"
+# additional_https_rules   = []
+# api_rule_priority        = 10
+# api_path_patterns        = ["/api*"]
+# create_health_rule       = true
+# alb_idle_timeout         = 3600
+# client_health_check_path = "/health"
+# ec2_security_group_ids   = ["sg-xxxxxxxx"]  # live instance's real SGs
+# create_ec2_iam_instance_profile = false     # if the live instance has none
+
+# admin_ssh_cidr_blocks = ["203.0.113.0/32"]
+# key_name              = "e2eetext-prod-key"
+
+# --- RDS (Phase 3) ---
+# Confirm whether a live prod RDS instance exists first:
+#   aws rds describe-db-instances --filters "Name=db-instance-id,Values=e2eetext-prod*"
+#
+# If real resources come back, audit them fully and fill in the real
+# values (see envs/dev/terraform.tfvars.example for the equivalent audit
+# commands). If nothing comes back, choose deliberately for a fresh apply
+# — get sign-off on instance class/storage/Multi-AZ first.
+rds_identifier        = "e2eetext-prod"
+rds_engine_version    = "16.4"
+rds_instance_class    = "db.t3.micro"
+rds_allocated_storage = 20
+rds_storage_type      = "gp3"
+rds_storage_encrypted = true
+# ForceNew: leave null if live CreateDBInstance had no DBName (AWS returns null).
+# rds_db_name           = null
+# App PostgreSQL database (DATABASE_URL) — independent of CreateDBInstance DBName.
+# rds_app_database_name = "messenger"
+rds_username           = "messenger"
+rds_subnet_ids        = ["subnet-xxxxxxxx", "subnet-yyyyyyyy"]  # REQUIRED — no fallback default (PR #32 review); commonly PRIVATE subnets
+rds_subnet_group_name = "e2eetext-prod-rds"
+# If the live instance instead sits in the account's implicit default VPC
+# subnet group (name literally "default"), set BOTH of:
+# rds_subnet_group_name   = "default"
+# rds_create_subnet_group = false   # AWS rejects creating a group named "default" ("Default" is not allowed as "name")
+rds_multi_az                = true
+rds_backup_retention_period = 7
+rds_backup_window           = "03:00-04:00"
+rds_maintenance_window      = "sun:04:30-sun:05:30"
+
+# Never put the real master password here — pass it out-of-band:
+#   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
+
+# If a parameter group with pg_cron already exists live, reference it
+# instead of creating a new one:
+# rds_create_parameter_group = false
+# rds_parameter_group_name   = "<live-parameter-group-name>"
+
+# If the live parameter group already preloads libraries besides pg_cron,
+# list the FULL set here (this module sets shared_preload_libraries
+# verbatim, so a partial list would drop the others on apply):
+# rds_shared_preload_libraries = ["pg_cron", "pg_stat_statements"]
+
+# Pre-existing security group(s), if importing an instance with hand-made
+# SGs. rds_ingress_security_group_id is REQUIRED if rds_security_group_ids
+# is left empty (module creates its own SG) — a precondition now fails the
+# plan otherwise, rather than silently creating an SG with zero ingress
+# rules (PR #32 review):
+# rds_security_group_ids        = ["sg-xxxxxxxx"]
+# rds_ingress_security_group_id = "sg-xxxxxxxx"
+
+# Optional storage/monitoring detail, useful for a zero-diff import when
+# the live instance uses any of them (all default to AWS's own "not set"/
+# disabled defaults — see terraform/modules/rds/variables.tf for the full
+# set): rds_iops, rds_storage_throughput, rds_kms_key_id,
+# rds_max_allocated_storage, rds_ca_cert_identifier,
+# rds_monitoring_interval, rds_monitoring_role_arn,
+# rds_performance_insights_enabled, rds_enabled_cloudwatch_logs_exports.

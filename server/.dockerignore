@@ -1,0 +1,6 @@
+.git
+*.md
+.env
+.env.*
+config.json
+config.example.json

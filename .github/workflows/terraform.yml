@@ -1,0 +1,235 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.10.5"
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive terraform
+
+  # Phase 2 of #27 added terraform/envs/{dev,prod} alongside envs/shared —
+  # matrixed so every root config gets init+validate on PRs touching
+  # terraform/. `terraform validate` doesn't need variable values (prod's
+  # ami_id/instance_type/alb_security_group_id/acm_certificate_arn are
+  # required with no defaults, by design, until its live status is
+  # confirmed; dev's defaults are audited-live values — see
+  # terraform/envs/dev/variables.tf), so this needs no secrets/tfvars to
+  # run.
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [shared, dev, prod]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform init (no backend)
+        working-directory: terraform/envs/${{ matrix.environment }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: terraform/envs/${{ matrix.environment }}
+        run: terraform validate
+
+  # Plan-only — never apply in CI given the blast radius (a shared,
+  # account-wide ECR/IAM stack). Deliberately does NOT reuse the
+  # AWS_ROLE_ARN secret build-images.yml assumes: that role is scoped to
+  # ECR push only (see terraform/modules/github-oidc) and lacks the
+  # IAM/ECR/S3 read access `terraform plan` needs, so reusing it would just
+  # trade one AccessDenied failure mode for another. Instead this job looks
+  # for a separate AWS_TERRAFORM_PLAN_ROLE_ARN secret pointing at a
+  # dedicated, read-only "terraform-plan" role. `continue-on-error` stays
+  # only on the AWS-credentials step, so a misconfigured/under-scoped plan
+  # role doesn't abort the job outright on that one step — but the job as a
+  # whole must NOT report green when `terraform plan` doesn't actually run:
+  # a skipped plan on a PR touching live infrastructure is exactly the kind
+  # of thing that should block a reviewer's attention, not hide behind a
+  # green check (owner feedback on PR #32: "if stage terraform plan doesn't
+  # run pipeline should be red"). The "Fail if terraform plan did not run"
+  # step at the end of this job enforces that: whenever
+  # AWS_TERRAFORM_PLAN_ROLE_ARN/AWS_REGION, or (for dev/prod)
+  # DEV_TFVARS/PROD_TFVARS, aren't configured, the job now fails instead of
+  # every remaining step just skipping quietly.
+  #
+  # Gated behind the "terraform-plan" GitHub Environment (must be created in
+  # repo Settings > Environments, ideally with required reviewers) so that,
+  # once this job has real AWS credentials, a same-repo PR can't use edits
+  # to this workflow file to run arbitrary steps with those OIDC-derived
+  # credentials before anyone reviews it.
+  #
+  # Matrixed over shared/dev/prod like the validate job above. dev's
+  # network/ec2/alb variables still default to audited-live values (Phase
+  # 2), and it looks the ALB SG / ACM cert up from the live ALB by name
+  # (which is why its plan needs real AWS credentials) — but Phase 3's RDS
+  # variables (rds_identifier, rds_engine_version, rds_instance_class, ...
+  # see terraform/envs/dev/terraform.tfvars.example) have no defaults at
+  # all, since Phase 3 was implemented without AWS credentials to audit the
+  # live dev RDS instance. So dev now needs DEV_TFVARS supplied too, the
+  # same way prod always has: prod's required-with-no-default variables
+  # (ami_id, instance_type, alb_security_group_id, acm_certificate_arn,
+  # plus the same rds_* set — see
+  # terraform/envs/prod/terraform.tfvars.example) are intentionally NOT
+  # hardcoded here or given fallback defaults in the .tf files while prod's
+  # live status is unconfirmed (a wrong guess for an import target risks a
+  # forced replace on live resources — the same lesson Phase 1 learned the
+  # hard way with the OIDC role name/thumbprint). Both are read from
+  # optional DEV_TFVARS / PROD_TFVARS secrets (full .tfvars-file contents)
+  # written to a gitignored ci.auto.tfvars before plan runs. Until the
+  # relevant secret is populated (which for dev's rds_* values requires
+  # first auditing the live dev RDS instance — see README's Terraform
+  # section), that environment's plan step is skipped — but per the "Fail
+  # if terraform plan did not run" step below, the job itself now fails
+  # rather than reporting green, the same way an unconfigured
+  # AWS_TERRAFORM_PLAN_ROLE_ARN does.
+  plan:
+    needs: [fmt, validate]
+    runs-on: ubuntu-latest
+    environment: terraform-plan
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [shared, dev, prod]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Check AWS secrets are configured
+        id: secrets-check
+        run: |
+          if [ -n "${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}" ] && [ -n "${{ secrets.AWS_REGION }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        if: steps.secrets-check.outputs.configured == 'true'
+        continue-on-error: true
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Write per-environment tfvars (dev/prod only, if configured)
+        id: write-tfvars
+        if: matrix.environment != 'shared' && steps.secrets-check.outputs.configured == 'true'
+        working-directory: terraform/envs/${{ matrix.environment }}
+        env:
+          # Explicit three-way branch, not `dev && X || Y`: that older form
+          # treats an empty/unset DEV_TFVARS as falsy and silently falls
+          # through to secrets.PROD_TFVARS, so the dev matrix leg would plan
+          # dev state using prod's tfvars (including prod's RDS identity) —
+          # flagged on PR #32 as the same expression bug already fixed once
+          # for Phase 2. Each leg now only ever resolves to its own secret,
+          # or '' if that secret isn't set.
+          ENV_TFVARS: ${{ matrix.environment == 'dev' && secrets.DEV_TFVARS || (matrix.environment == 'prod' && secrets.PROD_TFVARS || '') }}
+        run: |
+          if [ -n "$ENV_TFVARS" ]; then
+            echo "$ENV_TFVARS" > ci.auto.tfvars
+            echo "written=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "written=false" >> "$GITHUB_OUTPUT"
+            echo "No ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret configured — terraform/envs/${{ matrix.environment }}'s init/plan steps below are skipped rather than run-and-fail (its rds_* variables, and for prod also ami_id/instance_type/alb_security_group_id/acm_certificate_arn, have no defaults)."
+          fi
+
+      # Both dev and prod now have required-with-no-default variables (see
+      # terraform/envs/{dev,prod}/variables.tf's rds_* block, plus prod's
+      # ami_id/instance_type/alb_security_group_id/acm_certificate_arn), so
+      # without their respective *_TFVARS secret, `terraform plan` there can
+      # only fail with "No value for required variable" — continue-on-error
+      # would swallow that at the job level but still leave a failed red
+      # step in the Actions UI, which is exactly what a "skipped no-op" is
+      # meant to avoid. So dev/prod's init/plan only run once their tfvars
+      # were actually written; if they weren't, the "Fail if terraform plan
+      # did not run" step at the end of this job fails the job instead of
+      # leaving it green. shared is unaffected (it has no
+      # required-with-no-default variables, so it needs no tfvars at all).
+      #
+      # No `continue-on-error` on init/plan themselves (PR #32 review):
+      # `continue-on-error` stays only on the AWS-credentials step above,
+      # covering the "AWS_TERRAFORM_PLAN_ROLE_ARN isn't provisioned/scoped
+      # yet" case this job is meant to degrade gracefully for. Once tfvars
+      # are written AND credentials were configured, a failure here is a
+      # real problem (bad tfvars, insufficient permissions, a genuine
+      # config error) that should fail the check, not stay silently green.
+      - name: terraform init
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
+        working-directory: terraform/envs/${{ matrix.environment }}
+        run: terraform init -input=false
+
+      # -lock=false: this job is plan-only and never writes state, but
+      # Terraform's native S3 locking (use_lockfile) still wants to PUT a
+      # .tflock object even for a plan — which a deliberately read-only
+      # plan role must not be allowed to do (observed as "Error acquiring
+      # the state lock" / s3:PutObject AccessDenied on
+      # envs/dev/terraform.tfstate.tflock once AWS_TERRAFORM_PLAN_ROLE_ARN
+      # was configured). Skipping the lock is safe here precisely because
+      # nothing in CI ever mutates state. The role's required (read-only)
+      # permissions are documented in README's Terraform CI section.
+      #
+      # No `-detailed-exitcode` here: neither env is imported yet, so a
+      # non-empty diff is the expected, correct result of every plan until
+      # import happens — treating "changes present" as a failure would make
+      # this job red by design until then, not a useful signal.
+      #
+      # TF_VAR_rds_password: deliberately NOT part of DEV_TFVARS/PROD_TFVARS
+      # (docs already say never put the master password in a .tfvars file —
+      # see rds_password's variable description) — sourced from its own
+      # dedicated secret instead, so the full tfvars blob secret can be
+      # shared/rotated more freely without also carrying the DB password.
+      # Empty/unset is fine pre-import (plan still runs; Terraform just
+      # reports the required-variable error for rds_password same as any
+      # other missing one).
+      - name: terraform plan
+        if: steps.secrets-check.outputs.configured == 'true' && (matrix.environment == 'shared' || steps.write-tfvars.outputs.written == 'true')
+        working-directory: terraform/envs/${{ matrix.environment }}
+        env:
+          TF_VAR_rds_password: ${{ matrix.environment == 'dev' && secrets.DEV_RDS_PASSWORD || (matrix.environment == 'prod' && secrets.PROD_RDS_PASSWORD || '') }}
+        run: terraform plan -input=false -lock=false
+
+      # Owner feedback on PR #32: a skipped `terraform plan` must fail the
+      # job, not report green. Runs regardless of earlier steps'
+      # outcome (`if: always()`) so it still executes when the steps above
+      # were skipped entirely (missing AWS_TERRAFORM_PLAN_ROLE_ARN/
+      # AWS_REGION, or missing DEV_TFVARS/PROD_TFVARS). If `terraform plan`
+      # above actually ran, both checks below pass trivially and this step
+      # is a no-op — a genuine plan failure already failed the job via that
+      # step itself, this only covers the "silently never ran" case.
+      - name: Fail if terraform plan did not run
+        if: always()
+        run: |
+          if [ "${{ steps.secrets-check.outputs.configured }}" != "true" ]; then
+            echo "::error::terraform plan did not run for '${{ matrix.environment }}': AWS_TERRAFORM_PLAN_ROLE_ARN and/or AWS_REGION are not configured (terraform-plan GitHub Environment). See README's Terraform CI section."
+            exit 1
+          fi
+          if [ "${{ matrix.environment }}" != "shared" ] && [ "${{ steps.write-tfvars.outputs.written }}" != "true" ]; then
+            echo "::error::terraform plan did not run for '${{ matrix.environment }}': ${{ matrix.environment == 'dev' && 'DEV_TFVARS' || 'PROD_TFVARS' }} secret is not configured. See README's Terraform CI section."
+            exit 1
+          fi

@@ -1,0 +1,13 @@
+---
+description: Disappearing messages use chat-level TTL and messages.created_at
+alwaysApply: true
+---
+
+# Disappearing messages
+
+- **Policy is chat-level only** — column `chats.disappear_after_minutes` (API: `disappearAfterMinutes`), not per message.
+- **Default: 60 days** — `86400` minutes (`60 * 24 * 60`). New chats use `NOT NULL DEFAULT 86400` (not seconds).
+- **Expiry uses existing `messages.created_at`** — effective expiry is `created_at + disappear_after_minutes`. Do **not** add `messages.expires_at`.
+- Changing a chat’s TTL retargets existing messages. Document that when shipping.
+- Server enforces hard-delete via SQL `purge_expired_messages()` scheduled by **`pg_cron` in migration `000006`**. Local Compose installs `postgresql-16-cron` via `dockerfile_inline` in `docker-compose.yml` (not Alpine). RDS must allow the `pg_cron` extension.
+- Client may show a computed countdown from `created_at` + chat TTL.

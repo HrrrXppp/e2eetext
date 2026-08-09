@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars and adjust to match the resources already created
+# manually in AWS (see README.md's "Infrastructure as code (Terraform)"
+# section for the exact `terraform import` commands to run first).
+
+aws_region = "us-east-1"
+
+github_org  = "HrrrXppp"
+github_repo = "e2eetext"
+
+# Must match the IAM role/policy names already created for build-images.yml's
+# secrets.AWS_ROLE_ARN — check the AWS Console/CLI for the real names before
+# importing, then set them here.
+github_actions_role_name   = "github-actions-ecr-role"
+github_actions_policy_name = "github-actions-ecr-push"
+
+# Only needed if the live OIDC provider's thumbprint differs from the
+# module's default (GitHub's current root CA). Check via `aws iam
+# get-open-id-connect-provider` if the post-import `terraform plan` shows
+# a diff on this field.
+# oidc_thumbprint_list = ["<actual-thumbprint>"]
