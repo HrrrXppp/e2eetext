@@ -9,6 +9,15 @@ Release version is defined in `[VERSION](./VERSION)`.
 
 On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changelog heading. When a release is cut on `main`, rename that section to the semver from `VERSION` and add the release date.
 
+## [NEXT RELEASE]
+
+### Added
+
+#### Tooling & deployment
+
+- GitHub Actions ECR IAM: manage the live *inline* policy `github-actions-ecr-rolePolicy` via Terraform (not a managed policy attachment)
+- Terraform `modules/terraform-plan-role` + `envs/shared` wiring: import/manage the CI `terraform-plan-role` inline policy (includes dig/prod EC2 instance-profile and SSM boot-deploy reads)
+
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)
 
 Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end encryption; the server stores only opaque ciphertext and key wraps.

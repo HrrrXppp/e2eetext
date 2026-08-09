@@ -53,9 +53,10 @@ resource "aws_iam_role" "github_actions_ecr_push" {
   tags               = var.tags
 }
 
-# Permissions policy: ECR auth (account-wide, ECR requires resource "*" for
-# GetAuthorizationToken) plus the exact push actions build-and-push.sh needs,
-# scoped to just the two repos (see README's "Requires IAM permissions" note).
+# Permissions: ECR auth (account-wide — GetAuthorizationToken requires "*")
+# plus push actions scoped to the two repos. Live role uses an *inline*
+# policy (github-actions-ecr-rolePolicy), not a managed policy attachment —
+# match that shape so Terraform manages the real object.
 data "aws_iam_policy_document" "ecr_push" {
   statement {
     sid       = "ECRAuth"
@@ -78,12 +79,8 @@ data "aws_iam_policy_document" "ecr_push" {
   }
 }
 
-resource "aws_iam_policy" "ecr_push" {
-  name   = var.policy_name
+resource "aws_iam_role_policy" "ecr_push" {
+  name   = var.inline_policy_name
+  role   = aws_iam_role.github_actions_ecr_push.id
   policy = data.aws_iam_policy_document.ecr_push.json
-}
-
-resource "aws_iam_role_policy_attachment" "ecr_push" {
-  role       = aws_iam_role.github_actions_ecr_push.name
-  policy_arn = aws_iam_policy.ecr_push.arn
 }

@@ -21,10 +21,25 @@ module "github_oidc" {
   github_org  = var.github_org
   github_repo = var.github_repo
 
-  role_name   = var.github_actions_role_name
-  policy_name = var.github_actions_policy_name
+  role_name          = var.github_actions_role_name
+  inline_policy_name = var.github_actions_inline_policy_name
 
   oidc_thumbprint_list = var.oidc_thumbprint_list
 
   ecr_repository_arns = values(module.ecr.repository_arns)
+}
+
+# Read-only role for terraform.yml plan jobs (AWS_TERRAFORM_PLAN_ROLE_ARN).
+# Import the live hand-made role + inline policy before the first apply —
+# see README "terraform-plan-role".
+module "terraform_plan_role" {
+  source = "../../modules/terraform-plan-role"
+
+  github_org          = var.github_org
+  github_repo         = var.github_repo
+  oidc_provider_arn   = module.github_oidc.oidc_provider_arn
+  ecr_repository_arns = values(module.ecr.repository_arns)
+  role_name           = var.terraform_plan_role_name
+  inline_policy_name  = var.terraform_plan_inline_policy_name
+  state_bucket        = var.terraform_state_bucket
 }
