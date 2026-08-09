@@ -26,10 +26,10 @@ variable "github_actions_role_name" {
   default = "github-actions-ecr-role"
 }
 
-variable "github_actions_policy_name" {
-  description = "Name of the existing IAM policy granting ECR push access to the role above. Must match exactly for a zero-diff import."
+variable "github_actions_inline_policy_name" {
+  description = "Inline policy name on the GitHub Actions ECR role (live: github-actions-ecr-rolePolicy). Not a managed policy."
   type        = string
-  default     = "github-actions-ecr-push"
+  default     = "github-actions-ecr-rolePolicy"
 }
 
 variable "oidc_thumbprint_list" {

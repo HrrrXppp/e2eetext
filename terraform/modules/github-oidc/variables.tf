@@ -29,22 +29,22 @@ variable "role_name" {
   description = "Name of the IAM role assumed by GitHub Actions via OIDC. Must match the role already created manually, for a zero-diff import."
   type        = string
   # Matches the live role's actual name (see .github/workflows/build-images.yml's
-  # secrets.AWS_ROLE_ARN, which points at this role). A prior default of
-  # "github-actions-ecr-push" didn't match, which made Terraform plan to
-  # destroy the live role and create a new one under that name instead of
-  # recognizing it — that would have broken build-images.yml the moment
-  # apply ran, since AWS_ROLE_ARN would still point at the deleted role.
+  # secrets.AWS_ROLE_ARN, which points at this role).
   default = "github-actions-ecr-role"
 }
 
-variable "policy_name" {
-  description = "Name of the IAM policy granting ECR push access, attached to role_name. Must match the policy already created manually, for a zero-diff import."
+variable "inline_policy_name" {
+  description = <<-EOT
+    Name of the inline IAM role policy granting ECR push (live:
+    github-actions-ecr-rolePolicy). Not a managed customer policy — the live
+    role has no attached managed policies.
+  EOT
   type        = string
-  default     = "github-actions-ecr-push"
+  default     = "github-actions-ecr-rolePolicy"
 }
 
 variable "ecr_repository_arns" {
-  description = "ARNs of the ECR repositories the role is allowed to push/pull. Scopes the permissions policy to just these repos, matching the manually-created policy."
+  description = "ARNs of the ECR repositories the role is allowed to push/pull. Scopes the permissions policy to just these repos."
   type        = list(string)
 }
 

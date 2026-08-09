@@ -639,8 +639,8 @@ The ECR repos and the GitHub OIDC provider/role/policy already exist — they we
 ```bash
 cd terraform/envs/shared
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: set github_actions_role_name / github_actions_policy_name
-# to whatever the manually-created IAM role/policy are actually named in AWS.
+# edit terraform.tfvars if names differ from defaults
+# (role github-actions-ecr-role, inline policy github-actions-ecr-rolePolicy)
 
 terraform init
 
@@ -653,23 +653,19 @@ terraform import module.github_oidc.aws_iam_openid_connect_provider.github \
   arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com
 
 # IAM role assumed by build-images.yml (secrets.AWS_ROLE_ARN)
-terraform import module.github_oidc.aws_iam_role.github_actions_ecr_push <ROLE_NAME>
+terraform import module.github_oidc.aws_iam_role.github_actions_ecr_push github-actions-ecr-role
 
-# IAM policy granting ECR push, attached to the role above
-terraform import module.github_oidc.aws_iam_policy.ecr_push \
-  arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
+# Inline ECR push policy on that role (not a managed customer policy)
+terraform import module.github_oidc.aws_iam_role_policy.ecr_push \
+  'github-actions-ecr-role:github-actions-ecr-rolePolicy'
 
-# Attachment of the policy above to the role above
-terraform import module.github_oidc.aws_iam_role_policy_attachment.ecr_push \
-  <ROLE_NAME>/arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
-
-# terraform.yml plan role (inline policy — not a managed policy attachment)
+# terraform.yml plan role (also an inline policy)
 terraform import module.terraform_plan_role.aws_iam_role.this terraform-plan-role
 terraform import module.terraform_plan_role.aws_iam_role_policy.this \
-  terraform-plan-role:terraform-plan-rolePolicy
+  'terraform-plan-role:terraform-plan-rolePolicy'
 ```
 
-Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing the Phase 1 ECR/OIDC resources, `terraform plan` should show **no changes** for those. Importing `terraform-plan-role` may plan an in-place **inline policy update** (expanded dig/prod EC2 + SSM reads) — review that diff, then `terraform apply` in `envs/shared` with admin credentials (not CI) to publish the policy.
+Replace `<AWS_ACCOUNT_ID>` with the real account (`aws sts get-caller-identity`). After import, `terraform plan` may show in-place updates: trust-policy `Sid` tidy-ups, ECR inline policy scoped to the two repository ARNs (live was `Resource: "*"` for push actions), and the expanded `terraform-plan-role` reads (dig/prod EC2 + SSM). Review, then `terraform apply` in `envs/shared` with admin credentials (not CI).
 
 ### One-time import bootstrap (`envs/dev` — Phase 2)
 
@@ -811,8 +807,6 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
       ],
       "Resource": [
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/github-actions-ecr-role",
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/github-actions-ecr-role",
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/github-actions-ecr-push",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/terraform-plan-role",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/e2eetext-dev-ec2-role",
