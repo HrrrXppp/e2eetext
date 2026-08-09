@@ -1,0 +1,66 @@
+#!/bin/bash
+# SSM aws:runShellScript defaults to /bin/sh (dash on Ubuntu). Bashisms like
+# [[ must not be used without this shebang — otherwise IMAGE_TAG is never
+# written and start_now never runs, while enable still "succeeds".
+set -euo pipefail
+
+REPO_ROOT='${repo_root}'
+UNIT_DST=/etc/systemd/system/e2eetext.service
+DEPLOY_ENV_DIR=/etc/e2eetext
+DEPLOY_ENV_FILE="$DEPLOY_ENV_DIR/deploy.env"
+IMAGE_TAG='${image_tag}'
+START_NOW='${start_now}'
+
+if [ ! -d "$REPO_ROOT/maintenance/ec2" ]; then
+  echo "Repo root not found at $REPO_ROOT (clone the repo on the instance first)." >&2
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required before enabling the boot unit." >&2
+  exit 1
+fi
+
+cat >"$UNIT_DST" <<EOF
+[Unit]
+Description=e2eetext: ECR login, pull images if needed, start compose
+Documentation=https://github.com/HrrrXppp/e2eetext
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$REPO_ROOT
+EnvironmentFile=-/etc/e2eetext/deploy.env
+ExecStart=/bin/bash $REPO_ROOT/maintenance/ec2/deploy.sh
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+mkdir -p "$DEPLOY_ENV_DIR"
+if [ -n "$IMAGE_TAG" ]; then
+  printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >"$DEPLOY_ENV_FILE"
+  chmod 0644 "$DEPLOY_ENV_FILE"
+
+  # Also pin maintenance/ec2/.env so older deploy.sh (shell IMAGE_TAG from
+  # source .env beats --env-file) still pulls the IaC tag after reboot.
+  ENV_DOT="$REPO_ROOT/maintenance/ec2/.env"
+  if [ -f "$ENV_DOT" ]; then
+    if grep -q '^IMAGE_TAG=' "$ENV_DOT"; then
+      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$IMAGE_TAG|" "$ENV_DOT"
+    else
+      printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >>"$ENV_DOT"
+    fi
+  fi
+fi
+
+systemctl daemon-reload
+systemctl enable e2eetext.service
+
+if [ "$START_NOW" = "true" ]; then
+  systemctl restart e2eetext.service
+fi

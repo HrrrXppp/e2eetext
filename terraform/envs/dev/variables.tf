@@ -5,14 +5,9 @@ variable "aws_region" {
 }
 
 variable "name_prefix" {
-  description = <<-EOT
-    Name tag for the EC2 instance. Default "" because the live dev instance
-    carries no tags at all (confirmed 2026-07-26) and the import acceptance
-    bar is a zero-diff plan. Set to e.g. "e2eetext-dev" as a deliberate
-    post-import change to give the instance a Name tag.
-  EOT
+  description = "Name tag for the dig EC2 instance (live: \"dev-ec2\")."
   type        = string
-  default     = ""
+  default     = "dev-ec2"
 }
 
 # Defaults below marked "confirmed live" were read from the real dev stack
@@ -99,15 +94,13 @@ variable "ec2_security_group_ids" {
 
 variable "create_ec2_iam_instance_profile" {
   description = <<-EOT
-    Whether to create/attach the ECR-read IAM role + instance profile.
-    Default false because the live dev instance runs with NO instance
-    profile at all (confirmed 2026-07-26 — the account has zero instance
-    profiles, despite the README's documented setup). Flip to true to
-    migrate dev to the documented ECR-pull-via-instance-profile setup (an
-    in-place instance update).
+    Whether to create/attach the ECR-read (+ SSM, when boot deploy is on)
+    IAM role + instance profile. Default true: dev EC2 is managed only
+    via Terraform (boot pull/start needs the profile). In-place attach on
+    the live instance — not a replace.
   EOT
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "admin_ssh_cidr_blocks" {
@@ -132,6 +125,30 @@ variable "ec2_iam_instance_profile_name" {
   description = "Name for the instance profile, if create_ec2_iam_instance_profile is flipped to true."
   type        = string
   default     = "e2eetext-dev-ec2-profile"
+}
+
+variable "ec2_manage_boot_deploy" {
+  description = <<-EOT
+    Install/enable a systemd unit via SSM that runs deploy.sh on every boot
+    (ECR login, pull if needed, compose up). Requires
+    create_ec2_iam_instance_profile=true. Default true — dig boot deploy is
+    Terraform-managed only (not a manual systemd install).
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "ec2_boot_deploy_repo_root" {
+  description = "Absolute path to the e2eetext checkout on the dig EC2 instance (Ubuntu: /home/ubuntu/e2eetext)."
+  type        = string
+  default     = "/home/ubuntu/e2eetext"
+}
+
+
+variable "ec2_boot_deploy_start_now" {
+  description = "When boot deploy is managed, also restart the unit when the SSM association applies (deploy immediately)."
+  type        = bool
+  default     = true
 }
 
 # --- ALB ---
@@ -402,13 +419,13 @@ variable "rds_parameter_group_family" {
 }
 
 variable "rds_enable_pg_cron" {
-  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true — folding #20's manual pg_cron step into Terraform is exactly Phase 3's scope."
+  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true — requires rds_create_parameter_group=true (not default.postgres18)."
   type        = bool
   default     = true
 }
 
 variable "rds_cron_database_name" {
-  description = "Value for cron.database_name. Leave empty (default) to reuse rds_db_name."
+  description = "Value for cron.database_name. Leave empty (default) to reuse rds_app_database_name."
   type        = string
   default     = ""
 }
