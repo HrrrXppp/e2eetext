@@ -1,0 +1,21 @@
+---
+description: GitHub PR/issue comments from Cursor must be marked Cursor
+alwaysApply: true
+---
+
+# PR / issue comments (Cursor)
+
+Whenever you post a GitHub pull request or issue comment in this repo (review body, inline review comment, reply to a thread, or `gh pr comment` / API equivalent), **always** mark it as Cursor.
+
+Prefix the body with:
+
+```text
+**Cursor** — 
+```
+
+Examples:
+
+- `**Cursor** — Removed the startup warn path.`
+- `**Cursor** — Critical: ForceNew replace hazard after import.`
+
+Do this every time. Do not post unmarked comments that could be mistaken for a human reviewer.
