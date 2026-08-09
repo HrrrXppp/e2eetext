@@ -16,7 +16,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Tooling & deployment
 
 - GitHub Actions ECR IAM: manage the live *inline* policy `github-actions-ecr-rolePolicy` via Terraform (not a managed policy attachment)
-- Terraform `modules/terraform-plan-role` + `envs/shared` wiring: import/manage the CI `terraform-plan-role` inline policy (includes dig/prod EC2 instance-profile and SSM boot-deploy reads)
+- Terraform `modules/terraform-plan-role` + `envs/shared` wiring: import/manage the CI `terraform-plan-role` inline policy (includes dig/prod EC2 instance-profile and SSM boot-deploy reads for `*-boot-deploy` documents)
+- EC2 boot deploy managed by Terraform for dig and prod: systemd unit (`maintenance/ec2/e2eetext.service`) runs `deploy.sh` on every boot (ECR login, pull if needed, compose up); `IMAGE_TAG` is git-pinned per env in `envs/{dev,prod}/ec2_image_tag.tf` (dig and prod may differ)
+- EC2 boot-deploy SSM install script is bash/`[`-safe (SSM defaults to `/bin/sh`), and dig's default checkout path is `/home/ubuntu/e2eetext`
+- `deploy.sh` passes `/etc/e2eetext/deploy.env` to `docker compose` (and clears a stale shell `IMAGE_TAG`) so the Terraform pin wins over `maintenance/ec2/.env`; SSM install also rewrites `IMAGE_TAG` in that `.env` for older checkouts
+- Terraform dig EC2 `name_prefix` defaults to `dev-ec2` (keeps the live Name tag)
+- Terraform RDS pg_cron prep: require a custom parameter group when `enable_pg_cron` is set (not AWS `default.postgres*`) so `shared_preload_libraries` / `cron.database_name` (app DB) can be set; reboot the instance out-of-band after apply before migration `000006`
 
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)
 

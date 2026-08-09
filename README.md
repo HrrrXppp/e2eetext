@@ -247,7 +247,7 @@ Chat-level TTL only. Column `chats.disappear_after_minutes` (API `disappearAfter
 There is no per-message `expires_at`. Changing a chat’s TTL retargets existing messages.
 
 - **List / unread** — unchanged queries; expired rows are removed by purge.
-- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose builds Postgres inline (`dockerfile_inline` in `docker-compose.yml`: Postgres 16 + `postgresql-16-cron`) with `shared_preload_libraries=pg_cron` and `cron.database_name=messenger`. On AWS RDS, enable the `pg_cron` extension in the parameter group / allowed extensions before migrating.
+- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose and RDS Terraform both set `cron.database_name` to the app DB; on RDS enable `shared_preload_libraries=pg_cron` via a custom parameter group and reboot the instance after apply before migrating.
 - **Client** — default 60-day TTL on create; countdown from `createdAt` + chat TTL; local drop on a timer.
 
 ## Authentication flow
@@ -456,7 +456,7 @@ ALB cannot inject HTML into the SPA; this belongs in the client with deploy-time
 
 - AMI: Amazon Linux 2023 or Ubuntu
 - Instance type: `t3.small` or larger
-- IAM role: attach **AmazonEC2ContainerRegistryReadOnly** (so EC2 can pull from ECR)
+- IAM role: attach **AmazonEC2ContainerRegistryReadOnly** (so EC2 can pull from ECR). For Terraform-managed boot deploy (below), also **AmazonSSMManagedInstanceCore**.
 - Security group inbound:
   - **22** — SSH (your IP only)
   - **8080** — client (from ALB security group only)
@@ -532,6 +532,32 @@ bash maintenance/ecr/build-and-push.sh
 IMAGE_TAG=latest bash maintenance/ec2/deploy.sh
 ```
 
+#### Boot-time pull + start (Terraform-managed)
+
+`terraform/envs/dev` and `terraform/envs/prod` manage boot deploy by default:
+
+- IAM instance profile with **AmazonEC2ContainerRegistryReadOnly** + **AmazonSSMManagedInstanceCore**
+- SSM Association installs `e2eetext.service` (ECR login → `compose pull` → `up` on every boot)
+- **`IMAGE_TAG` is git-pinned per environment** (dig and prod may differ):
+
+```hcl
+# dig — terraform/envs/dev/ec2_image_tag.tf
+locals {
+  ec2_boot_deploy_image_tag = "v0.2.0"
+}
+
+# prod — terraform/envs/prod/ec2_image_tag.tf
+locals {
+  ec2_boot_deploy_image_tag = "v0.2.0"  # may differ from dig
+}
+```
+
+Edit the relevant `ec2_image_tag.tf`, commit, and `terraform apply` that env. Apply writes `/etc/e2eetext/deploy.env`, which overrides `maintenance/ec2/.env` for `IMAGE_TAG` only.
+
+Prerequisites on the box (still one-time host setup, not the boot unit itself): Docker, AWS CLI, cloned repo, `maintenance/ec2/.env` + `config/*.json`. After the first apply attaches IAM, wait until the instance is SSM-managed before expecting the association to succeed. `user_data` stays `ignore_changes` for brownfield — dig is not replaced.
+
+Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.2.0 bash maintenance/ec2/install-boot-service.sh`.
+
 Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
 
 ### 7. Google OAuth
@@ -560,6 +586,8 @@ Open `https://app.example.com` in the browser and sign in.
 | `maintenance/alb/create-alb.example.sh` | Example ALB + listener rules (AWS CLI) |
 | `maintenance/ec2/docker-compose.yml` | Pull ECR images; expose 8080/8081 for ALB |
 | `maintenance/ec2/deploy.sh` | ECR login, pull, and start on EC2 |
+| `maintenance/ec2/e2eetext.service` | systemd unit template (boot pull + start) |
+| `maintenance/ec2/install-boot-service.sh` | Install/enable the boot unit on the instance |
 | `maintenance/ec2/.env.example` | `DATABASE_URL`, ECR settings |
 | `maintenance/ec2/setup-docker.sh` | Install Docker on a fresh EC2 |
 
@@ -584,6 +612,7 @@ bash maintenance/ec2/deploy.sh
 | `database unavailable` | `DATABASE_URL`, RDS security group port 5432 from EC2 |
 | `load config` | `CONFIG_PATH` must point to a valid JSON file (e.g. `maintenance/ec2/config/config.json` on EC2) |
 | `exec format error` | Rebuild with `DOCKER_PLATFORM=linux/amd64` |
+| `can only create extension in database postgres` / `run migrations` on `000006` | `DATABASE_URL` must be the **app** DB. On RDS, use a custom parameter group with `cron.database_name` = that app DB and `shared_preload_libraries=pg_cron`, then reboot the instance after apply before deploy. If `schema_migrations` is dirty at version 6, set `version=5, dirty=false` and redeploy. |
 
 ## Infrastructure as code (Terraform)
 
@@ -684,9 +713,9 @@ echo 'ec2_subnet_id = "<DEV_INSTANCE_SUBNET_ID>"' > terraform.tfvars
 
 # VPC/subnets are data-sourced, not managed resources — nothing to import
 # there. Same for the instance's SGs and the ALB's SG (pre-existing,
-# looked up by name), and there is no IAM role/instance profile to import
-# (the live instance runs without one; create_ec2_iam_instance_profile
-# defaults to false accordingly).
+# looked up by name). The live instance historically had no IAM instance
+# profile — Terraform creates/attaches one (plus the boot-deploy SSM unit)
+# on the first apply after import; do not import a missing profile.
 
 # EC2 instance
 terraform import module.ec2.aws_instance.this <DEV_INSTANCE_ID>
@@ -707,9 +736,9 @@ terraform import 'module.alb.aws_lb_listener_rule.extra["13"]' <RULE_ARN_PRIO_13
 terraform import 'module.alb.aws_lb_listener_rule.extra["14"]' <RULE_ARN_PRIO_14>   # /instance.json
 ```
 
-Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing ALB/EC2/RDS, also import target-group attachments (AWS provider ≥ 6.34) with `terraform import module.alb.aws_lb_target_group_attachment.client '<tg-arn>,<instance-id>,8080'` and the same for `.server` with port `8081`. Everything else must be diff-free — the same acceptance bar as Phase 1. If plan shows anything else (drift since then), fix the `.tf`/`.tfvars` to match reality rather than accepting the diff; don't `apply` until it's clean.
+Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing ALB/EC2/RDS, also import target-group attachments (AWS provider ≥ 6.34) with `terraform import module.alb.aws_lb_target_group_attachment.client '<tg-arn>,<instance-id>,8080'` and the same for `.server` with port `8081`. Imported resources must be diff-free aside from the deliberate first-apply adds for IAM instance profile + boot-deploy SSM (see "Boot-time pull + start"). If plan shows unexpected churn on imported resources, fix the `.tf`/`.tfvars` to match reality rather than accepting the diff.
 
-Known, deliberate gaps for follow-up (each currently unmanaged by Terraform, so plan stays clean either way): the absent IAM instance profile (the "ECR pull via instance profile" setup this README documents — flip `create_ec2_iam_instance_profile = true` to migrate); and tags (defaults are `{}` to match the untagged live stack — set `tags`/`name_prefix` post-import to start tagging).
+Known follow-ups: other tags default to `{}` (only the EC2 `Name` tag is set via `name_prefix`, default `dev-ec2`). IAM instance profile and boot-time deploy are Terraform-managed by default for dig and prod (see "Boot-time pull + start" above).
 
 ### `envs/prod` (Phase 2) — live status not yet confirmed
 
@@ -754,7 +783,7 @@ aws rds describe-db-subnet-groups
 
   If `describe-db-instances` shows **`DBName` null** (instance created with no initial database), leave `rds_db_name` unset / `null`. Setting a name is ForceNew and will propose destroy/recreate of the live instance (observed on live-dev after import). Put the real PostgreSQL database the app uses in `rds_app_database_name` instead (live-dev: `dev_e2eetext`) — that attribute is not ForceNew.
 
-  If the live instance's parameter group does not yet have `pg_cron` configured (i.e. #20 hasn't been done manually), applying after import will propose the `shared_preload_libraries=pg_cron` / `cron.database_name` changes — both are static parameters (`apply_method = "pending-reboot"`), so **the instance needs a reboot after `apply`** for them to take effect, and that reboot must happen before migration `000006` (which runs `CREATE EXTENSION pg_cron`) is ever applied against this instance — the same ordering warning #20's plan calls out.
+  For `pg_cron`, set `rds_create_parameter_group = true` (AWS **default** parameter groups like `default.postgres18` cannot take `shared_preload_libraries` / `cron.database_name`) and `rds_enable_pg_cron = true`. After apply, **reboot the RDS instance** (static parameters) before deploying the app — migration `000006` creates the extension and schedules the purge job in the app DB. Do not leave dig on `default.postgres18` with `rds_enable_pg_cron = true`.
 - **If nothing comes back:** `terraform apply` can create the instance fresh — but get sign-off on instance class/storage/Multi-AZ choices first, same as any other production infrastructure decision, and doubly so for a database holding real user data.
 
 ### CI
