@@ -101,11 +101,18 @@ resource "aws_security_group" "this" {
 
 # #20's plan: "create or modify a custom DB parameter group with
 # shared_preload_libraries=pg_cron (and cron.database_name=messenger if
-# settable)". Both are static parameters (apply_method = "pending-reboot")
-# — per #20's plan, the instance must be rebooted for them to take effect,
-# and that must happen before any migration runs. This module does not
-# reboot the instance automatically; see README for the documented
-# post-apply reboot step.
+# settable)". Both are static parameters (apply_method = "pending-reboot").
+# AWS default parameter groups (e.g. default.postgres18) cannot take these
+# settings — create_parameter_group must be true when enable_pg_cron is true.
+# Reboot the instance out-of-band after apply so the preload takes effect
+# before migration 000006 creates the extension.
+check "pg_cron_requires_custom_parameter_group" {
+  assert {
+    condition     = !var.enable_pg_cron || var.create_parameter_group
+    error_message = "enable_pg_cron=true requires create_parameter_group=true. AWS default parameter groups cannot set shared_preload_libraries or cron.database_name (dig cannot stay on default.postgres18)."
+  }
+}
+
 resource "aws_db_parameter_group" "this" {
   count = var.create_parameter_group ? 1 : 0
 

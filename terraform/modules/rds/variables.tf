@@ -234,11 +234,10 @@ variable "enable_pg_cron" {
     Whether to set shared_preload_libraries=pg_cron and
     cron.database_name on the parameter group, per #20's plan
     ("Disappearing messages: ensure RDS allows pg_cron before migrate").
-    Both are static parameters (apply_method "pending-reboot") — per #20's
-    plan, the instance needs a reboot after apply for them to take effect,
-    and that must happen before migration 000006 (which does
-    `CREATE EXTENSION pg_cron`) ever runs against this instance. This
-    module does not reboot the instance automatically; see README.
+    Requires create_parameter_group=true (default parameter groups cannot
+    take these settings). Both parameters are static (pending-reboot) —
+    reboot the instance out-of-band after apply before migration 000006
+    creates the extension and schedules the purge job in the app DB.
   EOT
   type        = bool
   default     = true

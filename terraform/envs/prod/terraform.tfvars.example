@@ -57,7 +57,11 @@ acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxx
 # alb_idle_timeout         = 3600
 # client_health_check_path = "/health"
 # ec2_security_group_ids   = ["sg-xxxxxxxx"]  # live instance's real SGs
-# create_ec2_iam_instance_profile = false     # if the live instance has none
+
+# Boot deploy is on by default (IAM instance profile + SSM unit). IMAGE_TAG
+# is git-pinned per env in ec2_image_tag.tf (not here — *.tfvars is gitignored).
+# ec2_boot_deploy_repo_root = "/home/ec2-user/e2eetext"
+# create_ec2_iam_instance_profile = false  # only to temporarily skip IAM/boot
 
 # admin_ssh_cidr_blocks = ["203.0.113.0/32"]
 # key_name              = "e2eetext-prod-key"
@@ -95,15 +99,20 @@ rds_maintenance_window      = "sun:04:30-sun:05:30"
 # Never put the real master password here — pass it out-of-band:
 #   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
 
-# If a parameter group with pg_cron already exists live, reference it
-# instead of creating a new one:
+# pg_cron prep (required for disappearing-messages purge). Default parameter
+# groups cannot set these — use a custom group. Family must match engine major.
+# rds_create_parameter_group   = true
+# rds_parameter_group_name     = "e2eetext-prod-rds-pgcron"
+# rds_parameter_group_family   = "postgres16"
+# rds_enable_pg_cron           = true
+# rds_cron_database_name       = ""   # empty → rds_app_database_name
+# rds_shared_preload_libraries = ["pg_cron"]
+# After apply: reboot the instance (static params) before deploying the app.
+#
+# Only if a custom pg_cron parameter group already exists unmanaged:
 # rds_create_parameter_group = false
-# rds_parameter_group_name   = "<live-parameter-group-name>"
-
-# If the live parameter group already preloads libraries besides pg_cron,
-# list the FULL set here (this module sets shared_preload_libraries
-# verbatim, so a partial list would drop the others on apply):
-# rds_shared_preload_libraries = ["pg_cron", "pg_stat_statements"]
+# rds_parameter_group_name   = "<live-custom-parameter-group-name>"
+# rds_enable_pg_cron         = false
 
 # Pre-existing security group(s), if importing an instance with hand-made
 # SGs. rds_ingress_security_group_id is REQUIRED if rds_security_group_ids
