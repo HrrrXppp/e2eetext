@@ -78,7 +78,12 @@ variable "ec2_security_group_ids" {
 }
 
 variable "create_ec2_iam_instance_profile" {
-  description = "Whether to create/attach the ECR-read IAM role + instance profile. Default true (the README's documented setup) — set false if a live prod instance turns out to run without one, as dev does."
+  description = <<-EOT
+    Whether to create/attach the ECR-read (+ SSM, when boot deploy is on)
+    IAM role + instance profile. Default true: prod EC2 is managed only
+    via Terraform (boot pull/start needs the profile). In-place attach on
+    the live instance — not a replace.
+  EOT
   type        = bool
   default     = true
 }
@@ -99,6 +104,30 @@ variable "ec2_iam_instance_profile_name" {
   description = "Name of the prod instance's IAM instance profile. Must match the live instance profile's name for a zero-diff import."
   type        = string
   default     = "e2eetext-prod-ec2-profile"
+}
+
+variable "ec2_manage_boot_deploy" {
+  description = <<-EOT
+    Install/enable a systemd unit via SSM that runs deploy.sh on every boot
+    (ECR login, pull if needed, compose up). Requires
+    create_ec2_iam_instance_profile=true. Default true — prod boot deploy is
+    Terraform-managed only (not a manual systemd install).
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "ec2_boot_deploy_repo_root" {
+  description = "Absolute path to the e2eetext checkout on the prod EC2 instance."
+  type        = string
+  default     = "/home/ec2-user/e2eetext"
+}
+
+
+variable "ec2_boot_deploy_start_now" {
+  description = "When boot deploy is managed, also restart the unit when the SSM association applies (deploy immediately)."
+  type        = bool
+  default     = true
 }
 
 # --- ALB ---
@@ -355,13 +384,13 @@ variable "rds_parameter_group_family" {
 }
 
 variable "rds_enable_pg_cron" {
-  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true."
+  description = "Whether to set shared_preload_libraries=pg_cron + cron.database_name on the parameter group, per #20's plan. Default true — requires rds_create_parameter_group=true."
   type        = bool
   default     = true
 }
 
 variable "rds_cron_database_name" {
-  description = "Value for cron.database_name. Leave empty (default) to reuse rds_db_name."
+  description = "Value for cron.database_name. Leave empty (default) to reuse rds_app_database_name."
   type        = string
   default     = ""
 }

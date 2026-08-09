@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+# Greenfield helper: SSM association is the supported brownfield path
+# (user_data is ignore_changes'd on imported instances). This runs only
+# on first launch when Docker + repo already exist on the AMI.
+for i in $(seq 1 60); do
+  command -v docker >/dev/null 2>&1 && break
+  sleep 5
+done
+echo '${script_b64}' | base64 -d | bash

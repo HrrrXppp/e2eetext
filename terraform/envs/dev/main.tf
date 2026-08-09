@@ -80,15 +80,19 @@ module "ec2" {
   admin_ssh_cidr_blocks = var.admin_ssh_cidr_blocks
   key_name              = var.key_name
 
-  # The live instance's SGs and (absent) instance profile — see
-  # variables.tf; both defaults describe what's actually live so import
-  # stays zero-diff.
+  # Live SGs stay imported; IAM instance profile + boot deploy are owned by
+  # Terraform (defaults true) so dig pull/start is not a manual host step.
   security_group_ids          = local.ec2_security_group_ids
   create_iam_instance_profile = var.create_ec2_iam_instance_profile
 
   security_group_name       = var.ec2_security_group_name
   iam_role_name             = var.ec2_iam_role_name
   iam_instance_profile_name = var.ec2_iam_instance_profile_name
+
+  manage_boot_deploy    = var.ec2_manage_boot_deploy
+  boot_deploy_repo_root = var.ec2_boot_deploy_repo_root
+  boot_deploy_image_tag = local.ec2_boot_deploy_image_tag # pinned in ec2_image_tag.tf
+  boot_deploy_start_now = var.ec2_boot_deploy_start_now
 
   tags = var.tags
 }

@@ -125,6 +125,11 @@ resource "aws_instance" "this" {
   iam_instance_profile   = var.create_iam_instance_profile ? aws_iam_instance_profile.this[0].name : null
   key_name               = var.key_name != "" ? var.key_name : null
 
+  # Greenfield only in practice: lifecycle ignore_changes below keeps
+  # brownfield dig from replacing when this is later enabled. Live dig is
+  # configured by aws_ssm_association.boot_deploy instead.
+  user_data = local.boot_deploy_enabled ? local.boot_deploy_user_data : null
+
   # Name tag only when var.name is non-empty — the live, hand-made dev
   # instance carries no tags at all, and forcing a Name tag on it would
   # break the zero-diff import bar. Adding one later is a deliberate
@@ -135,7 +140,8 @@ resource "aws_instance" "this" {
     # user_data / AMI drift on an already-provisioned, hand-configured
     # instance is expected (setup-docker.sh and deploy.sh were run manually
     # over SSH, not via user_data) — don't let Terraform propose replacing a
-    # live instance over fields nothing here ever sets.
+    # live instance over fields nothing here ever sets. Boot-unit updates for
+    # brownfield go through SSM (boot_deploy.tf), not user_data churn.
     ignore_changes = [user_data, user_data_base64]
   }
 }

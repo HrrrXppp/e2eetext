@@ -62,6 +62,11 @@ module "ec2" {
   iam_role_name             = var.ec2_iam_role_name
   iam_instance_profile_name = var.ec2_iam_instance_profile_name
 
+  manage_boot_deploy    = var.ec2_manage_boot_deploy
+  boot_deploy_repo_root = var.ec2_boot_deploy_repo_root
+  boot_deploy_image_tag = local.ec2_boot_deploy_image_tag # pinned in ec2_image_tag.tf
+  boot_deploy_start_now = var.ec2_boot_deploy_start_now
+
   tags = var.tags
 }
 

@@ -156,9 +156,9 @@ data "aws_iam_policy_document" "plan" {
       "ssm:ListAssociations",
       "ssm:DescribeAssociationExecutions",
     ]
+    # Document name is "${ec2.name}-boot-deploy" (e.g. dig: dev-ec2-boot-deploy).
     resources = [
-      "arn:aws:ssm:*:${local.account_id}:document/e2eetext-boot-deploy",
-      "arn:aws:ssm:*:${local.account_id}:document/e2eetext-*-boot-deploy",
+      "arn:aws:ssm:*:${local.account_id}:document/*-boot-deploy",
       "arn:aws:ssm:*:${local.account_id}:association/*",
     ]
   }

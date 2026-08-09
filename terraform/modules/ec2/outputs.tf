@@ -17,3 +17,8 @@ output "iam_instance_profile_name" {
   description = "Name of the IAM instance profile attached to the instance, or null when var.create_iam_instance_profile is false."
   value       = var.create_iam_instance_profile ? aws_iam_instance_profile.this[0].name : null
 }
+
+output "boot_deploy_association_id" {
+  description = "SSM association ID for the boot deploy unit, or null when manage_boot_deploy is false."
+  value       = var.manage_boot_deploy ? aws_ssm_association.boot_deploy[0].association_id : null
+}

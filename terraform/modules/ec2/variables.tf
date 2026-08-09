@@ -94,3 +94,38 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "manage_boot_deploy" {
+  description = <<-EOT
+    When true, manage a systemd unit that on every boot runs deploy.sh
+    (ECR login, compose pull if needed, compose up). Applied to the
+    instance via SSM Association (and as user_data on first launch for
+    greenfield). Requires create_iam_instance_profile=true so the instance
+    can pull from ECR and the SSM agent can run the association.
+    envs/dev and envs/prod default this to true.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "boot_deploy_repo_root" {
+  description = "Absolute path to the e2eetext git checkout on the instance (WorkingDirectory for the boot unit)."
+  type        = string
+  default     = "/home/ec2-user/e2eetext"
+}
+
+variable "boot_deploy_image_tag" {
+  description = <<-EOT
+    ECR IMAGE_TAG written to /etc/e2eetext/deploy.env (overrides
+    maintenance/ec2/.env for that key). Required when manage_boot_deploy
+    is true. Dig/prod pin this in envs/*/ec2_image_tag.tf (committed).
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "boot_deploy_start_now" {
+  description = "When manage_boot_deploy is true, also systemctl restart the unit when the SSM association runs (deploy immediately, not only on next boot)."
+  type        = bool
+  default     = true
+}
