@@ -28,6 +28,11 @@ output "app_database_name" {
   value       = local.app_database_name_effective
 }
 
+output "cron_database_name" {
+  description = "Effective cron.database_name written to the parameter group when enable_pg_cron is true (app DB by default)."
+  value       = local.cron_database_name
+}
+
 output "security_group_id" {
   description = "Security group ID created for the instance, or null when pre-existing security_group_ids were passed."
   value       = local.create_security_group ? aws_security_group.this[0].id : null
