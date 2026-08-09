@@ -15,6 +15,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 #### Tooling & deployment
 
+- GitHub Actions ECR IAM: manage the live *inline* policy `github-actions-ecr-rolePolicy` via Terraform (not a managed policy attachment)
 - Terraform `modules/terraform-plan-role` + `envs/shared` wiring: import/manage the CI `terraform-plan-role` inline policy (includes dig/prod EC2 instance-profile and SSM boot-deploy reads)
 
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)

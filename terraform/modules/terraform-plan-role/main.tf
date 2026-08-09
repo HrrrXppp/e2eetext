@@ -94,8 +94,6 @@ data "aws_iam_policy_document" "plan" {
     ]
     resources = [
       "arn:aws:iam::${local.account_id}:role/github-actions-ecr-role",
-      "arn:aws:iam::${local.account_id}:policy/github-actions-ecr-role",
-      "arn:aws:iam::${local.account_id}:policy/github-actions-ecr-push",
       "arn:aws:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com",
       # This role (so shared plan can refresh itself after import).
       "arn:aws:iam::${local.account_id}:role/${var.role_name}",
