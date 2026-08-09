@@ -47,3 +47,21 @@ variable "oidc_thumbprint_list" {
   type        = list(string)
   default     = ["ab9d0263244dd0326eb67015705a667e79cfe998"]
 }
+
+variable "terraform_plan_role_name" {
+  description = "Name of the IAM role terraform.yml assumes for plan (AWS_TERRAFORM_PLAN_ROLE_ARN)."
+  type        = string
+  default     = "terraform-plan-role"
+}
+
+variable "terraform_plan_inline_policy_name" {
+  description = "Inline policy name on the terraform-plan role (live: terraform-plan-rolePolicy)."
+  type        = string
+  default     = "terraform-plan-rolePolicy"
+}
+
+variable "terraform_state_bucket" {
+  description = "S3 bucket for Terraform state; the plan role gets read-only access."
+  type        = string
+  default     = "e2eetext-terraform-state"
+}

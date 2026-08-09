@@ -662,9 +662,14 @@ terraform import module.github_oidc.aws_iam_policy.ecr_push \
 # Attachment of the policy above to the role above
 terraform import module.github_oidc.aws_iam_role_policy_attachment.ecr_push \
   <ROLE_NAME>/arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>
+
+# terraform.yml plan role (inline policy — not a managed policy attachment)
+terraform import module.terraform_plan_role.aws_iam_role.this terraform-plan-role
+terraform import module.terraform_plan_role.aws_iam_role_policy.this \
+  terraform-plan-role:terraform-plan-rolePolicy
 ```
 
-Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing all six resources, `terraform plan` should show **no changes** — that's the acceptance bar, proving the config matches what's already live rather than describing a divergent target state. Only once that's confirmed is `terraform apply` safe to run.
+Replace `<AWS_ACCOUNT_ID>`, `<ROLE_NAME>`, and `<POLICY_NAME>` with the real values (`aws sts get-caller-identity`, `aws iam list-roles` / `list-policies` if the exact names aren't already known). After importing the Phase 1 ECR/OIDC resources, `terraform plan` should show **no changes** for those. Importing `terraform-plan-role` may plan an in-place **inline policy update** (expanded dig/prod EC2 + SSM reads) — review that diff, then `terraform apply` in `envs/shared` with admin credentials (not CI) to publish the policy.
 
 ### One-time import bootstrap (`envs/dev` — Phase 2)
 
@@ -764,7 +769,7 @@ aws rds describe-db-subnet-groups
 
 The live RDS master password is intentionally **not** part of `DEV_TFVARS`/`PROD_TFVARS` (each `rds_password` variable's own description already says never put it in a `.tfvars` file) — it's sourced from its own dedicated `DEV_RDS_PASSWORD` / `PROD_RDS_PASSWORD` secret instead, exported as `TF_VAR_rds_password` only for the `terraform plan` step. This keeps the full tfvars-blob secret shareable/rotatable without also carrying the database password.
 
-CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role needs only reads — this is the full policy it runs with (state reads for every `envs/*` key; ECR/IAM reads scoped to the Phase 1 resources; EC2/ELBv2/ACM describes for Phase 2's instance/ALB and the dev root's live-ALB lookups; RDS describes for Phase 3's instance/parameter/subnet groups):
+CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role is managed in `terraform/modules/terraform-plan-role` (wired from `envs/shared`); this is the policy document that module applies (state reads for every `envs/*` key; ECR/IAM reads for Phase 1 OIDC plus dig/prod EC2 instance profiles; EC2/ELBv2/ACM describes for Phase 2; RDS describes for Phase 3; SSM document/association reads for boot deploy):
 
 ```json
 {
@@ -799,20 +804,29 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
       "Effect": "Allow",
       "Action": [
         "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
+        "iam:GetInstanceProfile", "iam:ListInstanceProfilesForRole",
         "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions",
         "iam:GetOpenIDConnectProvider", "iam:ListOpenIDConnectProviders",
-        "iam:ListRoleTags", "iam:ListPolicyTags"
+        "iam:ListRoleTags", "iam:ListPolicyTags", "iam:ListInstanceProfileTags"
       ],
       "Resource": [
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/<ROLE_NAME>",
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/<POLICY_NAME>",
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/github-actions-ecr-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/github-actions-ecr-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/github-actions-ecr-push",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/terraform-plan-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/e2eetext-dev-ec2-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/e2eetext-prod-ec2-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:instance-profile/e2eetext-dev-ec2-profile",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:instance-profile/e2eetext-prod-ec2-profile",
+        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       ]
     },
     {
       "Sid": "IAMListAccount",
       "Effect": "Allow",
-      "Action": ["iam:ListRoles", "iam:ListPolicies"],
+      "Action": ["iam:ListRoles", "iam:ListPolicies", "iam:ListInstanceProfiles"],
       "Resource": "*"
     },
     {
@@ -833,6 +847,21 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
         "rds:ListTagsForResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "SsmBootDeployRead",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:DescribeDocument", "ssm:DescribeDocumentPermission",
+        "ssm:ListTagsForResource", "ssm:GetDocument",
+        "ssm:DescribeAssociation", "ssm:ListAssociations",
+        "ssm:DescribeAssociationExecutions"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*:<AWS_ACCOUNT_ID>:document/e2eetext-boot-deploy",
+        "arn:aws:ssm:*:<AWS_ACCOUNT_ID>:document/e2eetext-*-boot-deploy",
+        "arn:aws:ssm:*:<AWS_ACCOUNT_ID>:association/*"
+      ]
     }
   ]
 }
