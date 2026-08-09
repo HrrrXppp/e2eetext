@@ -8,23 +8,46 @@ CONFIG_FILE="$ROOT_DIR/maintenance/ec2/config/config.json"
 INSTANCE_CONFIG_FILE="$ROOT_DIR/maintenance/ec2/config/instance.json"
 LEGACY_CONFIG="$ROOT_DIR/server/config.json"
 
+# IaC pin (Terraform SSM). Compose prefers an already-exported shell IMAGE_TAG
+# over --env-file, and `source .env` keeps IMAGE_TAG exported when systemd
+# EnvironmentFile set it — so .env's `latest` can clobber the pin. compose()
+# unsets IMAGE_TAG and loads override last so the pin wins.
+DEPLOY_ENV_OVERRIDE="${E2EETEXT_DEPLOY_ENV:-/etc/e2eetext/deploy.env}"
+
 compose() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  local -a env_files=(--env-file "$ENV_FILE")
+  if [[ -f "$DEPLOY_ENV_OVERRIDE" ]]; then
+    # Later --env-file wins for duplicate keys (Compose v2).
+    env_files+=(--env-file "$DEPLOY_ENV_OVERRIDE")
+  fi
+  # -u IMAGE_TAG: do not let a stale exported shell value override env-files.
+  env -u IMAGE_TAG docker compose "${env_files[@]}" -f "$COMPOSE_FILE" "$@"
 }
 
 require_env() {
   # shellcheck source=/dev/null
   source "$ENV_FILE"
+
+  # Optional IaC / ops override. Applied after .env so overlapping keys win.
+  if [[ -f "$DEPLOY_ENV_OVERRIDE" ]]; then
+    # shellcheck source=/dev/null
+    set -a
+    source "$DEPLOY_ENV_OVERRIDE"
+    set +a
+  fi
+
   local missing=0
   for key in DATABASE_URL AWS_ACCOUNT_ID AWS_REGION IMAGE_TAG; do
     if [[ -z "${!key:-}" ]]; then
-      echo "Missing $key in $ENV_FILE" >&2
+      echo "Missing $key (set in $ENV_FILE or $DEPLOY_ENV_OVERRIDE)" >&2
       missing=1
     fi
   done
   if [[ "$missing" -ne 0 ]]; then
     exit 1
   fi
+
+  echo "Using IMAGE_TAG=$IMAGE_TAG"
 }
 
 preflight() {
@@ -136,4 +159,8 @@ if ! wait_for_server; then
 fi
 
 echo "Deployed. Check:"
-echo "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE ps"
+if [[ -f "$DEPLOY_ENV_OVERRIDE" ]]; then
+  echo "  docker compose --env-file $ENV_FILE --env-file $DEPLOY_ENV_OVERRIDE -f $COMPOSE_FILE ps"
+else
+  echo "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE ps"
+fi

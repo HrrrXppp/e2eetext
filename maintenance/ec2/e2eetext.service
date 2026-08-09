@@ -1,0 +1,20 @@
+[Unit]
+Description=e2eetext: ECR login, pull images if needed, start compose
+Documentation=https://github.com/HrrrXppp/e2eetext
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Overridden by install-boot-service.sh / Terraform (WorkingDirectory + ExecStart).
+WorkingDirectory=/opt/e2eetext
+# Optional IaC pin for IMAGE_TAG (and other non-secret deploy knobs). Sourced
+# after maintenance/ec2/.env by deploy.sh so this file wins for IMAGE_TAG.
+EnvironmentFile=-/etc/e2eetext/deploy.env
+ExecStart=/bin/bash /opt/e2eetext/maintenance/ec2/deploy.sh
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
