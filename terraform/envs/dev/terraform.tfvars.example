@@ -12,7 +12,7 @@
 # `terraform apply` before importing — see README.md's import bootstrap.
 
 # aws_region   = "us-east-2"
-# name_prefix  = "e2eetext-dev"
+# name_prefix  = "dev-ec2"   # default; EC2 Name tag
 
 # Confirmed live 2026-07-26 (already the defaults — override only on drift):
 # ami_id        = "ami-0e5497a77ef21b5ac"
@@ -27,7 +27,11 @@
 # api_path_patterns        = ["/api/*"]
 # create_health_rule       = false
 # ec2_security_group_names = ["launch-wizard-2", "ec2-rds-1"]
-# create_ec2_iam_instance_profile = false
+
+# Boot deploy is on by default (IAM instance profile + SSM unit). IMAGE_TAG
+# is git-pinned per env in ec2_image_tag.tf (not here — *.tfvars is gitignored).
+# ec2_boot_deploy_repo_root = "/home/ubuntu/e2eetext"
+# create_ec2_iam_instance_profile = false  # only to temporarily skip IAM/boot
 
 # REQUIRED before `terraform import` (not for plain plan): the live
 # instance's actual subnet — module.network's subnet order isn't
@@ -90,16 +94,22 @@
 # Never put the real master password here — pass it out-of-band:
 #   TF_VAR_rds_password="$(aws secretsmanager get-secret-value --secret-id <name> --query SecretString --output text)" terraform plan
 #
-# If a parameter group with pg_cron already exists live (e.g. #20's manual
-# steps were followed by hand before this module existed), reference it
-# instead of creating a new one:
-# rds_create_parameter_group = false
-# rds_parameter_group_name   = "<live-parameter-group-name>"
+# pg_cron prep (required for disappearing-messages purge). AWS default
+# parameter groups (e.g. default.postgres18) cannot set these — dig must
+# use a custom group. Family must match engine major (live dig: postgres18).
+# rds_create_parameter_group   = true
+# rds_parameter_group_name     = "e2eetext-dev-rds-pgcron"
+# rds_parameter_group_family   = "postgres18"
+# rds_enable_pg_cron           = true
+# rds_cron_database_name       = ""   # empty → rds_app_database_name (dev_e2eetext)
+# rds_shared_preload_libraries = ["pg_cron"]
+# After apply: reboot the instance (static params) before deploying the app.
 #
-# If the live parameter group already preloads libraries besides pg_cron,
-# list the FULL set here (this module sets shared_preload_libraries
-# verbatim, so a partial list would drop the others on apply):
-# rds_shared_preload_libraries = ["pg_cron", "pg_stat_statements"]
+# Only if a custom pg_cron parameter group already exists and you do not
+# want Terraform to manage its parameters:
+# rds_create_parameter_group = false
+# rds_parameter_group_name   = "<live-custom-parameter-group-name>"
+# rds_enable_pg_cron         = false  # required when create_parameter_group is false
 #
 # Optional storage/monitoring detail, useful for a zero-diff import when
 # the live instance uses any of them (all default to AWS's own "not set"/

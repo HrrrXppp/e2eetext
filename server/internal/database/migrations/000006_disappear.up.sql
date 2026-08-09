@@ -24,9 +24,10 @@ $$;
 COMMENT ON FUNCTION purge_expired_messages() IS
     'Hard-deletes messages past chat TTL (created_at + disappear_after_minutes). Scheduled by pg_cron.';
 
+-- Requires cron.database_name to be this database (local Compose: messenger;
+-- RDS: Terraform modules/rds parameter group + out-of-band reboot).
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- Jobs live in this database (must match Postgres cron.database_name).
 DO $$
 BEGIN
   PERFORM cron.unschedule(j.jobid)

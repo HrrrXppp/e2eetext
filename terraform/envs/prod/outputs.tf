@@ -17,3 +17,8 @@ output "rds_app_database_name" {
   description = "PostgreSQL database name for DATABASE_URL on the prod instance."
   value       = module.rds.app_database_name
 }
+
+output "rds_cron_database_name" {
+  description = "Effective cron.database_name for prod RDS pg_cron (defaults to rds_app_database_name)."
+  value       = module.rds.cron_database_name
+}

@@ -17,3 +17,8 @@ output "rds_app_database_name" {
   description = "PostgreSQL database name for DATABASE_URL on the live-dev instance (dev_e2eetext)."
   value       = module.rds.app_database_name
 }
+
+output "rds_cron_database_name" {
+  description = "Effective cron.database_name for dig RDS pg_cron (defaults to rds_app_database_name)."
+  value       = module.rds.cron_database_name
+}
