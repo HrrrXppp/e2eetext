@@ -32,6 +32,14 @@ RUN groupadd -f docker \
 	&& mkdir -p /workspace \
 	&& chown -R claude:claude /workspace /home/claude
 
+# Pre-create the directory the claude-runner-state volume mounts onto
+# (docker-compose.yml mounts it at /home/claude/.claude) so Docker's
+# volume-init step copies this ownership into the new volume instead of
+# defaulting to root -- Claude Code only creates this directory lazily at
+# runtime, so without this it doesn't exist in any image layer to chown.
+RUN mkdir -p /home/claude/.claude \
+	&& chown -R claude:claude /home/claude/.claude
+
 COPY --chown=claude:claude maintenance/claude-runner/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

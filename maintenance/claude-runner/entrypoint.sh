@@ -4,12 +4,22 @@
 #
 # Any arguments passed to `docker run <image> ...` are exec'd directly
 # instead of starting the loop, so ad hoc commands work for smoke-testing
-# the image (e.g. `docker run --rm <image> claude --version`). The loop
-# below only runs when the container is started with no command, which is
-# how docker-compose.yml runs it.
+# the image without needing any of the runtime env vars below (e.g.
+# `docker run --rm <image> claude --version`). The loop below only runs
+# when the container is started with no command, which is how
+# docker-compose.yml runs it.
+#
+# `docker run <image> interactive` is the one exception: it runs the same
+# setup the loop uses (env var checks, git config, clone/fetch,
+# workspace-trust seeding) and then execs an interactive `claude` session
+# in place of the unattended `claude -p` loop, so a human can drive the
+# ticket-processing prompt -- or anything else -- by hand in the same
+# environment the automated cycles run in. Needs a tty/stdin attached
+# (`docker run -it` or `docker compose run`, both of which allocate one by
+# default).
 set -euo pipefail
 
-if [ "$#" -gt 0 ]; then
+if [ "$#" -gt 0 ] && [ "$1" != "interactive" ]; then
 	exec "$@"
 fi
 
@@ -32,6 +42,32 @@ git config --global credential.helper '!f() { echo "username=x-access-token"; ec
 
 [ -d /workspace/e2eetext/.git ] || git clone "$REPO_URL" /workspace/e2eetext
 cd /workspace/e2eetext
+
+# Claude Code gates a project's committed permissions.allow entries behind a
+# one-time interactive "trust this workspace" dialog, recorded per-path in
+# ~/.claude.json. `claude -p ... --permission-mode dontAsk` runs fully
+# non-interactively, so that dialog is never shown -- pre-accept it here for
+# this exact clone path so the allowlist in .claude/settings.json actually
+# takes effect. Runs once per container start; cheap and idempotent, and
+# independent of the claude-runner-state volume so it doesn't matter whether
+# ~/.claude.json already exists or what else it holds.
+node -e '
+	const fs = require("fs");
+	const path = process.env.HOME + "/.claude.json";
+	const config = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : {};
+	config.projects ||= {};
+	config.projects["/workspace/e2eetext"] ||= {};
+	config.projects["/workspace/e2eetext"].hasTrustDialogAccepted = true;
+	fs.writeFileSync(path, JSON.stringify(config, null, 2));
+'
+
+if [ "$#" -gt 0 ]; then
+	# Only "interactive" reaches here (the passthrough exec above handles
+	# every other case) -- consume it and hand off to an interactive claude
+	# session instead of the loop below.
+	shift
+	exec claude "$@"
+fi
 
 while true; do
 	echo "[$(date -Is)] starting cycle"
