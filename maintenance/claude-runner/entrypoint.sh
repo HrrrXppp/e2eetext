@@ -4,12 +4,22 @@
 #
 # Any arguments passed to `docker run <image> ...` are exec'd directly
 # instead of starting the loop, so ad hoc commands work for smoke-testing
-# the image (e.g. `docker run --rm <image> claude --version`). The loop
-# below only runs when the container is started with no command, which is
-# how docker-compose.yml runs it.
+# the image without needing any of the runtime env vars below (e.g.
+# `docker run --rm <image> claude --version`). The loop below only runs
+# when the container is started with no command, which is how
+# docker-compose.yml runs it.
+#
+# `docker run <image> interactive` is the one exception: it runs the same
+# setup the loop uses (env var checks, git config, clone/fetch,
+# workspace-trust seeding) and then execs an interactive `claude` session
+# in place of the unattended `claude -p` loop, so a human can drive the
+# ticket-processing prompt -- or anything else -- by hand in the same
+# environment the automated cycles run in. Needs a tty/stdin attached
+# (`docker run -it` or `docker compose run`, both of which allocate one by
+# default).
 set -euo pipefail
 
-if [ "$#" -gt 0 ]; then
+if [ "$#" -gt 0 ] && [ "$1" != "interactive" ]; then
 	exec "$@"
 fi
 
@@ -50,6 +60,14 @@ node -e '
 	config.projects["/workspace/e2eetext"].hasTrustDialogAccepted = true;
 	fs.writeFileSync(path, JSON.stringify(config, null, 2));
 '
+
+if [ "$#" -gt 0 ]; then
+	# Only "interactive" reaches here (the passthrough exec above handles
+	# every other case) -- consume it and hand off to an interactive claude
+	# session instead of the loop below.
+	shift
+	exec claude "$@"
+fi
 
 while true; do
 	echo "[$(date -Is)] starting cycle"
