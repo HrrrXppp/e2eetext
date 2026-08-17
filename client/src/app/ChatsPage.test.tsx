@@ -164,6 +164,9 @@ describe("ChatsPage", () => {
     render(<ChatsPage />);
 
     expect(screen.getByText("Sign in to view your chats.")).toBeInTheDocument();
+    expect(
+      screen.getByText(/E2EE Text will be sustained through/),
+    ).toBeInTheDocument();
   });
 
   it("reloads messages when the open chat unread count changes", async () => {
