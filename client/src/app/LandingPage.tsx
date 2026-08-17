@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
 const features = [
@@ -147,13 +148,7 @@ export function LandingPage() {
           </ul>
         </section>
 
-        <footer className="landing__footer">
-          <p className="landing__support">
-            E2EE Text will be sustained through{" "}
-            <strong>advertisement</strong> and <strong>donations</strong>
-            <span className="landing__soon"> — coming soon</span>
-          </p>
-        </footer>
+        <Footer />
       </div>
     </>
   );

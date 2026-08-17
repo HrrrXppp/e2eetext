@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { NewChatDialog } from "@/components/chat/NewChatDialog";
+import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -297,6 +298,7 @@ export function ChatsPage() {
             </div>
           )}
         </main>
+        <Footer />
       </div>
 
       {createOpen && canManageChats && user ? (
