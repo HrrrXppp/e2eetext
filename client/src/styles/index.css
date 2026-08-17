@@ -469,7 +469,8 @@ body.has-dev-instance-banner .site-head {
 }
 
 .chats-page__list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   gap: 0.375rem;
