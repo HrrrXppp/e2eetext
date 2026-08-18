@@ -99,6 +99,7 @@ Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end 
 #### Client
 
 - Client dev proxy now forwards `X-Forwarded-Host`/`X-Forwarded-Proto` on WebSocket upgrades too (not just plain HTTP requests), fixing live `chat.added`/`chat.unread` push under `npm run dev` against a local server
+- `.chats-page__list` no longer spreads chat items apart when the sidebar is taller than the list — it used `display: grid` with no `grid-template-rows`/`align-content`, so the default `align-content: normal` behaved as `stretch` and, combined with `flex: 1`, stretched the implicit row tracks to fill the height; switched to `display: flex; flex-direction: column`, matching the sibling `.chats-page__message-list` rule (#50)
 
 
 
