@@ -13,6 +13,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Added
 
+#### Client
+
+- Shared `Footer` component (site chrome parity with `SiteHeader`) now also renders on the chats page; footer styling moved out of the landing-only `landing__footer` BEM block into a page-agnostic `site-foot` block, with a compact non-scrolling variant for the height-locked chats app shell and the original spacing preserved on the landing page
+
 #### Tooling & deployment
 
 - GitHub Actions ECR IAM: manage the live *inline* policy `github-actions-ecr-rolePolicy` via Terraform (not a managed policy attachment)
