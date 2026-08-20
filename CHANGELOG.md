@@ -23,6 +23,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 - Terraform dig EC2 `name_prefix` defaults to `dev-ec2` (keeps the live Name tag)
 - Terraform RDS pg_cron prep: require a custom parameter group when `enable_pg_cron` is set (not AWS `default.postgres*`) so `shared_preload_libraries` / `cron.database_name` (app DB) can be set; reboot the instance out-of-band after apply before migration `000006`
 
+### Fixed
+
+#### Client
+
+- `.chats-page__list` no longer spreads chat items apart when the sidebar is taller than the list — it used `display: grid` with no `grid-template-rows`/`align-content`, so the default `align-content: normal` behaved as `stretch` and, combined with `flex: 1`, stretched the implicit row tracks to fill the height; switched to `display: flex; flex-direction: column`, matching the sibling `.chats-page__message-list` rule (#50)
+
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)
 
 Pre-MVP alpha. New chats and messages use hybrid ML-KEM-768 + X25519 end-to-end encryption; the server stores only opaque ciphertext and key wraps.
