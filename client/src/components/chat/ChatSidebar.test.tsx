@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
@@ -88,5 +91,25 @@ describe("ChatSidebar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New chat" }));
     expect(onNewChat).toHaveBeenCalled();
+  });
+
+  it("packs .chats-page__list items at the top via flex layout (regression for #50)", () => {
+    // Issue #50: .chats-page__list used display: grid with no grid-template-rows,
+    // so Grid's default align-content (normal, behaves as stretch) spread
+    // leftover vertical space evenly across implicit row tracks, pushing chat
+    // items apart instead of packing them at the top. This guards against
+    // that regression by asserting the rule stays flex + column, matching the
+    // sibling .chats-page__message-list rule.
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+    const match = css.match(/\.chats-page__list\s*\{([^}]*)\}/);
+    expect(match).not.toBeNull();
+    const rule = match![1];
+    expect(rule).toMatch(/display:\s*flex/);
+    expect(rule).toMatch(/flex-direction:\s*column/);
+    expect(rule).not.toMatch(/display:\s*grid/);
   });
 });
