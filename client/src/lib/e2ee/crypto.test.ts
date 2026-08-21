@@ -81,7 +81,7 @@ describe("identity backup export/import", () => {
     const backup = await exportIdentityBackup(identity, "correct horse battery staple");
 
     await expect(importIdentityBackup(backup, "wrong passphrase")).rejects.toThrow(
-      "wrong passphrase or corrupted file",
+      "wrong passphrase or corrupted backup file",
     );
   });
 
@@ -102,6 +102,6 @@ describe("identity backup export/import", () => {
 
     await expect(
       importIdentityBackup(JSON.stringify(envelope), "correct horse battery staple"),
-    ).rejects.toThrow("wrong passphrase or corrupted file");
+    ).rejects.toThrow("wrong passphrase or corrupted backup file");
   });
 });

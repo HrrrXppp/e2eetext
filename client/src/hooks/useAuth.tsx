@@ -48,8 +48,8 @@ type AuthState = {
   // True for the remainder of this session only, starting the moment
   // ensureIdentityKeys generates a brand-new local keypair (new account or
   // new device). Never persisted, so it does not reappear on later sign-ins.
-  identityJustGenerated: boolean;
-  acknowledgeIdentityGenerated: () => void;
+  justCreatedIdentity: boolean;
+  acknowledgeIdentityBackup: () => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [providers, setProviders] = useState<OIDCProvider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [identityJustGenerated, setIdentityJustGenerated] = useState(false);
+  const [justCreatedIdentity, setJustCreatedIdentity] = useState(false);
 
   useEffect(() => {
     // AuthCallback.tsx owns this transient route: it stores the session
@@ -147,8 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // demand.
         try {
           const identityResult = await ensureIdentityKeys(dbUser.id);
-          if (active && identityResult.generated) {
-            setIdentityJustGenerated(true);
+          if (active && identityResult.created) {
+            setJustCreatedIdentity(true);
           }
         } catch {
           // Local generation/persistence failed; chat creation/sending
@@ -210,8 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((current) => (current ? { ...current, name } : null));
   }, []);
 
-  const acknowledgeIdentityGenerated = useCallback(() => {
-    setIdentityJustGenerated(false);
+  const acknowledgeIdentityBackup = useCallback(() => {
+    setJustCreatedIdentity(false);
   }, []);
 
   const value = useMemo(
@@ -221,8 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signOut,
       setDisplayName,
-      identityJustGenerated,
-      acknowledgeIdentityGenerated,
+      justCreatedIdentity,
+      acknowledgeIdentityBackup,
     }),
     [
       user,
@@ -230,8 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signOut,
       setDisplayName,
-      identityJustGenerated,
-      acknowledgeIdentityGenerated,
+      justCreatedIdentity,
+      acknowledgeIdentityBackup,
     ],
   );
 
