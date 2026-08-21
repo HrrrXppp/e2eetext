@@ -55,16 +55,20 @@ export async function saveStoredIdentity(userId: string, identity: StoredIdentit
   localStorage.setItem(identityStorageKey(userId), encrypted);
 }
 
-export async function exportStoredIdentityBackup(userId: string): Promise<string> {
+export async function exportStoredIdentityBackup(userId: string, passphrase: string): Promise<string> {
   const identity = await loadStoredIdentity(userId);
   if (!identity) {
     throw new Error("identity not found");
   }
-  return exportIdentityBackup(identity);
+  return exportIdentityBackup(identity, passphrase);
 }
 
-export async function importStoredIdentityBackup(userId: string, raw: string): Promise<StoredIdentity> {
-  const identity = importIdentityBackup(raw);
+export async function importStoredIdentityBackup(
+  userId: string,
+  raw: string,
+  passphrase: string,
+): Promise<StoredIdentity> {
+  const identity = await importIdentityBackup(raw, passphrase);
   await saveStoredIdentity(userId, identity);
   return identity;
 }
