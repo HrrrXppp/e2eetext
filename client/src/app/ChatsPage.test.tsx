@@ -80,8 +80,8 @@ describe("ChatsPage", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
     vi.mocked(fetchChats).mockResolvedValue([sampleChat]);
     vi.mocked(fetchMessages).mockResolvedValue([sampleMessage]);
@@ -109,8 +109,8 @@ describe("ChatsPage", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
     vi.mocked(fetchChats).mockResolvedValue([sampleChat]);
     vi.mocked(fetchMessages).mockResolvedValue([]);
@@ -143,8 +143,8 @@ describe("ChatsPage", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
     vi.mocked(fetchChats).mockResolvedValue([]);
 
@@ -165,8 +165,8 @@ describe("ChatsPage", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<ChatsPage />);
@@ -184,8 +184,8 @@ describe("ChatsPage", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
     vi.mocked(fetchChats).mockResolvedValue([
       { ...sampleChat, unreadMessageCount: 0 },

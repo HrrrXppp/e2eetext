@@ -11,7 +11,7 @@ type PromptMode = "prompt" | "backup" | "restore";
 
 // One-time prompt shown right after a brand-new local identity keypair is
 // generated (new account, or a new device with no local identity yet --
-// see identityJustGenerated in useAuth.tsx). It is not gated on a
+// see justCreatedIdentity in useAuth.tsx). It is not gated on a
 // persisted "seen" flag: it fires once per generation event and never
 // reappears on later sign-ins, by design (issue #52 review feedback).
 export function IdentityBackupPrompt({ userId, onDismiss }: IdentityBackupPromptProps) {

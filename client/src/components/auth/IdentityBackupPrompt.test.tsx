@@ -11,6 +11,7 @@ const uploadIdentityKey = vi.fn();
 vi.mock("@/lib/e2ee/storage", () => ({
   exportStoredIdentityBackup: (...args: unknown[]) => exportStoredIdentityBackup(...args),
   fetchIdentityPublicKey: (...args: unknown[]) => fetchIdentityPublicKey(...args),
+  loadStoredIdentity: vi.fn().mockResolvedValue(null),
   saveStoredIdentity: (...args: unknown[]) => saveStoredIdentity(...args),
   uploadIdentityKey: (...args: unknown[]) => uploadIdentityKey(...args),
 }));

@@ -12,6 +12,7 @@ vi.mock("@/hooks/useAuth", () => ({
 vi.mock("@/lib/e2ee/storage", () => ({
   exportStoredIdentityBackup: vi.fn(),
   fetchIdentityPublicKey: vi.fn(),
+  loadStoredIdentity: vi.fn().mockResolvedValue(null),
   saveStoredIdentity: vi.fn(),
   uploadIdentityKey: vi.fn(),
 }));
@@ -42,8 +43,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -64,8 +65,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -86,8 +87,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -113,8 +114,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -137,8 +138,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -184,8 +185,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -202,8 +203,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -214,15 +215,15 @@ describe("SiteHeader OIDC providers", () => {
   });
 
   it("shows the one-time identity backup prompt right after a new key is generated", () => {
-    const acknowledgeIdentityGenerated = vi.fn();
+    const acknowledgeIdentityBackup = vi.fn();
     vi.mocked(useAuth).mockReturnValue({
       user: SIGNED_IN_USER,
       providers: [],
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: true,
-      acknowledgeIdentityGenerated,
+      justCreatedIdentity: true,
+      acknowledgeIdentityBackup,
     });
 
     render(<SiteHeader />);
@@ -230,7 +231,7 @@ describe("SiteHeader OIDC providers", () => {
     expect(screen.getByText("Save a backup of your private key")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    expect(acknowledgeIdentityGenerated).toHaveBeenCalled();
+    expect(acknowledgeIdentityBackup).toHaveBeenCalled();
   });
 
   it("does not show the identity backup prompt once acknowledged", () => {
@@ -240,8 +241,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
-      identityJustGenerated: false,
-      acknowledgeIdentityGenerated: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);

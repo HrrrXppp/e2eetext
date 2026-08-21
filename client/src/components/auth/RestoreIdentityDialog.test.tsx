@@ -4,6 +4,7 @@ import { RestoreIdentityDialog } from "@/components/auth/RestoreIdentityDialog";
 
 const importIdentityBackup = vi.fn();
 const fetchIdentityPublicKey = vi.fn();
+const loadStoredIdentity = vi.fn();
 const saveStoredIdentity = vi.fn();
 const uploadIdentityKey = vi.fn();
 
@@ -13,6 +14,7 @@ vi.mock("@/lib/e2ee/crypto", () => ({
 
 vi.mock("@/lib/e2ee/storage", () => ({
   fetchIdentityPublicKey: (...args: unknown[]) => fetchIdentityPublicKey(...args),
+  loadStoredIdentity: (...args: unknown[]) => loadStoredIdentity(...args),
   saveStoredIdentity: (...args: unknown[]) => saveStoredIdentity(...args),
   uploadIdentityKey: (...args: unknown[]) => uploadIdentityKey(...args),
 }));
@@ -26,8 +28,10 @@ describe("RestoreIdentityDialog", () => {
   beforeEach(() => {
     importIdentityBackup.mockReset();
     fetchIdentityPublicKey.mockReset();
+    loadStoredIdentity.mockReset();
     saveStoredIdentity.mockReset();
     uploadIdentityKey.mockReset();
+    loadStoredIdentity.mockResolvedValue(null);
     saveStoredIdentity.mockResolvedValue(undefined);
     uploadIdentityKey.mockResolvedValue(undefined);
   });
@@ -85,6 +89,21 @@ describe("RestoreIdentityDialog", () => {
     expect(screen.queryByText(/already has a different key/)).not.toBeInTheDocument();
   });
 
+  it("requires explicit confirmation before overwriting a different local key even with no server key on file", async () => {
+    importIdentityBackup.mockResolvedValue({ publicKey: "pk-imported", secretKey: "sk-imported" });
+    fetchIdentityPublicKey.mockRejectedValue(new Error("identity key not found"));
+    loadStoredIdentity.mockResolvedValue({ publicKey: "pk-local", secretKey: "sk-local" });
+
+    render(<RestoreIdentityDialog userId="user-1" onClose={vi.fn()} />);
+
+    selectFile();
+    fireEvent.change(screen.getByLabelText("Backup passphrase"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(await screen.findByText(/already has a different key/)).toBeInTheDocument();
+    expect(saveStoredIdentity).not.toHaveBeenCalled();
+  });
+
   it("requires explicit confirmation before overwriting a different server key", async () => {
     importIdentityBackup.mockResolvedValue({ publicKey: "pk-imported", secretKey: "sk-imported" });
     fetchIdentityPublicKey.mockResolvedValue({
@@ -135,7 +154,7 @@ describe("RestoreIdentityDialog", () => {
   });
 
   it("surfaces the generic error message on a wrong passphrase", async () => {
-    importIdentityBackup.mockRejectedValue(new Error("wrong passphrase or corrupted file"));
+    importIdentityBackup.mockRejectedValue(new Error("wrong passphrase or corrupted backup file"));
 
     render(<RestoreIdentityDialog userId="user-1" onClose={vi.fn()} />);
 
@@ -143,7 +162,7 @@ describe("RestoreIdentityDialog", () => {
     fireEvent.change(screen.getByLabelText("Backup passphrase"), { target: { value: "wrong" } });
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("wrong passphrase or corrupted file");
+    expect(await screen.findByRole("alert")).toHaveTextContent("wrong passphrase or corrupted backup file");
     expect(saveStoredIdentity).not.toHaveBeenCalled();
   });
 
