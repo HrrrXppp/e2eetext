@@ -586,6 +586,25 @@ body.has-dev-instance-banner .site-head {
   font-size: 0.875rem;
 }
 
+.backup-dialog__strength {
+  margin: -0.5rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.backup-dialog__strength--weak {
+  color: #f0a8a8;
+}
+
+.backup-dialog__strength--fair {
+  color: #f2d27a;
+}
+
+.backup-dialog__strength--strong {
+  color: var(--accent-bright);
+}
+
 .new-chat-dialog__submit {
   width: 100%;
   padding: 0.75rem 1rem;
