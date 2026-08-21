@@ -68,7 +68,7 @@ describe("useAuth", () => {
     });
     ensureIdentityKeys.mockResolvedValue({
       identity: { publicKey: "pk", secretKey: "sk" },
-      generated: false,
+      created: false,
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -83,7 +83,7 @@ describe("useAuth", () => {
       provider: "google",
       oidcProviderId: "provider-1",
     });
-    expect(result.current.identityJustGenerated).toBe(false);
+    expect(result.current.justCreatedIdentity).toBe(false);
   });
 
   it("resolves the provider from the stored auth provider slug, not a guess from the issuer", async () => {
@@ -114,7 +114,7 @@ describe("useAuth", () => {
     });
     ensureIdentityKeys.mockResolvedValue({
       identity: { publicKey: "pk", secretKey: "sk" },
-      generated: false,
+      created: false,
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -164,7 +164,7 @@ describe("useAuth", () => {
     expect(localStorage.getItem("messenger_id_token")).toBeNull();
   });
 
-  it("flags identityJustGenerated only when a brand-new keypair was generated, and it clears on acknowledge", async () => {
+  it("flags justCreatedIdentity only when a brand-new keypair was generated, and it clears on acknowledge", async () => {
     const idToken = makeToken({
       sub: "google-subject-2",
       iss: "https://accounts.google.com",
@@ -191,7 +191,7 @@ describe("useAuth", () => {
     });
     ensureIdentityKeys.mockResolvedValue({
       identity: { publicKey: "pk", secretKey: "sk" },
-      generated: true,
+      created: true,
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -199,11 +199,11 @@ describe("useAuth", () => {
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
-    expect(result.current.identityJustGenerated).toBe(true);
+    expect(result.current.justCreatedIdentity).toBe(true);
 
-    result.current.acknowledgeIdentityGenerated();
+    result.current.acknowledgeIdentityBackup();
     await waitFor(() => {
-      expect(result.current.identityJustGenerated).toBe(false);
+      expect(result.current.justCreatedIdentity).toBe(false);
     });
   });
 });

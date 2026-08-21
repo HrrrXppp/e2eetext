@@ -24,15 +24,15 @@ import type { Message } from "@/lib/messages";
 
 export type EnsureIdentityKeysResult = {
   identity: StoredIdentity;
-  generated: boolean;
+  created: boolean;
 };
 
 export async function ensureIdentityKeys(userId: string): Promise<EnsureIdentityKeysResult> {
   let identity = await loadStoredIdentity(userId);
-  let generated = false;
+  let created = false;
   if (!identity) {
     identity = generateIdentityKeyPair();
-    generated = true;
+    created = true;
     await saveStoredIdentity(userId, identity);
   }
 
@@ -48,7 +48,7 @@ export async function ensureIdentityKeys(userId: string): Promise<EnsureIdentity
   uploadIdentityKey(userId, identity).catch((error) => {
     console.error("uploadIdentityKey failed", error);
   });
-  return { identity, generated };
+  return { identity, created };
 }
 
 export async function prepareE2EEChatCreation(input: {

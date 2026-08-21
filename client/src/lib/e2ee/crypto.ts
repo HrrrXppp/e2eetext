@@ -202,7 +202,7 @@ const IDENTITY_BACKUP_SCRYPT_N = 2 ** 17;
 const IDENTITY_BACKUP_SCRYPT_R = 8;
 const IDENTITY_BACKUP_SCRYPT_P = 1;
 const IDENTITY_BACKUP_DK_LEN = 32;
-const IDENTITY_BACKUP_GENERIC_ERROR = "wrong passphrase or corrupted file";
+const IDENTITY_BACKUP_GENERIC_ERROR = "wrong passphrase or corrupted backup file";
 const IDENTITY_BACKUP_LEGACY_ERROR = "unsupported or legacy backup format";
 
 async function deriveIdentityBackupKey(

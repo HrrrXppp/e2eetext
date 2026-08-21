@@ -1,6 +1,11 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { importIdentityBackup } from "@/lib/e2ee/crypto";
-import { fetchIdentityPublicKey, saveStoredIdentity, uploadIdentityKey } from "@/lib/e2ee/storage";
+import {
+  fetchIdentityPublicKey,
+  loadStoredIdentity,
+  saveStoredIdentity,
+  uploadIdentityKey,
+} from "@/lib/e2ee/storage";
 import type { StoredIdentity } from "@/lib/e2ee/types";
 
 type RestoreIdentityDialogProps = {
@@ -76,17 +81,23 @@ export function RestoreIdentityDialog({ userId, onClose }: RestoreIdentityDialog
       const identity = await importIdentityBackup(raw, passphrase);
 
       // Multi-device / re-import collision check: this device (or account)
-      // may already have a different identity uploaded. Overwriting it
-      // silently would invalidate existing chat-key wraps other
-      // participants hold for the current key, so confirm explicitly first.
+      // may already have a different identity in local storage and/or
+      // uploaded to the server. Overwriting either silently would
+      // invalidate existing chat-key wraps other participants hold for the
+      // current key, so confirm explicitly first.
+      const currentLocalIdentity = await loadStoredIdentity(userId);
       let serverKey: string | null = null;
       try {
         serverKey = (await fetchIdentityPublicKey(userId)).publicKey;
       } catch {
+        // No key uploaded yet (e.g. 404) is not a conflict.
         serverKey = null;
       }
 
-      if (serverKey && serverKey !== identity.publicKey) {
+      const localConflict = currentLocalIdentity !== null && currentLocalIdentity.publicKey !== identity.publicKey;
+      const serverConflict = serverKey !== null && serverKey !== identity.publicKey;
+
+      if (localConflict || serverConflict) {
         setPendingIdentity(identity);
         return;
       }

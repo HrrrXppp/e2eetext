@@ -15,8 +15,8 @@ export function SiteHeader() {
     loading,
     signOut,
     setDisplayName,
-    identityJustGenerated,
-    acknowledgeIdentityGenerated,
+    justCreatedIdentity,
+    acknowledgeIdentityBackup,
   } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
@@ -136,8 +136,8 @@ export function SiteHeader() {
         <RestoreIdentityDialog userId={user.id} onClose={() => setRestoreOpen(false)} />
       ) : null}
 
-      {identityJustGenerated && user && !backupOpen && !restoreOpen ? (
-        <IdentityBackupPrompt userId={user.id} onDismiss={acknowledgeIdentityGenerated} />
+      {justCreatedIdentity && user && !backupOpen && !restoreOpen ? (
+        <IdentityBackupPrompt userId={user.id} onDismiss={acknowledgeIdentityBackup} />
       ) : null}
     </>
   );
