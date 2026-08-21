@@ -4,6 +4,24 @@ import { expect, test, type Page } from "@playwright/test";
 
 const execFileAsync = promisify(execFile);
 
+// The client shows a one-time "back up your private key" popup the first
+// time a fresh identity keypair is generated (see IdentityBackupPrompt.tsx).
+// Its backdrop is a full-viewport, click-intercepting overlay, so any test
+// that continues interacting with the page after a fresh sign-in must
+// dismiss it first if it appears. Not every sign-in path necessarily
+// triggers fresh identity generation, so this is a short, best-effort wait
+// rather than a hard assertion that it always shows up.
+async function dismissIdentityBackupPromptIfPresent(page: Page): Promise<void> {
+  const skipButton = page.getByRole("button", { name: "Skip for now" });
+  try {
+    await skipButton.waitFor({ state: "visible", timeout: 3_000 });
+  } catch {
+    return;
+  }
+  await skipButton.click();
+  await expect(skipButton).toBeHidden();
+}
+
 // Queries the most recently created message's raw `data` column directly
 // from Postgres — the same database global-setup.ts pointed the whole
 // stack at (E2E_DATABASE_URL) — so we assert on what the server actually
@@ -42,6 +60,7 @@ async function signIn(page: Page, displayName: string): Promise<void> {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Sign in with OIDC" }).click();
   await page.waitForURL("**/chats");
+  await dismissIdentityBackupPromptIfPresent(page);
 
   await page.getByTitle("Edit display name").click();
   await page.getByLabel("Display name").fill(displayName);
