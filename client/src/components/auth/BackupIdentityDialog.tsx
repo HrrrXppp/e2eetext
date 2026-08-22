@@ -11,8 +11,8 @@ type PassphraseStrength = {
   className: string;
 };
 
-// Visual-only signal, never blocking -- the export passphrase has no minimum
-// length or complexity requirement by design (issue #52 review feedback).
+// Visual-only signal, never blocking -- beyond requiring a non-empty passphrase, the export
+// passphrase has no minimum length or complexity requirement, by design (issue #52 review feedback).
 function passphraseStrength(passphrase: string): PassphraseStrength {
   let score = 0;
   if (passphrase.length >= 8) score += 1;
@@ -163,8 +163,9 @@ export function BackupIdentityDialog({ userId, onClose }: BackupIdentityDialogPr
               />
             </label>
             <p className="new-chat-dialog__hint">
-              There is no minimum length requirement -- it is your choice. A short or common passphrase
-              is the only thing protecting this file if it leaks, so choose carefully.
+              Beyond not being blank, there is no minimum length or complexity requirement -- it is
+              your choice. A short or common passphrase is the only thing protecting this file if it
+              leaks, so choose carefully.
             </p>
 
             {error ? (
