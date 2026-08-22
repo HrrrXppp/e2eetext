@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { dismissIdentityBackupPromptIfPresent } from "./identity-backup-prompt";
 
 // Signs in through the real OAuth authorization-code flow against the
 // mock-Google-shaped provider (see e2e/global-setup.ts's "GoogleE2E" row and
@@ -9,6 +10,7 @@ async function signInWithGoogleE2E(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Sign in with GoogleE2E", exact: true }).click();
   await page.waitForURL("**/chats");
+  await dismissIdentityBackupPromptIfPresent(page);
 }
 
 test.describe("Google-like sign-in (GET redirect + static client secret + ID-token name claim)", () => {

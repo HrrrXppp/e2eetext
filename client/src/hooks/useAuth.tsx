@@ -45,6 +45,11 @@ type AuthState = {
   loading: boolean;
   signOut: () => void;
   setDisplayName: (name?: string) => void;
+  // True for the remainder of this session only, starting the moment
+  // ensureIdentityKeys generates a brand-new local keypair (new account or
+  // new device). Never persisted, so it does not reappear on later sign-ins.
+  justCreatedIdentity: boolean;
+  acknowledgeIdentityBackup: () => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -53,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [providers, setProviders] = useState<OIDCProvider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [justCreatedIdentity, setJustCreatedIdentity] = useState(false);
 
   useEffect(() => {
     // AuthCallback.tsx owns this transient route: it stores the session
@@ -140,7 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // to setUser below; chat creation/sending retries key generation on
         // demand.
         try {
-          await ensureIdentityKeys(dbUser.id);
+          const identityResult = await ensureIdentityKeys(dbUser.id);
+          if (active && identityResult.created) {
+            setJustCreatedIdentity(true);
+          }
         } catch {
           // Local generation/persistence failed; chat creation/sending
           // retries key generation on demand, so sign-in can still proceed.
@@ -201,9 +210,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((current) => (current ? { ...current, name } : null));
   }, []);
 
+  const acknowledgeIdentityBackup = useCallback(() => {
+    setJustCreatedIdentity(false);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, providers, loading, signOut, setDisplayName }),
-    [user, providers, loading, signOut, setDisplayName],
+    () => ({
+      user,
+      providers,
+      loading,
+      signOut,
+      setDisplayName,
+      justCreatedIdentity,
+      acknowledgeIdentityBackup,
+    }),
+    [
+      user,
+      providers,
+      loading,
+      signOut,
+      setDisplayName,
+      justCreatedIdentity,
+      acknowledgeIdentityBackup,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

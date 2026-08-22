@@ -1,14 +1,27 @@
 import { useState } from "react";
+import { BackupIdentityDialog } from "@/components/auth/BackupIdentityDialog";
 import { EditNameDialog } from "@/components/auth/EditNameDialog";
+import { IdentityBackupPrompt } from "@/components/auth/IdentityBackupPrompt";
+import { RestoreIdentityDialog } from "@/components/auth/RestoreIdentityDialog";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { appVersion } from "@/lib/version";
 import { userDisplayName } from "@/lib/users";
 
 export function SiteHeader() {
-  const { user, providers, loading, signOut, setDisplayName } = useAuth();
+  const {
+    user,
+    providers,
+    loading,
+    signOut,
+    setDisplayName,
+    justCreatedIdentity,
+    acknowledgeIdentityBackup,
+  } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
   const [skipProfile, setSkipProfile] = useState(false);
   const onChatsPage =
     window.location.pathname === "/chats" || window.location.pathname.startsWith("/chats/");
@@ -51,6 +64,22 @@ export function SiteHeader() {
                   {userDisplayName(user.name)}
                 </button>
               </div>
+              <button
+                type="button"
+                className="site-head__sign-in"
+                onClick={() => setBackupOpen(true)}
+                title="Download an encrypted backup of your private key"
+              >
+                Back up key
+              </button>
+              <button
+                type="button"
+                className="site-head__sign-in"
+                onClick={() => setRestoreOpen(true)}
+                title="Restore your private key from a backup file"
+              >
+                Restore key
+              </button>
               <a
                 className={`site-head__sign-in site-head__chats${onChatsPage ? " site-head__chats--active" : ""}`}
                 href="/chats"
@@ -97,6 +126,18 @@ export function SiteHeader() {
             setEditNameOpen(false);
           }}
         />
+      ) : null}
+
+      {backupOpen && user ? (
+        <BackupIdentityDialog userId={user.id} onClose={() => setBackupOpen(false)} />
+      ) : null}
+
+      {restoreOpen && user ? (
+        <RestoreIdentityDialog userId={user.id} onClose={() => setRestoreOpen(false)} />
+      ) : null}
+
+      {justCreatedIdentity && user && !backupOpen && !restoreOpen ? (
+        <IdentityBackupPrompt userId={user.id} onDismiss={acknowledgeIdentityBackup} />
       ) : null}
     </>
   );
