@@ -69,6 +69,8 @@ if [ "$#" -gt 0 ]; then
 	exec claude "$@"
 fi
 
+git checkout .
+
 while true; do
 	echo "[$(date -Is)] starting cycle"
 	git fetch origin
