@@ -8,6 +8,18 @@ vi.mock("@/lib/users", () => ({
   updateUserName: (...args: unknown[]) => updateUserName(...args),
 }));
 
+vi.mock("@/lib/e2ee/storage", () => ({
+  exportStoredIdentityBackup: vi.fn(),
+  fetchIdentityPublicKey: vi.fn(),
+  loadStoredIdentity: vi.fn().mockResolvedValue(null),
+  saveStoredIdentity: vi.fn(),
+  uploadIdentityKey: vi.fn(),
+}));
+
+vi.mock("@/lib/e2ee/crypto", () => ({
+  importIdentityBackup: vi.fn(),
+}));
+
 describe("EditNameDialog", () => {
   it("saves trimmed name", async () => {
     updateUserName.mockResolvedValue({
@@ -59,5 +71,25 @@ describe("EditNameDialog", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("opens the backup dialog from the Back up key button", () => {
+    render(
+      <EditNameDialog userId="user-1" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back up key" }));
+
+    expect(screen.getByText("Back up your private key")).toBeInTheDocument();
+  });
+
+  it("opens the restore dialog from the Restore key button", () => {
+    render(
+      <EditNameDialog userId="user-1" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore key" }));
+
+    expect(screen.getByText("Restore your private key")).toBeInTheDocument();
   });
 });
