@@ -178,42 +178,6 @@ describe("SiteHeader OIDC providers", () => {
     expect(nameMatch![1]).toMatch(/text-overflow:\s*ellipsis/);
   });
 
-  it("opens the backup dialog from the Back up key button", () => {
-    vi.mocked(useAuth).mockReturnValue({
-      user: SIGNED_IN_USER,
-      providers: [],
-      loading: false,
-      signOut: vi.fn(),
-      setDisplayName: vi.fn(),
-      justCreatedIdentity: false,
-      acknowledgeIdentityBackup: vi.fn(),
-    });
-
-    render(<SiteHeader />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Back up key" }));
-
-    expect(screen.getByText("Back up your private key")).toBeInTheDocument();
-  });
-
-  it("opens the restore dialog from the Restore key button", () => {
-    vi.mocked(useAuth).mockReturnValue({
-      user: SIGNED_IN_USER,
-      providers: [],
-      loading: false,
-      signOut: vi.fn(),
-      setDisplayName: vi.fn(),
-      justCreatedIdentity: false,
-      acknowledgeIdentityBackup: vi.fn(),
-    });
-
-    render(<SiteHeader />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Restore key" }));
-
-    expect(screen.getByText("Restore your private key")).toBeInTheDocument();
-  });
-
   it("shows the one-time identity backup prompt right after a new key is generated", () => {
     const acknowledgeIdentityBackup = vi.fn();
     vi.mocked(useAuth).mockReturnValue({

@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { BackupIdentityDialog } from "@/components/auth/BackupIdentityDialog";
+import { RestoreIdentityDialog } from "@/components/auth/RestoreIdentityDialog";
 import { updateUserName } from "@/lib/users";
 
 type EditNameDialogProps = {
@@ -14,6 +16,8 @@ export function EditNameDialog({ userId, currentName, onClose, onSaved }: EditNa
   const [name, setName] = useState(currentName ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -43,6 +47,14 @@ export function EditNameDialog({ userId, currentName, onClose, onSaved }: EditNa
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (backupOpen) {
+    return <BackupIdentityDialog userId={userId} onClose={() => setBackupOpen(false)} />;
+  }
+
+  if (restoreOpen) {
+    return <RestoreIdentityDialog userId={userId} onClose={() => setRestoreOpen(false)} />;
   }
 
   return (
@@ -93,6 +105,23 @@ export function EditNameDialog({ userId, currentName, onClose, onSaved }: EditNa
             {submitting ? "Saving..." : "Save name"}
           </button>
         </form>
+
+        <button
+          type="button"
+          className="new-chat-dialog__back"
+          onClick={() => setBackupOpen(true)}
+          title="Download an encrypted backup of your private key"
+        >
+          Back up key
+        </button>
+        <button
+          type="button"
+          className="new-chat-dialog__back"
+          onClick={() => setRestoreOpen(true)}
+          title="Restore your private key from a backup file"
+        >
+          Restore key
+        </button>
       </div>
     </div>
   );
