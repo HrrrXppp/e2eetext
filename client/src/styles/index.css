@@ -706,6 +706,23 @@ body.has-dev-instance-banner .site-head {
   color: var(--text-soft);
 }
 
+.edit-name-dialog__key-actions {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.edit-name-dialog__key-label {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.edit-name-dialog__key-buttons {
+  display: flex;
+  gap: 1.25rem;
+}
+
 .new-chat-dialog__status {
   margin: 0;
   color: var(--muted);
