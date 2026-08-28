@@ -71,14 +71,14 @@ export function EditNameDialog({ userId, currentName, onClose, onSaved }: EditNa
         <button
           type="button"
           className="sign-in-dialog__close"
-          aria-label="Close edit name dialog"
+          aria-label="Close user settings dialog"
           onClick={onClose}
         >
           ×
         </button>
 
         <h2 id={titleId} className="sign-in-dialog__title">
-          Edit name
+          User Settings
         </h2>
         <p className="sign-in-dialog__lead">Choose how your name appears in the app.</p>
 
@@ -106,22 +106,27 @@ export function EditNameDialog({ userId, currentName, onClose, onSaved }: EditNa
           </button>
         </form>
 
-        <button
-          type="button"
-          className="new-chat-dialog__back"
-          onClick={() => setBackupOpen(true)}
-          title="Download an encrypted backup of your private key"
-        >
-          Back up key
-        </button>
-        <button
-          type="button"
-          className="new-chat-dialog__back"
-          onClick={() => setRestoreOpen(true)}
-          title="Restore your private key from a backup file"
-        >
-          Restore key
-        </button>
+        <div className="edit-name-dialog__key-actions">
+          <p className="edit-name-dialog__key-label">Private key</p>
+          <div className="edit-name-dialog__key-buttons">
+            <button
+              type="button"
+              className="new-chat-dialog__back"
+              onClick={() => setBackupOpen(true)}
+              title="Download an encrypted backup of your private key"
+            >
+              Back up key
+            </button>
+            <button
+              type="button"
+              className="new-chat-dialog__back"
+              onClick={() => setRestoreOpen(true)}
+              title="Restore your private key from a backup file"
+            >
+              Restore key
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
