@@ -112,4 +112,28 @@ describe("ChatSidebar", () => {
     expect(rule).toMatch(/flex-direction:\s*column/);
     expect(rule).not.toMatch(/display:\s*grid/);
   });
+
+  it("stacks the chat layout on narrow viewports instead of always using two columns (regression for #58)", () => {
+    // Issue #58: .chats-page__layout was unconditionally display: flex (row
+    // direction), so the sidebar (min-width 14rem) and message panel were
+    // always squeezed side by side, even on phone-width viewports. This
+    // guards against that regression by asserting the base rule stacks the
+    // panes in a column and only switches to a row layout inside a
+    // min-width media query (desktop and up).
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const baseMatch = css.match(/\.chats-page__layout\s*\{([^}]*)\}/);
+    expect(baseMatch).not.toBeNull();
+    expect(baseMatch![1]).toMatch(/flex-direction:\s*column/);
+
+    const mediaBlockMatch = css.match(
+      /@media \(min-width: 640px\) \{\s*\.chats-page__layout \{([^}]*)\}/,
+    );
+    expect(mediaBlockMatch).not.toBeNull();
+    expect(mediaBlockMatch![1]).toMatch(/flex-direction:\s*row/);
+  });
 });
