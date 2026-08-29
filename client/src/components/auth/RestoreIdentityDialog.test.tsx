@@ -166,6 +166,19 @@ describe("RestoreIdentityDialog", () => {
     expect(saveStoredIdentity).not.toHaveBeenCalled();
   });
 
+  it("surfaces a specific error when the backup belongs to a different account", async () => {
+    importIdentityBackup.mockRejectedValue(new Error("this backup belongs to a different account"));
+
+    render(<RestoreIdentityDialog userId="user-1" onClose={vi.fn()} />);
+
+    selectFile();
+    fireEvent.change(screen.getByLabelText("Backup passphrase"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("this backup belongs to a different account");
+    expect(saveStoredIdentity).not.toHaveBeenCalled();
+  });
+
   it("closes on escape", () => {
     const onClose = vi.fn();
     render(<RestoreIdentityDialog userId="user-1" onClose={onClose} />);

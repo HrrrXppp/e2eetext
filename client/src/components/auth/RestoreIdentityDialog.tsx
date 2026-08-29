@@ -78,7 +78,7 @@ export function RestoreIdentityDialog({ userId, onClose }: RestoreIdentityDialog
     setSubmitting(true);
     try {
       const raw = await readFileAsText(file);
-      const identity = await importIdentityBackup(raw, passphrase);
+      const identity = await importIdentityBackup(raw, passphrase, userId);
 
       // Multi-device / re-import collision check: this device (or account)
       // may already have a different identity in local storage and/or
