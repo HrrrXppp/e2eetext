@@ -60,7 +60,7 @@ export async function exportStoredIdentityBackup(userId: string, passphrase: str
   if (!identity) {
     throw new Error("identity not found");
   }
-  return exportIdentityBackup(identity, passphrase);
+  return exportIdentityBackup(identity, passphrase, userId);
 }
 
 export async function importStoredIdentityBackup(
@@ -68,7 +68,7 @@ export async function importStoredIdentityBackup(
   raw: string,
   passphrase: string,
 ): Promise<StoredIdentity> {
-  const identity = await importIdentityBackup(raw, passphrase);
+  const identity = await importIdentityBackup(raw, passphrase, userId);
   await saveStoredIdentity(userId, identity);
   return identity;
 }

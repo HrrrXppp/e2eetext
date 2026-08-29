@@ -204,6 +204,7 @@ const IDENTITY_BACKUP_SCRYPT_P = 1;
 const IDENTITY_BACKUP_DK_LEN = 32;
 const IDENTITY_BACKUP_GENERIC_ERROR = "wrong passphrase or corrupted backup file";
 const IDENTITY_BACKUP_LEGACY_ERROR = "unsupported or legacy backup format";
+const IDENTITY_BACKUP_WRONG_ACCOUNT_ERROR = "this backup belongs to a different account";
 
 async function deriveIdentityBackupKey(
   passphrase: string,
@@ -223,7 +224,11 @@ async function deriveIdentityBackupKey(
 // nonce, no format-version field by design). The passphrase is never
 // persisted; only the derived key lives in memory for the duration of this
 // call.
-export async function exportIdentityBackup(identity: StoredIdentity, passphrase: string): Promise<string> {
+export async function exportIdentityBackup(
+  identity: StoredIdentity,
+  passphrase: string,
+  userId: string,
+): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const kdfParams: IdentityBackupKdfParams = {
     n: IDENTITY_BACKUP_SCRYPT_N,
@@ -233,7 +238,7 @@ export async function exportIdentityBackup(identity: StoredIdentity, passphrase:
   const derivedKey = await deriveIdentityBackupKey(passphrase, salt, kdfParams);
   const aesKey = await importAesKey(derivedKey);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const plaintext = utf8Bytes(JSON.stringify(identity));
+  const plaintext = utf8Bytes(JSON.stringify({ ...identity, userId }));
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce.buffer as ArrayBuffer },
     aesKey,
@@ -285,26 +290,34 @@ function parseIdentityBackupEnvelope(raw: string): IdentityBackupEnvelope {
 // Wrong passphrase and corrupted ciphertext both fail at the AES-GCM auth
 // tag check, and both surface the same generic error below — this is
 // intentional: a passphrase-specific error message would be an oracle.
-export async function importIdentityBackup(raw: string, passphrase: string): Promise<StoredIdentity> {
+export async function importIdentityBackup(
+  raw: string,
+  passphrase: string,
+  expectedUserId: string,
+): Promise<StoredIdentity> {
   const envelope = parseIdentityBackupEnvelope(raw);
   const salt = base64UrlToBytes(envelope.kdf.salt);
   const derivedKey = await deriveIdentityBackupKey(passphrase, salt, envelope.kdf);
   const aesKey = await importAesKey(derivedKey);
 
-  let identity: Partial<StoredIdentity>;
+  let identity: Partial<StoredIdentity> & { userId?: unknown };
   try {
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: base64UrlToBytes(envelope.nonce).buffer as ArrayBuffer },
       aesKey,
       base64UrlToBytes(envelope.ciphertext).buffer as ArrayBuffer,
     );
-    identity = JSON.parse(new TextDecoder().decode(plaintext)) as Partial<StoredIdentity>;
+    identity = JSON.parse(new TextDecoder().decode(plaintext)) as Partial<StoredIdentity> & { userId?: unknown };
   } catch {
     throw new Error(IDENTITY_BACKUP_GENERIC_ERROR);
   }
 
   if (typeof identity.publicKey !== "string" || typeof identity.secretKey !== "string") {
     throw new Error(IDENTITY_BACKUP_GENERIC_ERROR);
+  }
+
+  if (identity.userId !== expectedUserId) {
+    throw new Error(IDENTITY_BACKUP_WRONG_ACCOUNT_ERROR);
   }
 
   return { publicKey: identity.publicKey, secretKey: identity.secretKey };
