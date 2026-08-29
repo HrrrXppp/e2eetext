@@ -231,6 +231,7 @@ body.has-dev-instance-banner .site-head {
 
 .chats-page__layout {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   border: 1px solid var(--border);
@@ -239,14 +240,30 @@ body.has-dev-instance-banner .site-head {
   overflow: hidden;
 }
 
+@media (min-width: 640px) {
+  .chats-page__layout {
+    flex-direction: row;
+  }
+}
+
 .chats-page__sidebar {
   display: flex;
   flex-direction: column;
-  width: min(100%, 18rem);
-  min-width: 14rem;
+  width: 100%;
+  max-height: 40%;
   min-height: 0;
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: rgba(12, 18, 32, 0.9);
+}
+
+@media (min-width: 640px) {
+  .chats-page__sidebar {
+    width: min(100%, 18rem);
+    min-width: 14rem;
+    max-height: none;
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+  }
 }
 
 .chats-page__sidebar-header {
