@@ -68,9 +68,11 @@ body.has-dev-instance-banner .site-head {
 
 .site-head__inner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  row-gap: 0.5rem;
   max-width: 56rem;
   margin: 0 auto;
   padding: 0.875rem 1.5rem;
@@ -156,7 +158,10 @@ body.has-dev-instance-banner .site-head {
 .site-head__user {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .site-head__user-identity {
@@ -164,6 +169,7 @@ body.has-dev-instance-banner .site-head {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.125rem;
+  min-width: 0;
 }
 
 .site-head__user-caption {
@@ -174,6 +180,8 @@ body.has-dev-instance-banner .site-head {
 }
 
 .site-head__user-name {
+  max-width: 12rem;
+  overflow: hidden;
   font-size: 0.875rem;
   color: var(--text-soft);
   padding: 0;
@@ -181,6 +189,8 @@ body.has-dev-instance-banner .site-head {
   background: transparent;
   font: inherit;
   cursor: pointer;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   text-decoration: underline dotted transparent;
   transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
