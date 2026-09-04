@@ -218,4 +218,34 @@ describe("ChatsPage", () => {
       expect(screen.getByText("new message")).toBeInTheDocument();
     });
   });
+
+  it("toggles the chat-open layout modifier when a chat is selected and closed", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([sampleChat]);
+    vi.mocked(fetchMessages).mockResolvedValue([sampleMessage]);
+
+    render(<ChatsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("hello")).toBeInTheDocument();
+    });
+
+    expect(document.querySelector(".chats-page__layout")).toHaveClass(
+      "chats-page__layout--chat-open",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to chats" }));
+
+    await waitFor(() => {
+      expect(document.querySelector(".chats-page__layout")).not.toHaveClass(
+        "chats-page__layout--chat-open",
+      );
+    });
+  });
 });
