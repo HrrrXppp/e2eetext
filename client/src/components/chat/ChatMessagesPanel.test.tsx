@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
 
@@ -161,5 +161,79 @@ describe("ChatMessagesPanel", () => {
     );
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show a back button when onBack is not provided", () => {
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Back to chats" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onBack when the back button is clicked", () => {
+    const onBack = vi.fn();
+
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+        onBack={onBack}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to chats" }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("groups the back button with the title, separate from the meta caption (regression for alignment bug)", () => {
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const backButton = screen.getByRole("button", { name: "Back to chats" });
+    const title = screen.getByRole("heading", { name: chat.name });
+    const heading = backButton.parentElement;
+
+    // The back button and title must share the same single-line wrapper so
+    // they can be vertically centered against each other, not against the
+    // two-line title+caption block.
+    expect(heading).toHaveClass("chats-page__panel-heading");
+    expect(title.parentElement).toBe(heading);
+
+    const meta = document.querySelector(".chats-page__panel-meta");
+    expect(meta?.parentElement).not.toBe(heading);
+    expect(meta?.parentElement).toBe(heading?.parentElement);
   });
 });

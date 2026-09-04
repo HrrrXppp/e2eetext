@@ -136,4 +136,33 @@ describe("ChatSidebar", () => {
     expect(mediaBlockMatch).not.toBeNull();
     expect(mediaBlockMatch![1]).toMatch(/flex-direction:\s*row/);
   });
+
+  it("goes edge-to-edge on phone-width viewports like other messengers", () => {
+    // Follow-up to #58: on phones the chat view still sat inside an
+    // outer-padded, rounded-corner card (.chats-page padding, .chats-page__layout
+    // border + border-radius), unlike the full-bleed single-pane layout used by
+    // Telegram/WhatsApp/iMessage on phones. This guards against that regression
+    // by asserting the mobile media query zeroes out the page padding and the
+    // layout's border/border-radius.
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const mediaBlockMatch = css.match(
+      /@media \(max-width: 639\.98px\) \{([\s\S]*?)\n\}/,
+    );
+    expect(mediaBlockMatch).not.toBeNull();
+    const mediaBlock = mediaBlockMatch![1];
+
+    const pageMatch = mediaBlock.match(/\.chats-page\s*\{([^}]*)\}/);
+    expect(pageMatch).not.toBeNull();
+    expect(pageMatch![1]).toMatch(/padding:\s*0/);
+
+    const layoutMatch = mediaBlock.match(/\.chats-page__layout\s*\{([^}]*)\}/);
+    expect(layoutMatch).not.toBeNull();
+    expect(layoutMatch![1]).toMatch(/border:\s*none/);
+    expect(layoutMatch![1]).toMatch(/border-radius:\s*0/);
+  });
 });
