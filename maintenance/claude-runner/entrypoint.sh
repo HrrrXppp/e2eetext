@@ -69,13 +69,28 @@ if [ "$#" -gt 0 ]; then
 	exec claude "$@"
 fi
 
-git checkout .
+# /workspace is a disposable mirror of origin/dev, not a place for durable
+# work -- dispatched agents do their real editing in isolated git worktrees
+# per CLAUDE.md, so this checkout should always be clean between cycles. If
+# it ever isn't (a killed cycle, a stray write outside a worktree), discard
+# the drift rather than crash-looping forever on a checkout conflict.
+sync_repo() {
+	if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git clean -nd)" ]; then
+		echo "[$(date -Is)] warning: discarding unexpected local changes in /workspace/e2eetext" >&2
+		git status --porcelain >&2
+	fi
+	git reset --hard HEAD
+	git clean -fd
+	git fetch origin
+	git checkout dev
+	git reset --hard origin/dev
+}
+
+sync_repo
 
 while true; do
 	echo "[$(date -Is)] starting cycle"
-	git fetch origin
-	git checkout dev
-	git pull --ff-only
+	sync_repo
 	claude -p "Run the GitHub issue/PR ticket-processing cycle described in CLAUDE.md." \
 		--permission-mode "$CLAUDE_PERMISSION_MODE" \
 		--output-format text \
