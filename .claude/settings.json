@@ -92,8 +92,8 @@
       "Bash(date *)",
       "Bash(cd *)",
       "Bash(awk *)",
-      "Read(.github/**)",
-      "Edit(.github/workflows/**)"
+      "Read(**)",
+      "Edit(**)"
     ]
   },
   "worktree": {
