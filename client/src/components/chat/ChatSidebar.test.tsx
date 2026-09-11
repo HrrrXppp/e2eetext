@@ -137,13 +137,15 @@ describe("ChatSidebar", () => {
     expect(mediaBlockMatch![1]).toMatch(/flex-direction:\s*row/);
   });
 
-  it("goes edge-to-edge on phone-width viewports like other messengers", () => {
-    // Follow-up to #58: on phones the chat view still sat inside an
-    // outer-padded, rounded-corner card (.chats-page padding, .chats-page__layout
-    // border + border-radius), unlike the full-bleed single-pane layout used by
-    // Telegram/WhatsApp/iMessage on phones. This guards against that regression
-    // by asserting the mobile media query zeroes out the page padding and the
-    // layout's border/border-radius.
+  it("keeps the padded, rounded-corner card on phone-width viewports", () => {
+    // Follow-up to #58: an earlier revision went full-bleed edge-to-edge on
+    // phones (zeroing .chats-page padding and .chats-page__layout border /
+    // border-radius below the 640px breakpoint), but that read as cramped
+    // against the sticky site header and was reported as "bad again" (PR #59
+    // comment 5619586547 / diagnosis in 5619922920). The single-pane
+    // navigation fix (back button + one visible pane at a time) is kept; only
+    // the edge-to-edge treatment is reverted. This guards against silently
+    // reintroducing edge-to-edge styling without a fresh screenshot check.
     const cssPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       "../../styles/index.css",
@@ -156,13 +158,12 @@ describe("ChatSidebar", () => {
     expect(mediaBlockMatch).not.toBeNull();
     const mediaBlock = mediaBlockMatch![1];
 
+    // The mobile media query should no longer zero out the page padding or
+    // the layout's border/border-radius.
     const pageMatch = mediaBlock.match(/\.chats-page\s*\{([^}]*)\}/);
-    expect(pageMatch).not.toBeNull();
-    expect(pageMatch![1]).toMatch(/padding:\s*0/);
+    expect(pageMatch).toBeNull();
 
     const layoutMatch = mediaBlock.match(/\.chats-page__layout\s*\{([^}]*)\}/);
-    expect(layoutMatch).not.toBeNull();
-    expect(layoutMatch![1]).toMatch(/border:\s*none/);
-    expect(layoutMatch![1]).toMatch(/border-radius:\s*0/);
+    expect(layoutMatch).toBeNull();
   });
 });

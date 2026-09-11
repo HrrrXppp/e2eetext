@@ -266,15 +266,6 @@ body.has-dev-instance-banner .site-head {
 }
 
 @media (max-width: 639.98px) {
-  .chats-page {
-    padding: 0;
-  }
-
-  .chats-page__layout {
-    border: none;
-    border-radius: 0;
-  }
-
   .chats-page__layout--chat-open .chats-page__sidebar {
     display: none;
   }
