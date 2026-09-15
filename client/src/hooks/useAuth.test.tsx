@@ -6,6 +6,7 @@ import { makeToken } from "@/test/makeToken";
 
 const fetchAuthProviders = vi.fn();
 const ensureUserRegistered = vi.fn();
+const ensureIdentityKeys = vi.fn();
 
 vi.mock("@/lib/oidcProviders", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/oidcProviders")>();
@@ -20,7 +21,7 @@ vi.mock("@/lib/users", () => ({
 }));
 
 vi.mock("@/lib/e2ee/session", () => ({
-  ensureIdentityKeys: vi.fn().mockResolvedValue({ publicKey: "pk", secretKey: "sk" }),
+  ensureIdentityKeys: (...args: unknown[]) => ensureIdentityKeys(...args),
 }));
 
 vi.mock("@/lib/e2ee/storage", () => ({
@@ -37,6 +38,7 @@ describe("useAuth", () => {
     localStorage.clear();
     fetchAuthProviders.mockReset();
     ensureUserRegistered.mockReset();
+    ensureIdentityKeys.mockReset();
   });
 
   it("loads signed-in user from stored token", async () => {
@@ -64,6 +66,10 @@ describe("useAuth", () => {
       createdAt: "2026-06-11T12:00:00.000Z",
       updatedAt: "2026-06-11T12:00:00.000Z",
     });
+    ensureIdentityKeys.mockResolvedValue({
+      identity: { publicKey: "pk", secretKey: "sk" },
+      created: false,
+    });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -77,6 +83,7 @@ describe("useAuth", () => {
       provider: "google",
       oidcProviderId: "provider-1",
     });
+    expect(result.current.justCreatedIdentity).toBe(false);
   });
 
   it("resolves the provider from the stored auth provider slug, not a guess from the issuer", async () => {
@@ -104,6 +111,10 @@ describe("useAuth", () => {
       oidcProviderId: "apple-provider-id",
       createdAt: "2026-06-11T12:00:00.000Z",
       updatedAt: "2026-06-11T12:00:00.000Z",
+    });
+    ensureIdentityKeys.mockResolvedValue({
+      identity: { publicKey: "pk", secretKey: "sk" },
+      created: false,
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -151,5 +162,48 @@ describe("useAuth", () => {
 
     result.current.signOut();
     expect(localStorage.getItem("messenger_id_token")).toBeNull();
+  });
+
+  it("flags justCreatedIdentity only when a brand-new keypair was generated, and it clears on acknowledge", async () => {
+    const idToken = makeToken({
+      sub: "google-subject-2",
+      iss: "https://accounts.google.com",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    localStorage.setItem("messenger_id_token", idToken);
+    localStorage.setItem("messenger_auth_provider", "google");
+
+    fetchAuthProviders.mockResolvedValue([
+      {
+        id: "provider-1",
+        name: "Google",
+        link: "https://accounts.google.com",
+        slug: "google",
+      },
+    ]);
+    ensureUserRegistered.mockResolvedValue({
+      id: "user-2",
+      subject: "google-subject-2",
+      name: "New User",
+      oidcProviderId: "provider-1",
+      createdAt: "2026-06-11T12:00:00.000Z",
+      updatedAt: "2026-06-11T12:00:00.000Z",
+    });
+    ensureIdentityKeys.mockResolvedValue({
+      identity: { publicKey: "pk", secretKey: "sk" },
+      created: true,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.justCreatedIdentity).toBe(true);
+
+    result.current.acknowledgeIdentityBackup();
+    await waitFor(() => {
+      expect(result.current.justCreatedIdentity).toBe(false);
+    });
   });
 });

@@ -1,12 +1,21 @@
 import { useState } from "react";
 import { EditNameDialog } from "@/components/auth/EditNameDialog";
+import { IdentityBackupPrompt } from "@/components/auth/IdentityBackupPrompt";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { appVersion } from "@/lib/version";
 import { userDisplayName } from "@/lib/users";
 
 export function SiteHeader() {
-  const { user, providers, loading, signOut, setDisplayName } = useAuth();
+  const {
+    user,
+    providers,
+    loading,
+    signOut,
+    setDisplayName,
+    justCreatedIdentity,
+    acknowledgeIdentityBackup,
+  } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [skipProfile, setSkipProfile] = useState(false);
@@ -97,6 +106,10 @@ export function SiteHeader() {
             setEditNameOpen(false);
           }}
         />
+      ) : null}
+
+      {justCreatedIdentity && user ? (
+        <IdentityBackupPrompt userId={user.id} onDismiss={acknowledgeIdentityBackup} />
       ) : null}
     </>
   );
