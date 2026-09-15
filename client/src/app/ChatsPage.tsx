@@ -275,11 +275,7 @@ export function ChatsPage() {
               Sign in to view your chats.
             </p>
           ) : (
-            <div
-              className={`chats-page__layout${
-                selectedChatId ? " chats-page__layout--chat-open" : ""
-              }`}
-            >
+            <div className="chats-page__layout">
               <ChatSidebar
                 chats={chats}
                 selectedChatId={selectedChatId}
@@ -298,7 +294,6 @@ export function ChatsPage() {
                 sendError={sendError}
                 onSend={handleSendMessage}
                 onMarkRead={handleMarkMessageRead}
-                onBack={() => setSelectedChatId(null)}
               />
             </div>
           )}
