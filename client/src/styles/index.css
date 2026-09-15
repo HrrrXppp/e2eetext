@@ -403,6 +403,9 @@ body.has-dev-instance-banner .site-head {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .chats-page__message-text {
