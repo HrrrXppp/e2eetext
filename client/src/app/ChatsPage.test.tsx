@@ -218,4 +218,30 @@ describe("ChatsPage", () => {
       expect(screen.getByText("new message")).toBeInTheDocument();
     });
   });
+
+  it("keeps the chat list and message panel as siblings after a chat is selected", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([sampleChat]);
+    vi.mocked(fetchMessages).mockResolvedValue([sampleMessage]);
+
+    render(<ChatsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("hello")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("listbox", { name: "Chats" })).toBeInTheDocument();
+    expect(document.querySelector(".chats-page__layout")).not.toHaveClass(
+      "chats-page__layout--chat-open",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Back to chats" }),
+    ).not.toBeInTheDocument();
+  });
 });

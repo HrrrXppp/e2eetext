@@ -15,6 +15,7 @@ type ChatMessagesPanelProps = {
   sendError: string | null;
   onSend: (data: string) => Promise<void>;
   onMarkRead: (messageId: string) => void;
+  onBack?: () => void;
 };
 
 function chatLabel(chat: Chat): string {
@@ -42,6 +43,7 @@ export function ChatMessagesPanel({
   sendError,
   onSend,
   onMarkRead,
+  onBack,
 }: ChatMessagesPanelProps) {
   const [draft, setDraft] = useState("");
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -96,15 +98,25 @@ export function ChatMessagesPanel({
   return (
     <section className="chats-page__panel" aria-label={`Messages in ${chatLabel(chat)}`}>
       <header className="chats-page__panel-header">
-        <div>
+        <div className="chats-page__panel-heading">
+          {onBack ? (
+            <button
+              type="button"
+              className="chats-page__panel-back"
+              aria-label="Back to chats"
+              onClick={onBack}
+            >
+              ← Chats
+            </button>
+          ) : null}
           <h2 className="chats-page__panel-title">{chatLabel(chat)}</h2>
-          <p className="chats-page__panel-meta">
-            Updated{" "}
-            <time dateTime={chat.updatedAt}>{formatChatUpdatedAt(chat.updatedAt)}</time>
-            {" · "}
-            Messages disappear after {Math.round(chat.disappearAfterMinutes / (24 * 60))}d
-          </p>
         </div>
+        <p className="chats-page__panel-meta">
+          Updated{" "}
+          <time dateTime={chat.updatedAt}>{formatChatUpdatedAt(chat.updatedAt)}</time>
+          {" · "}
+          Messages disappear after {Math.round(chat.disappearAfterMinutes / (24 * 60))}d
+        </p>
       </header>
 
       <div className="chats-page__messages" ref={messagesContainerRef}>

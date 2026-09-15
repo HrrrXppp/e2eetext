@@ -112,4 +112,43 @@ describe("ChatSidebar", () => {
     expect(rule).toMatch(/flex-direction:\s*column/);
     expect(rule).not.toMatch(/display:\s*grid/);
   });
+
+  it("keeps the chat list beside the message panel at every viewport (no column jump)", () => {
+    // Stacking to flex-direction: column below 640px moved the sidebar on
+    // top of the thread. Both panes stay visible in a row; the sidebar
+    // just gets a narrower min-width instead of wrapping.
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const baseMatch = css.match(/\.chats-page__layout\s*\{([^}]*)\}/);
+    expect(baseMatch).not.toBeNull();
+    expect(baseMatch![1]).toMatch(/flex-direction:\s*row/);
+    expect(baseMatch![1]).not.toMatch(/flex-direction:\s*column/);
+
+    expect(css).not.toMatch(
+      /@media \(min-width: 640px\) \{\s*\.chats-page__layout \{/,
+    );
+    expect(css).not.toMatch(/chats-page__layout--chat-open/);
+    expect(css).not.toMatch(/\.chats-page__panel \{\s*display:\s*none/);
+  });
+
+  it("keeps the padded, rounded-corner card (no edge-to-edge phone treatment)", () => {
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const pageMatch = css.match(/\.chats-page\s*\{([^}]*)\}/);
+    expect(pageMatch).not.toBeNull();
+    expect(pageMatch![1]).toMatch(/padding:/);
+
+    const layoutMatch = css.match(/\.chats-page__layout\s*\{([^}]*)\}/);
+    expect(layoutMatch).not.toBeNull();
+    expect(layoutMatch![1]).toMatch(/border-radius:/);
+    expect(layoutMatch![1]).toMatch(/border:/);
+  });
 });
