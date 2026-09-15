@@ -31,7 +31,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 #### Client
 
-- `.chats-page__list` no longer spreads chat items apart when the sidebar is taller than the list — it used `display: grid` with no `grid-template-rows`/`align-content`, so the default `align-content: normal` behaved as `stretch` and, combined with `flex: 1`, stretched the implicit row tracks to fill the height; switched to `display: flex; flex-direction: column`, matching the sibling `.chats-page__message-list` rule (#50)
+- Chat list and message panel stay side by side at every width (narrower sidebar instead of stacking), so shrinking the window no longer jumps the chats list above the thread (#58)
 
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)
 

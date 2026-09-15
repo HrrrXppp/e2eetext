@@ -219,7 +219,7 @@ describe("ChatsPage", () => {
     });
   });
 
-  it("toggles the chat-open layout modifier when a chat is selected and closed", async () => {
+  it("keeps the chat list and message panel as siblings after a chat is selected", async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: authUser,
       providers: [],
@@ -236,16 +236,12 @@ describe("ChatsPage", () => {
       expect(screen.getByText("hello")).toBeInTheDocument();
     });
 
-    expect(document.querySelector(".chats-page__layout")).toHaveClass(
+    expect(screen.getByRole("listbox", { name: "Chats" })).toBeInTheDocument();
+    expect(document.querySelector(".chats-page__layout")).not.toHaveClass(
       "chats-page__layout--chat-open",
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to chats" }));
-
-    await waitFor(() => {
-      expect(document.querySelector(".chats-page__layout")).not.toHaveClass(
-        "chats-page__layout--chat-open",
-      );
-    });
+    expect(
+      screen.queryByRole("button", { name: "Back to chats" }),
+    ).not.toBeInTheDocument();
   });
 });

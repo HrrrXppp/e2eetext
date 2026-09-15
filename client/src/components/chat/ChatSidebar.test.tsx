@@ -113,13 +113,10 @@ describe("ChatSidebar", () => {
     expect(rule).not.toMatch(/display:\s*grid/);
   });
 
-  it("stacks the chat layout on narrow viewports instead of always using two columns (regression for #58)", () => {
-    // Issue #58: .chats-page__layout was unconditionally display: flex (row
-    // direction), so the sidebar (min-width 14rem) and message panel were
-    // always squeezed side by side, even on phone-width viewports. This
-    // guards against that regression by asserting the base rule stacks the
-    // panes in a column and only switches to a row layout inside a
-    // min-width media query (desktop and up).
+  it("keeps the chat list beside the message panel at every viewport (no column jump)", () => {
+    // Stacking to flex-direction: column below 640px moved the sidebar on
+    // top of the thread. Both panes stay visible in a row; the sidebar
+    // just gets a narrower min-width instead of wrapping.
     const cssPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       "../../styles/index.css",
@@ -128,42 +125,30 @@ describe("ChatSidebar", () => {
 
     const baseMatch = css.match(/\.chats-page__layout\s*\{([^}]*)\}/);
     expect(baseMatch).not.toBeNull();
-    expect(baseMatch![1]).toMatch(/flex-direction:\s*column/);
+    expect(baseMatch![1]).toMatch(/flex-direction:\s*row/);
+    expect(baseMatch![1]).not.toMatch(/flex-direction:\s*column/);
 
-    const mediaBlockMatch = css.match(
-      /@media \(min-width: 640px\) \{\s*\.chats-page__layout \{([^}]*)\}/,
+    expect(css).not.toMatch(
+      /@media \(min-width: 640px\) \{\s*\.chats-page__layout \{/,
     );
-    expect(mediaBlockMatch).not.toBeNull();
-    expect(mediaBlockMatch![1]).toMatch(/flex-direction:\s*row/);
+    expect(css).not.toMatch(/chats-page__layout--chat-open/);
+    expect(css).not.toMatch(/\.chats-page__panel \{\s*display:\s*none/);
   });
 
-  it("keeps the padded, rounded-corner card on phone-width viewports", () => {
-    // Follow-up to #58: an earlier revision went full-bleed edge-to-edge on
-    // phones (zeroing .chats-page padding and .chats-page__layout border /
-    // border-radius below the 640px breakpoint), but that read as cramped
-    // against the sticky site header and was reported as "bad again" (PR #59
-    // comment 5619586547 / diagnosis in 5619922920). The single-pane
-    // navigation fix (back button + one visible pane at a time) is kept; only
-    // the edge-to-edge treatment is reverted. This guards against silently
-    // reintroducing edge-to-edge styling without a fresh screenshot check.
+  it("keeps the padded, rounded-corner card (no edge-to-edge phone treatment)", () => {
     const cssPath = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       "../../styles/index.css",
     );
     const css = readFileSync(cssPath, "utf8");
 
-    const mediaBlockMatch = css.match(
-      /@media \(max-width: 639\.98px\) \{([\s\S]*?)\n\}/,
-    );
-    expect(mediaBlockMatch).not.toBeNull();
-    const mediaBlock = mediaBlockMatch![1];
+    const pageMatch = css.match(/\.chats-page\s*\{([^}]*)\}/);
+    expect(pageMatch).not.toBeNull();
+    expect(pageMatch![1]).toMatch(/padding:/);
 
-    // The mobile media query should no longer zero out the page padding or
-    // the layout's border/border-radius.
-    const pageMatch = mediaBlock.match(/\.chats-page\s*\{([^}]*)\}/);
-    expect(pageMatch).toBeNull();
-
-    const layoutMatch = mediaBlock.match(/\.chats-page__layout\s*\{([^}]*)\}/);
-    expect(layoutMatch).toBeNull();
+    const layoutMatch = css.match(/\.chats-page__layout\s*\{([^}]*)\}/);
+    expect(layoutMatch).not.toBeNull();
+    expect(layoutMatch![1]).toMatch(/border-radius:/);
+    expect(layoutMatch![1]).toMatch(/border:/);
   });
 });
