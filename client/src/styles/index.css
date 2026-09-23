@@ -356,6 +356,7 @@ body.has-dev-instance-banner .site-head {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .chats-page__message-divider {
@@ -378,10 +379,12 @@ body.has-dev-instance-banner .site-head {
 
 .chats-page__message {
   max-width: 75%;
+  min-width: 0;
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: rgba(20, 30, 51, 0.85);
+  overflow: hidden;
 }
 
 .chats-page__message--own {
@@ -400,12 +403,16 @@ body.has-dev-instance-banner .site-head {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .chats-page__message-text {
   margin: 0 0 0.25rem;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .chats-page__message-time {

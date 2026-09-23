@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
@@ -235,5 +238,109 @@ describe("ChatMessagesPanel", () => {
     const meta = document.querySelector(".chats-page__panel-meta");
     expect(meta?.parentElement).not.toBe(heading);
     expect(meta?.parentElement).toBe(heading?.parentElement);
+  });
+
+  it("renders a long unbroken message unmodified, relying on CSS to wrap it (regression for #63)", () => {
+    const longToken = "7".repeat(200);
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[
+          {
+            id: "long-1",
+            chatId: chat.id,
+            userId: "99999999-9999-9999-9999-999999999999/other-user",
+            userName: "Evgenii Khrunov",
+            data: longToken,
+            createdAt: "2026-06-11T12:00:00.000Z",
+            updatedAt: "2026-06-11T12:00:00.000Z",
+            unread: false,
+          },
+        ]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    const textEl = document.querySelector(".chats-page__message-text");
+    expect(textEl).not.toBeNull();
+    expect(textEl!.textContent).toBe(longToken);
+  });
+
+  it("wraps long unbroken message text instead of letting it overflow the bubble (regression for #63)", () => {
+    // Issue #63: a message consisting of one long unbroken run of characters
+    // (no spaces) overflowed past the right edge of the message bubble
+    // instead of wrapping. This guards the CSS chain that forces the text to
+    // break and caps the bubble container's width regardless of content.
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const textMatch = css.match(/\.chats-page__message-text\s*\{([^}]*)\}/);
+    expect(textMatch).not.toBeNull();
+    expect(textMatch![1]).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(textMatch![1]).toMatch(/word-break:\s*break-word/);
+
+    const bubbleMatch = css.match(/\.chats-page__message\s*\{([^}]*)\}/);
+    expect(bubbleMatch).not.toBeNull();
+    expect(bubbleMatch![1]).toMatch(/min-width:\s*0/);
+    expect(bubbleMatch![1]).toMatch(/max-width:\s*75%/);
+  });
+
+  it("renders a long unbroken sender name unmodified, relying on CSS to truncate it (regression for #63)", () => {
+    const longName = "7".repeat(200);
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[
+          {
+            id: "long-name-1",
+            chatId: chat.id,
+            userId: "99999999-9999-9999-9999-999999999999/other-user",
+            userName: longName,
+            data: "r23r23r3",
+            createdAt: "2026-06-11T12:00:00.000Z",
+            updatedAt: "2026-06-11T12:00:00.000Z",
+            unread: false,
+          },
+        ]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    const authorEl = document.querySelector(".chats-page__message-author");
+    expect(authorEl).not.toBeNull();
+    expect(authorEl!.textContent).toBe(longName);
+  });
+
+  it("truncates a long unbroken sender name with an ellipsis instead of letting it overflow the bubble (regression for #63)", () => {
+    // Issue #63: the screenshot showed the long unbroken string overflowing
+    // next to the message bubble was the sender's own long display name
+    // (rendered via .chats-page__message-author), not the message body. This
+    // guards the CSS truncation rule, mirroring .site-head__user-name.
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+
+    const authorMatch = css.match(/\.chats-page__message-author\s*\{([^}]*)\}/);
+    expect(authorMatch).not.toBeNull();
+    expect(authorMatch![1]).toMatch(/overflow:\s*hidden/);
+    expect(authorMatch![1]).toMatch(/white-space:\s*nowrap/);
+    expect(authorMatch![1]).toMatch(/text-overflow:\s*ellipsis/);
   });
 });
