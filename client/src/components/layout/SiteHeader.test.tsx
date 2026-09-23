@@ -2,16 +2,40 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock("@/lib/e2ee/storage", () => ({
+  exportStoredIdentityBackup: vi.fn(),
+  fetchIdentityPublicKey: vi.fn(),
+  loadStoredIdentity: vi.fn().mockResolvedValue(null),
+  saveStoredIdentity: vi.fn(),
+  uploadIdentityKey: vi.fn(),
+}));
+
+vi.mock("@/lib/e2ee/crypto", () => ({
+  importIdentityBackup: vi.fn(),
+}));
+
 import { useAuth } from "@/hooks/useAuth";
 
+const SIGNED_IN_USER = {
+  id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  subject: "google-subject-1",
+  name: "Test User",
+  provider: "google",
+  oidcProviderId: "11111111-1111-1111-1111-111111111111",
+};
+
 describe("SiteHeader OIDC providers", () => {
+  beforeEach(() => {
+    vi.mocked(useAuth).mockReset();
+  });
+
   it("shows the application version in the header", () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
@@ -19,6 +43,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -39,6 +65,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -59,6 +87,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -84,6 +114,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -106,6 +138,8 @@ describe("SiteHeader OIDC providers", () => {
       loading: false,
       signOut: vi.fn(),
       setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
     });
 
     render(<SiteHeader />);
@@ -142,5 +176,41 @@ describe("SiteHeader OIDC providers", () => {
     expect(nameMatch).not.toBeNull();
     expect(nameMatch![1]).toMatch(/overflow:\s*hidden/);
     expect(nameMatch![1]).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
+  it("shows the one-time identity backup prompt right after a new key is generated", () => {
+    const acknowledgeIdentityBackup = vi.fn();
+    vi.mocked(useAuth).mockReturnValue({
+      user: SIGNED_IN_USER,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: true,
+      acknowledgeIdentityBackup,
+    });
+
+    render(<SiteHeader />);
+
+    expect(screen.getByText("Save a backup of your private key")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    expect(acknowledgeIdentityBackup).toHaveBeenCalled();
+  });
+
+  it("does not show the identity backup prompt once acknowledged", () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: SIGNED_IN_USER,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+
+    render(<SiteHeader />);
+
+    expect(screen.queryByText("Save a backup of your private key")).not.toBeInTheDocument();
   });
 });

@@ -639,6 +639,25 @@ body.has-dev-instance-banner .site-head {
   font-size: 0.875rem;
 }
 
+.backup-dialog__strength {
+  margin: -0.5rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.backup-dialog__strength--weak {
+  color: #f0a8a8;
+}
+
+.backup-dialog__strength--fair {
+  color: #f2d27a;
+}
+
+.backup-dialog__strength--strong {
+  color: var(--accent-bright);
+}
+
 .new-chat-dialog__submit {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -685,6 +704,23 @@ body.has-dev-instance-banner .site-head {
 
 .new-chat-dialog__back:hover {
   color: var(--text-soft);
+}
+
+.edit-name-dialog__key-actions {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.edit-name-dialog__key-label {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.edit-name-dialog__key-buttons {
+  display: flex;
+  gap: 1.25rem;
 }
 
 .new-chat-dialog__status {
