@@ -122,6 +122,36 @@ describe("NewChatMemberSearch", () => {
     expect(screen.queryByText("Add name")).not.toBeInTheDocument();
   });
 
+  it("renders long names in the styled name element and keeps Add accessible", async () => {
+    const longName = "A".repeat(120);
+    searchUsers.mockResolvedValue([
+      {
+        id: "member-9",
+        name: longName,
+        oidcProviderId: "p1",
+        subject: "s9",
+        createdAt: "2026-06-11T12:00:00.000Z",
+        updatedAt: "2026-06-11T12:00:00.000Z",
+      },
+    ]);
+
+    render(
+      <NewChatMemberSearch
+        currentUserId="user-1"
+        members={[]}
+        onAddMember={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/Search/i), { target: { value: "aaa" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    const name = await screen.findByText(longName);
+    expect(name).toHaveClass("new-chat-dialog__result-name");
+    expect(screen.getByRole("button", { name: "Add" })).toBeVisible();
+  });
+
   it("calls onAddMember and onBack", async () => {
     searchUsers.mockResolvedValue([
       {
