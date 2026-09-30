@@ -618,7 +618,14 @@ body.has-dev-instance-banner .site-head {
   font-size: 0.875rem;
 }
 
+.new-chat-dialog__field {
+  min-width: 0;
+}
+
 .new-chat-dialog__field input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--border-bright);
   border-radius: 0.5rem;
@@ -664,11 +671,13 @@ body.has-dev-instance-banner .site-head {
 
 .new-chat-dialog__search {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
 .new-chat-dialog__search-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -695,6 +704,7 @@ body.has-dev-instance-banner .site-head {
 
 .new-chat-dialog__results {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.5rem;
   margin: 0;
   padding: 0;
@@ -706,6 +716,7 @@ body.has-dev-instance-banner .site-head {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  min-width: 0;
   padding: 0.625rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -721,6 +732,9 @@ body.has-dev-instance-banner .site-head {
 .new-chat-dialog__result-name {
   color: var(--text-soft);
   font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .new-chat-dialog__result-id {
@@ -821,11 +835,23 @@ body.has-dev-instance-banner .site-head {
   width: min(100%, 28rem);
   max-height: min(100%, 90vh);
   overflow: auto;
+  overflow-x: hidden;
   padding: 1.5rem;
   border: 1px solid var(--border-bright);
   border-radius: 0.875rem;
   background: linear-gradient(180deg, var(--surface-raised), var(--surface));
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 480px) {
+  .new-chat-dialog__backdrop {
+    padding: 0.75rem;
+  }
+
+  .new-chat-dialog {
+    max-height: calc(100dvh - 1.5rem);
+    padding: 1rem;
+  }
 }
 
 .new-chat-dialog__close {
