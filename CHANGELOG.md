@@ -16,6 +16,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Client
 
 - Shared `Footer` component (site chrome parity with `SiteHeader`) now also renders on the chats page; footer styling moved out of the landing-only `landing__footer` BEM block into a page-agnostic `site-foot` block, with a compact non-scrolling variant for the height-locked chats app shell and the original spacing preserved on the landing page
+- Export/import UI for the E2EE private identity key (#52): passphrase-protected `scrypt` + `AES-256-GCM` backup file, download-only (never clipboard), no minimum passphrase length; `Back up key` / `Restore key` buttons in the signed-in header, plus a one-time prompt right after a brand-new local keypair is generated offering to back up or restore instead. Import detects and rejects the legacy plaintext export format, and requires explicit confirmation before overwriting a different key already on file for the account.
 
 #### Tooling & deployment
 

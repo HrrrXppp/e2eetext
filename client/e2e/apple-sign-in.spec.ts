@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { dismissIdentityBackupPromptIfPresent } from "./identity-backup-prompt";
 
 // Signs in through the real OAuth authorization-code flow against the
 // mock-Apple provider (see e2e/global-setup.ts and mockoidc/main.go's
@@ -8,6 +9,7 @@ async function signInWithAppleE2E(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Sign in with AppleE2E", exact: true }).click();
   await page.waitForURL("**/chats");
+  await dismissIdentityBackupPromptIfPresent(page);
 }
 
 test.describe("Apple-like sign-in (response_mode=form_post + private_key_jwt + one-time name)", () => {

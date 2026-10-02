@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
+import { dismissIdentityBackupPromptIfPresent } from "./identity-backup-prompt";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,6 +43,7 @@ async function signIn(page: Page, displayName: string): Promise<void> {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("button", { name: "Sign in with OIDC" }).click();
   await page.waitForURL("**/chats");
+  await dismissIdentityBackupPromptIfPresent(page);
 
   await page.getByTitle("Edit display name").click();
   await page.getByLabel("Display name").fill(displayName);
