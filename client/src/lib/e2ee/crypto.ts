@@ -316,7 +316,11 @@ export async function importIdentityBackup(
     throw new Error(IDENTITY_BACKUP_GENERIC_ERROR);
   }
 
-  if (identity.userId !== expectedUserId) {
+  // Backups written before account binding was added carry no userId; they
+  // are still accepted (the restore dialog's key-conflict check guards
+  // against overwriting a different existing identity). A backup that does
+  // carry a userId must match the current account.
+  if (identity.userId !== undefined && identity.userId !== expectedUserId) {
     throw new Error(IDENTITY_BACKUP_WRONG_ACCOUNT_ERROR);
   }
 
