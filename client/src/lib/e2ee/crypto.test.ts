@@ -94,6 +94,16 @@ describe("identity backup export/import", () => {
     ).rejects.toThrow("this backup belongs to a different account");
   });
 
+  it("accepts an encrypted backup created before account binding (no userId in payload)", async () => {
+    const identity = generateIdentityKeyPair();
+    // JSON.stringify drops an undefined userId, reproducing the old payload shape.
+    const backup = await exportIdentityBackup(identity, "pw", undefined as unknown as string);
+
+    const restored = await importIdentityBackup(backup, "pw", "user-1");
+
+    expect(restored).toEqual(identity);
+  });
+
   it("rejects a legacy plaintext backup with a clear format error", async () => {
     const identity = generateIdentityKeyPair();
     const legacyPlaintext = JSON.stringify(identity);
