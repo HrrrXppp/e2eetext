@@ -223,7 +223,7 @@ Each class refills at `requests_per_minute` and allows short bursts up to `burst
 | `default` | 300/min, burst 60 | 200/min, burst 40 |
 | `ws` | 30/min, burst 10 | 20/min, burst 5 |
 
-Set either `requests_per_minute` or `burst` to a negative number to disable a class outright (plain `0` is treated as "not set" and falls back to the default above, since a JSON file can't otherwise distinguish an omitted key from an explicit `0`).
+Omit a class from `rate_limits` entirely to use the default above; include it with `requests_per_minute` or `burst` set to `0` (or any non-positive value) to disable that class outright.
 
 ## End-to-end encryption (v1)
 
