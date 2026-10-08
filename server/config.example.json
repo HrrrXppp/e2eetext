@@ -4,5 +4,12 @@
       "client_id": "",
       "client_secret": ""
     }
+  },
+  "rate_limits": {
+    "auth": { "requests_per_minute": 30, "burst": 10 },
+    "search": { "requests_per_minute": 60, "burst": 20 },
+    "message": { "requests_per_minute": 120, "burst": 30 },
+    "default": { "requests_per_minute": 300, "burst": 60 },
+    "ws": { "requests_per_minute": 30, "burst": 10 }
   }
 }

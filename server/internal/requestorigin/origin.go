@@ -25,6 +25,24 @@ func PublicBaseURL(r *http.Request) string {
 	return ""
 }
 
+// ClientIP returns the originating client IP for the request. Behind the ALB
+// it uses the last X-Forwarded-For entry, which is the address the load
+// balancer itself observed; earlier entries are client-supplied and trivially
+// spoofable. Without a usable header it falls back to RemoteAddr. Like the
+// other helpers here, it assumes the server is only reachable via the proxy.
+func ClientIP(r *http.Request) string {
+	if v := r.Header.Get("X-Forwarded-For"); v != "" {
+		parts := strings.Split(v, ",")
+		if ip := net.ParseIP(strings.TrimSpace(parts[len(parts)-1])); ip != nil {
+			return ip.String()
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 func forwardedProto(r *http.Request) string {
 	if v := r.Header.Get("X-Forwarded-Proto"); v != "" {
 		return strings.ToLower(strings.TrimSpace(strings.Split(v, ",")[0]))

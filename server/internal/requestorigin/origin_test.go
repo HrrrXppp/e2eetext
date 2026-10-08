@@ -5,6 +5,34 @@ import (
 	"testing"
 )
 
+func TestClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		xff        string
+		remoteAddr string
+		want       string
+	}{
+		{"remote addr fallback", "", "192.0.2.10:4321", "192.0.2.10"},
+		{"single forwarded", "203.0.113.7", "10.0.0.1:80", "203.0.113.7"},
+		{"multi hop uses last", "198.51.100.1, 203.0.113.7", "10.0.0.1:80", "203.0.113.7"},
+		{"ipv6 forwarded", "2001:db8::1", "10.0.0.1:80", "2001:db8::1"},
+		{"invalid forwarded falls back", "garbage", "192.0.2.10:4321", "192.0.2.10"},
+		{"remote addr without port", "", "192.0.2.10", "192.0.2.10"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			if tt.xff != "" {
+				req.Header.Set("X-Forwarded-For", tt.xff)
+			}
+			if got := ClientIP(req); got != tt.want {
+				t.Fatalf("ClientIP() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOAuthClientCallbackURL_FromForwardedHeaders(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/auth/google/callback", nil)
 	req.Host = "server:8080"
