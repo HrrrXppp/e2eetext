@@ -198,8 +198,8 @@ func TestOAuthForProviderRejectsUnsupportedAlgorithm(t *testing.T) {
 }
 
 func TestNormalizeRateLimitsFillsOmittedClasses(t *testing.T) {
-	got := normalizeRateLimits(RateLimits{
-		Auth: RateLimitConfig{RequestsPerMinute: 5, Burst: 2},
+	got := normalizeRateLimits(fileRateLimits{
+		Auth: &RateLimitConfig{RequestsPerMinute: 5, Burst: 2},
 	})
 
 	if got.Auth != (RateLimitConfig{RequestsPerMinute: 5, Burst: 2}) {
@@ -226,12 +226,12 @@ func TestNormalizeRateLimitsFillsOmittedClasses(t *testing.T) {
 }
 
 func TestNormalizeRateLimitsAllowsExplicitlyDisablingAClass(t *testing.T) {
-	got := normalizeRateLimits(RateLimits{
-		WS: RateLimitConfig{RequestsPerMinute: -1, Burst: -1},
+	got := normalizeRateLimits(fileRateLimits{
+		WS: &RateLimitConfig{RequestsPerMinute: 0, Burst: 0},
 	})
 
-	if got.WS != (RateLimitConfig{RequestsPerMinute: -1, Burst: -1}) {
-		t.Fatalf("WS = %+v, want the explicit negative (disabled) value preserved, not the default", got.WS)
+	if got.WS != (RateLimitConfig{}) {
+		t.Fatalf("WS = %+v, want the explicit zero (disabled) value preserved, not the default", got.WS)
 	}
 }
 
@@ -294,5 +294,39 @@ func TestLoadHonorsConfiguredRateLimits(t *testing.T) {
 	}
 	if cfg.RateLimits.Search != defaultRateLimits().Search {
 		t.Fatalf("RateLimits.Search = %+v, want the default since config.json didn't set it", cfg.RateLimits.Search)
+	}
+}
+
+func TestLoadDisablesClassWithExplicitZero(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.json")
+	configContents := `{
+  "oauth_credentials": {
+    "google": {
+      "client_id": "test-client-id",
+      "client_secret": "test-client-secret"
+    }
+  },
+  "rate_limits": {
+    "ws": {"requests_per_minute": 0, "burst": 0}
+  }
+}`
+	if err := os.WriteFile(configPath, []byte(configContents), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	t.Setenv("CONFIG_PATH", configPath)
+	t.Setenv("DATABASE_URL", "postgres://messenger:messenger@localhost:5432/messenger?sslmode=disable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.RateLimits.WS != (RateLimitConfig{}) {
+		t.Fatalf("RateLimits.WS = %+v, want zero (disabled) since config.json explicitly set it to 0", cfg.RateLimits.WS)
+	}
+	if cfg.RateLimits.Auth != defaultRateLimits().Auth {
+		t.Fatalf("RateLimits.Auth = %+v, want the default since config.json didn't set it", cfg.RateLimits.Auth)
 	}
 }

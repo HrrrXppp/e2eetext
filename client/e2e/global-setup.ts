@@ -174,6 +174,19 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   writeFileSync(
     configPath,
     JSON.stringify({
+      // Every browser the suite drives shares 127.0.0.1 and signs in/sends
+      // messages repeatedly in quick succession; the server's rate_limits
+      // defaults would start rejecting requests with 429 well before the
+      // suite finishes. Rate-limiting behavior itself is covered by the Go
+      // unit/integration tests, not this suite, so disable every class here
+      // (0 = disabled, not "use the default" — see server/internal/config).
+      rate_limits: {
+        auth: { requests_per_minute: 0, burst: 0 },
+        search: { requests_per_minute: 0, burst: 0 },
+        message: { requests_per_minute: 0, burst: 0 },
+        default: { requests_per_minute: 0, burst: 0 },
+        ws: { requests_per_minute: 0, burst: 0 },
+      },
       oauth_credentials: {
         // Key must match the seeded providers' slugs (see
         // seedMockProviders below), not the mockoidc binary's own name.

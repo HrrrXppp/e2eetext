@@ -41,10 +41,10 @@ type Config struct {
 }
 
 // RateLimitConfig describes one token bucket class: it refills at
-// RequestsPerMinute and holds at most Burst tokens. Zero (the value an
-// omitted JSON key unmarshals to) means "use the built-in default" — a class
-// can only be turned off deliberately by setting either field negative, since
-// a config file can't otherwise distinguish "omitted" from "explicitly 0".
+// RequestsPerMinute and holds at most Burst tokens. A non-positive value in
+// either field disables limiting for the class, matching
+// middleware.RateLimitConfig's contract exactly (see toMiddlewareRateLimit
+// in internal/app).
 type RateLimitConfig struct {
 	RequestsPerMinute int `json:"requests_per_minute"`
 	Burst             int `json:"burst"`
@@ -56,11 +56,11 @@ type RateLimitConfig struct {
 // authenticated routes by user, falling back to IP when unauthenticated; WS
 // guards the WebSocket upgrade handshake by IP.
 type RateLimits struct {
-	Auth    RateLimitConfig `json:"auth"`
-	Search  RateLimitConfig `json:"search"`
-	Message RateLimitConfig `json:"message"`
-	Default RateLimitConfig `json:"default"`
-	WS      RateLimitConfig `json:"ws"`
+	Auth    RateLimitConfig
+	Search  RateLimitConfig
+	Message RateLimitConfig
+	Default RateLimitConfig
+	WS      RateLimitConfig
 }
 
 // defaultRateLimits are the conservative, hardcoded limits applied to any
@@ -78,10 +78,23 @@ func defaultRateLimits() RateLimits {
 	}
 }
 
-// normalizeRateLimits fills in the built-in default for any class left at
-// its zero value (i.e. omitted from config.json), and leaves explicitly
-// configured classes untouched.
-func normalizeRateLimits(limits RateLimits) RateLimits {
+// fileRateLimits mirrors RateLimits for JSON decoding, but with pointer
+// fields: that lets normalizeRateLimits tell a class config.json omits
+// entirely (nil; use the default) apart from one explicitly present with a
+// disabling non-positive value (use it as-is, per RateLimitConfig's
+// contract) — a plain, non-pointer zero value can't distinguish the two.
+type fileRateLimits struct {
+	Auth    *RateLimitConfig `json:"auth"`
+	Search  *RateLimitConfig `json:"search"`
+	Message *RateLimitConfig `json:"message"`
+	Default *RateLimitConfig `json:"default"`
+	WS      *RateLimitConfig `json:"ws"`
+}
+
+// normalizeRateLimits fills in the built-in default for any class
+// config.json omits, and leaves explicitly configured classes (including
+// ones deliberately disabled with a non-positive value) untouched.
+func normalizeRateLimits(limits fileRateLimits) RateLimits {
 	defaults := defaultRateLimits()
 	return RateLimits{
 		Auth:    rateLimitOrDefault(limits.Auth, defaults.Auth),
@@ -92,16 +105,16 @@ func normalizeRateLimits(limits RateLimits) RateLimits {
 	}
 }
 
-func rateLimitOrDefault(cfg, def RateLimitConfig) RateLimitConfig {
-	if cfg.RequestsPerMinute == 0 && cfg.Burst == 0 {
+func rateLimitOrDefault(cfg *RateLimitConfig, def RateLimitConfig) RateLimitConfig {
+	if cfg == nil {
 		return def
 	}
-	return cfg
+	return *cfg
 }
 
 type fileConfig struct {
 	OAuthCredentials map[string]OAuthCredential `json:"oauth_credentials"`
-	RateLimits       RateLimits                 `json:"rate_limits"`
+	RateLimits       fileRateLimits             `json:"rate_limits"`
 }
 
 func Load() (Config, error) {
