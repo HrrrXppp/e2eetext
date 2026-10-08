@@ -13,6 +13,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Added
 
+#### Server
+
+- API rate limiting (#22): in-memory token-bucket middleware per route class (auth, search, message, default, WebSocket upgrade), keyed by client IP before authentication and by user afterward; `429` responses include `Retry-After`. Configurable via `rate_limits` in the server JSON config, with built-in defaults for local and production (see README)
+
 #### Client
 
 - Shared `Footer` component (site chrome parity with `SiteHeader`) now also renders on the chats page; footer styling moved out of the landing-only `landing__footer` BEM block into a page-agnostic `site-foot` block, with a compact non-scrolling variant for the height-locked chats app shell and the original spacing preserved on the landing page

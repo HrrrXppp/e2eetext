@@ -196,3 +196,103 @@ func TestOAuthForProviderRejectsUnsupportedAlgorithm(t *testing.T) {
 		t.Fatalf("normalizeOAuthCredentials() error = %v, want private_key_jwt_algorithm ... not supported", err)
 	}
 }
+
+func TestNormalizeRateLimitsFillsOmittedClasses(t *testing.T) {
+	got := normalizeRateLimits(RateLimits{
+		Auth: RateLimitConfig{RequestsPerMinute: 5, Burst: 2},
+	})
+
+	if got.Auth != (RateLimitConfig{RequestsPerMinute: 5, Burst: 2}) {
+		t.Fatalf("Auth = %+v, want the explicitly configured value preserved", got.Auth)
+	}
+
+	defaults := defaultRateLimits()
+	for name, class := range map[string]RateLimitConfig{
+		"Search":  got.Search,
+		"Message": got.Message,
+		"Default": got.Default,
+		"WS":      got.WS,
+	} {
+		want := map[string]RateLimitConfig{
+			"Search":  defaults.Search,
+			"Message": defaults.Message,
+			"Default": defaults.Default,
+			"WS":      defaults.WS,
+		}[name]
+		if class != want {
+			t.Errorf("%s = %+v, want default %+v", name, class, want)
+		}
+	}
+}
+
+func TestNormalizeRateLimitsAllowsExplicitlyDisablingAClass(t *testing.T) {
+	got := normalizeRateLimits(RateLimits{
+		WS: RateLimitConfig{RequestsPerMinute: -1, Burst: -1},
+	})
+
+	if got.WS != (RateLimitConfig{RequestsPerMinute: -1, Burst: -1}) {
+		t.Fatalf("WS = %+v, want the explicit negative (disabled) value preserved, not the default", got.WS)
+	}
+}
+
+func TestLoadAppliesDefaultRateLimitsWhenOmitted(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.json")
+	configContents := `{
+  "oauth_credentials": {
+    "google": {
+      "client_id": "test-client-id",
+      "client_secret": "test-client-secret"
+    }
+  }
+}`
+	if err := os.WriteFile(configPath, []byte(configContents), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	t.Setenv("CONFIG_PATH", configPath)
+	t.Setenv("DATABASE_URL", "postgres://messenger:messenger@localhost:5432/messenger?sslmode=disable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.RateLimits != defaultRateLimits() {
+		t.Fatalf("RateLimits = %+v, want built-in defaults %+v", cfg.RateLimits, defaultRateLimits())
+	}
+}
+
+func TestLoadHonorsConfiguredRateLimits(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.json")
+	configContents := `{
+  "oauth_credentials": {
+    "google": {
+      "client_id": "test-client-id",
+      "client_secret": "test-client-secret"
+    }
+  },
+  "rate_limits": {
+    "auth": {"requests_per_minute": 5, "burst": 2}
+  }
+}`
+	if err := os.WriteFile(configPath, []byte(configContents), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	t.Setenv("CONFIG_PATH", configPath)
+	t.Setenv("DATABASE_URL", "postgres://messenger:messenger@localhost:5432/messenger?sslmode=disable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.RateLimits.Auth != (RateLimitConfig{RequestsPerMinute: 5, Burst: 2}) {
+		t.Fatalf("RateLimits.Auth = %+v, want the configured override", cfg.RateLimits.Auth)
+	}
+	if cfg.RateLimits.Search != defaultRateLimits().Search {
+		t.Fatalf("RateLimits.Search = %+v, want the default since config.json didn't set it", cfg.RateLimits.Search)
+	}
+}

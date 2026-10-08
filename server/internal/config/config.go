@@ -37,10 +37,71 @@ type Config struct {
 	Addr             string
 	DatabaseURL      string
 	OAuthCredentials map[string]OAuthCredential
+	RateLimits       RateLimits
+}
+
+// RateLimitConfig describes one token bucket class: it refills at
+// RequestsPerMinute and holds at most Burst tokens. Zero (the value an
+// omitted JSON key unmarshals to) means "use the built-in default" — a class
+// can only be turned off deliberately by setting either field negative, since
+// a config file can't otherwise distinguish "omitted" from "explicitly 0".
+type RateLimitConfig struct {
+	RequestsPerMinute int `json:"requests_per_minute"`
+	Burst             int `json:"burst"`
+}
+
+// RateLimits groups the rate-limit classes the server applies per route
+// group (see internal/app for the wiring). Auth guards the unauthenticated
+// login/callback/refresh routes by IP; Search, Message, and Default guard
+// authenticated routes by user, falling back to IP when unauthenticated; WS
+// guards the WebSocket upgrade handshake by IP.
+type RateLimits struct {
+	Auth    RateLimitConfig `json:"auth"`
+	Search  RateLimitConfig `json:"search"`
+	Message RateLimitConfig `json:"message"`
+	Default RateLimitConfig `json:"default"`
+	WS      RateLimitConfig `json:"ws"`
+}
+
+// defaultRateLimits are the conservative, hardcoded limits applied to any
+// rate-limit class config.json omits entirely (see normalizeRateLimits).
+// They're meant to be safe for both local dev and production out of the
+// box; tune per environment in config.json if they're too tight or too
+// loose for a given deployment.
+func defaultRateLimits() RateLimits {
+	return RateLimits{
+		Auth:    RateLimitConfig{RequestsPerMinute: 30, Burst: 10},
+		Search:  RateLimitConfig{RequestsPerMinute: 60, Burst: 20},
+		Message: RateLimitConfig{RequestsPerMinute: 120, Burst: 30},
+		Default: RateLimitConfig{RequestsPerMinute: 300, Burst: 60},
+		WS:      RateLimitConfig{RequestsPerMinute: 30, Burst: 10},
+	}
+}
+
+// normalizeRateLimits fills in the built-in default for any class left at
+// its zero value (i.e. omitted from config.json), and leaves explicitly
+// configured classes untouched.
+func normalizeRateLimits(limits RateLimits) RateLimits {
+	defaults := defaultRateLimits()
+	return RateLimits{
+		Auth:    rateLimitOrDefault(limits.Auth, defaults.Auth),
+		Search:  rateLimitOrDefault(limits.Search, defaults.Search),
+		Message: rateLimitOrDefault(limits.Message, defaults.Message),
+		Default: rateLimitOrDefault(limits.Default, defaults.Default),
+		WS:      rateLimitOrDefault(limits.WS, defaults.WS),
+	}
+}
+
+func rateLimitOrDefault(cfg, def RateLimitConfig) RateLimitConfig {
+	if cfg.RequestsPerMinute == 0 && cfg.Burst == 0 {
+		return def
+	}
+	return cfg
 }
 
 type fileConfig struct {
 	OAuthCredentials map[string]OAuthCredential `json:"oauth_credentials"`
+	RateLimits       RateLimits                 `json:"rate_limits"`
 }
 
 func Load() (Config, error) {
@@ -70,6 +131,7 @@ func Load() (Config, error) {
 		Addr:             addr,
 		DatabaseURL:      databaseURL,
 		OAuthCredentials: oauthCredentials,
+		RateLimits:       normalizeRateLimits(fileCfg.RateLimits),
 	}, nil
 }
 
