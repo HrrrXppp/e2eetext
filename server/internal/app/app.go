@@ -33,43 +33,54 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 	hub := ws.NewHub()
 	requireAuth := middleware.RequireAuth(authService)
 
+	// Rate limits by route class (see config.RateLimits for the defaults).
+	// Auth and WS run before any user identity exists, so they key by IP;
+	// Search, Message, and Default run after RequireAuth and key by user,
+	// falling back to IP for the handful of authenticated handlers that
+	// don't fit a more specific class.
+	authLimit := middleware.RateLimit(toMiddlewareRateLimit(cfg.RateLimits.Auth), middleware.IPKey)
+	searchLimit := middleware.RateLimit(toMiddlewareRateLimit(cfg.RateLimits.Search), middleware.UserKey)
+	messageLimit := middleware.RateLimit(toMiddlewareRateLimit(cfg.RateLimits.Message), middleware.UserKey)
+	defaultLimit := middleware.RateLimit(toMiddlewareRateLimit(cfg.RateLimits.Default), middleware.UserKey)
+	wsLimit := middleware.RateLimit(toMiddlewareRateLimit(cfg.RateLimits.WS), middleware.IPKey)
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", handler.NewHealthHandler())
 
 	authHandler := handler.NewAuthHandler(authService, nodeRegistry)
 	mux.HandleFunc("GET /api/v1/auth/providers", authHandler.ListProviders)
-	mux.HandleFunc("GET /api/v1/auth/{provider}/login", authHandler.Login)
-	mux.HandleFunc("GET /api/v1/auth/{provider}/callback", authHandler.Callback)
+	mux.Handle("GET /api/v1/auth/{provider}/login", authLimit(http.HandlerFunc(authHandler.Login)))
+	mux.Handle("GET /api/v1/auth/{provider}/callback", authLimit(http.HandlerFunc(authHandler.Callback)))
 	// POST callback: required by providers using response_mode=form_post
 	// (Apple, whenever name/email scopes are requested) — the provider POSTs
 	// code/state/the one-time "user" field to this same URL instead of a
 	// 302 redirect with query params.
-	mux.HandleFunc("POST /api/v1/auth/{provider}/callback", authHandler.Callback)
-	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
+	mux.Handle("POST /api/v1/auth/{provider}/callback", authLimit(http.HandlerFunc(authHandler.Callback)))
+	mux.Handle("POST /api/v1/auth/refresh", authLimit(http.HandlerFunc(authHandler.Refresh)))
 
 	userHandler := handler.NewUserHandler(userService, nodeRegistry)
-	mux.Handle("GET /api/v1/search", requireAuth(http.HandlerFunc(userHandler.Search)))
-	mux.Handle("GET /api/v1/user", requireAuth(http.HandlerFunc(userHandler.List)))
-	mux.Handle("POST /api/v1/user", requireAuth(http.HandlerFunc(userHandler.Create)))
-	mux.Handle("GET /api/v1/user/{nodeId}/{localId}", requireAuth(http.HandlerFunc(userHandler.GetByID)))
-	mux.Handle("PATCH /api/v1/user/{nodeId}/{localId}", requireAuth(http.HandlerFunc(userHandler.Update)))
+	mux.Handle("GET /api/v1/search", requireAuth(searchLimit(http.HandlerFunc(userHandler.Search))))
+	mux.Handle("GET /api/v1/user", requireAuth(defaultLimit(http.HandlerFunc(userHandler.List))))
+	mux.Handle("POST /api/v1/user", requireAuth(defaultLimit(http.HandlerFunc(userHandler.Create))))
+	mux.Handle("GET /api/v1/user/{nodeId}/{localId}", requireAuth(defaultLimit(http.HandlerFunc(userHandler.GetByID))))
+	mux.Handle("PATCH /api/v1/user/{nodeId}/{localId}", requireAuth(defaultLimit(http.HandlerFunc(userHandler.Update))))
 
 	chatHandler := handler.NewChatHandler(chatService, e2eeService, hub, nodeRegistry)
-	mux.Handle("GET /api/v1/chat", requireAuth(http.HandlerFunc(chatHandler.List)))
-	mux.Handle("POST /api/v1/chat", requireAuth(http.HandlerFunc(chatHandler.Create)))
+	mux.Handle("GET /api/v1/chat", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.List))))
+	mux.Handle("POST /api/v1/chat", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.Create))))
 
 	e2eeHandler := handler.NewE2EEHandler(e2eeService, nodeRegistry)
-	mux.Handle("PUT /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(http.HandlerFunc(e2eeHandler.PutIdentityKey)))
-	mux.Handle("GET /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(http.HandlerFunc(e2eeHandler.GetIdentityKey)))
-	mux.Handle("GET /api/v1/chat/{nodeId}/{localId}/key-wraps", requireAuth(http.HandlerFunc(e2eeHandler.ListKeyWraps)))
+	mux.Handle("PUT /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.PutIdentityKey))))
+	mux.Handle("GET /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.GetIdentityKey))))
+	mux.Handle("GET /api/v1/chat/{nodeId}/{localId}/key-wraps", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.ListKeyWraps))))
 
 	messageHandler := handler.NewMessageHandler(messageService, chatRepo, hub, nodeRegistry)
-	mux.Handle("GET /api/v1/message", requireAuth(http.HandlerFunc(messageHandler.List)))
-	mux.Handle("POST /api/v1/message", requireAuth(http.HandlerFunc(messageHandler.Create)))
-	mux.Handle("PATCH /api/v1/message/{nodeId}/{localId}", requireAuth(http.HandlerFunc(messageHandler.Update)))
+	mux.Handle("GET /api/v1/message", requireAuth(messageLimit(http.HandlerFunc(messageHandler.List))))
+	mux.Handle("POST /api/v1/message", requireAuth(messageLimit(http.HandlerFunc(messageHandler.Create))))
+	mux.Handle("PATCH /api/v1/message/{nodeId}/{localId}", requireAuth(messageLimit(http.HandlerFunc(messageHandler.Update))))
 
 	wsHandler := handler.NewWSHandler(authService, logger, hub, userRepo, oidcProviderRepo)
-	mux.HandleFunc("GET /api/v1/ws", wsHandler.ServeHTTP)
+	mux.Handle("GET /api/v1/ws", wsLimit(http.HandlerFunc(wsHandler.ServeHTTP)))
 
 	root := middleware.Logging(logger)(mux)
 
@@ -82,4 +93,12 @@ func (a *App) DB() *sql.DB {
 
 func (a *App) Handler() http.Handler {
 	return a.handler
+}
+
+// toMiddlewareRateLimit adapts config.RateLimitConfig to
+// middleware.RateLimitConfig. The two packages each define their own copy of
+// this shape (config can't import middleware: middleware depends on service,
+// which already depends on config) rather than share a type across layers.
+func toMiddlewareRateLimit(cfg config.RateLimitConfig) middleware.RateLimitConfig {
+	return middleware.RateLimitConfig{RequestsPerMinute: cfg.RequestsPerMinute, Burst: cfg.Burst}
 }

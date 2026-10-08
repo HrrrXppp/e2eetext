@@ -1,0 +1,89 @@
+package app
+
+import (
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/ekhrunov/messenger/server/internal/config"
+	"github.com/ekhrunov/messenger/server/internal/node"
+)
+
+func newRateLimitedTestHandler(t *testing.T, limits config.RateLimits) http.Handler {
+	t.Helper()
+
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	application, err := New(
+		config.Config{RateLimits: limits},
+		logger,
+		db,
+		node.Registry{ID: "99999999-9999-9999-9999-999999999999"},
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	return application.Handler()
+}
+
+// TestRateLimit_AuthRouteRejectsOverBurst drives POST /api/v1/auth/refresh
+// through the real app.New(...) handler to confirm the auth-class rate
+// limiter is actually wired in (not just unit-tested in isolation): once the
+// configured burst is exhausted, further requests from the same IP get 429
+// before the handler runs, and /health stays unaffected since it never gets
+// a limiter at all.
+func TestRateLimit_AuthRouteRejectsOverBurst(t *testing.T) {
+	handler := newRateLimitedTestHandler(t, config.RateLimits{
+		Auth: config.RateLimitConfig{RequestsPerMinute: 60, Burst: 1},
+	})
+
+	refresh := func() int {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := refresh(); code == http.StatusTooManyRequests {
+		t.Fatalf("first request status = %d, want anything but 429", code)
+	}
+	if code := refresh(); code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", code)
+	}
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	healthReq.RemoteAddr = "192.0.2.1:1234"
+	healthRec := httptest.NewRecorder()
+	handler.ServeHTTP(healthRec, healthReq)
+	if healthRec.Code != http.StatusOK {
+		t.Fatalf("/health status = %d, want 200 (unaffected by auth rate limit)", healthRec.Code)
+	}
+}
+
+// TestRateLimit_DisabledByDefaultInTests confirms the zero-value
+// config.RateLimits used by the other app tests (which build Config{}
+// directly rather than going through config.Load) leaves rate limiting off,
+// so those tests aren't coupled to this change.
+func TestRateLimit_DisabledByDefaultInTests(t *testing.T) {
+	handler := newRateLimitedTestHandler(t, config.RateLimits{})
+
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d got 429 with zero-value RateLimits, want rate limiting disabled", i)
+		}
+	}
+}

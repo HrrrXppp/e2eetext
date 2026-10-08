@@ -26,7 +26,7 @@ messenger/
 │       ├── database/      # postgres + migrations
 │       ├── domain/        # entities
 │       ├── handler/       # HTTP handlers
-│       ├── middleware/    # logging, auth
+│       ├── middleware/    # logging, auth, rate limiting
 │       ├── repository/    # data access
 │       └── service/       # business logic
 └── docker-compose.yml     # local PostgreSQL
@@ -200,6 +200,30 @@ All routes below require `Authorization: Bearer <id_token>` (or `?token=` for th
 | `GET` | `/api/v1/ws` | WebSocket for realtime events (`chat.added`, `chat.unread`) |
 
 Scoped resource IDs use the form `{nodeId}/{localId}` (e.g. `99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111`).
+
+### Rate limiting
+
+Every route above except `/health` and `GET /api/v1/auth/providers` is rate-limited with in-memory token buckets (one bucket per key; this assumes a single server instance — scaling out horizontally would need a shared store instead). A request over the limit gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a JSON body (`{"error": "too many requests"}`).
+
+| Class | Routes | Keyed by |
+|-------|--------|----------|
+| `auth` | `/api/v1/auth/{provider}/login`, `/api/v1/auth/{provider}/callback`, `/api/v1/auth/refresh` | Client IP (no user identity yet) |
+| `search` | `GET /api/v1/search` | Authenticated user |
+| `message` | `/api/v1/message*` | Authenticated user |
+| `default` | `/api/v1/user*`, `/api/v1/chat*`, identity-key and key-wraps routes | Authenticated user |
+| `ws` | `GET /api/v1/ws` (the upgrade handshake only; an established connection isn't throttled per-message) | Client IP |
+
+Each class refills at `requests_per_minute` and allows short bursts up to `burst`. Configure them under `rate_limits` in the JSON file at `CONFIG_PATH` (see `server/config.example.json`); any class omitted from the file falls back to these built-in defaults:
+
+| Class | Local default (`server/config.example.json`) | Production default (`maintenance/ec2/config/config.example.json`) |
+|-------|-----------------------------------------------|---------------------------------------------------------------------|
+| `auth` | 30/min, burst 10 | 15/min, burst 5 |
+| `search` | 60/min, burst 20 | 40/min, burst 10 |
+| `message` | 120/min, burst 30 | 80/min, burst 20 |
+| `default` | 300/min, burst 60 | 200/min, burst 40 |
+| `ws` | 30/min, burst 10 | 20/min, burst 5 |
+
+Set either `requests_per_minute` or `burst` to a negative number to disable a class outright (plain `0` is treated as "not set" and falls back to the default above, since a JSON file can't otherwise distinguish an omitted key from an explicit `0`).
 
 ## End-to-end encryption (v1)
 
