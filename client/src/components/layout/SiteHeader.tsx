@@ -3,6 +3,7 @@ import { EditNameDialog } from "@/components/auth/EditNameDialog";
 import { IdentityBackupPrompt } from "@/components/auth/IdentityBackupPrompt";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { appVersion } from "@/lib/version";
 import { userDisplayName } from "@/lib/users";
 
@@ -16,6 +17,7 @@ export function SiteHeader() {
     justCreatedIdentity,
     acknowledgeIdentityBackup,
   } = useAuth();
+  const notifications = useNotificationPermission();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [skipProfile, setSkipProfile] = useState(false);
@@ -67,6 +69,15 @@ export function SiteHeader() {
               >
                 Chats
               </a>
+              {notifications.supported && notifications.permission === "default" ? (
+                <button
+                  type="button"
+                  className="site-head__sign-in"
+                  onClick={() => void notifications.request()}
+                >
+                  Enable notifications
+                </button>
+              ) : null}
               <button type="button" className="site-head__sign-in" onClick={signOut}>
                 Sign out
               </button>
