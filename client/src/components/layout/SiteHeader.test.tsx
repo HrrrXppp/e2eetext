@@ -21,7 +21,12 @@ vi.mock("@/lib/e2ee/crypto", () => ({
   importIdentityBackup: vi.fn(),
 }));
 
+vi.mock("@/hooks/useNotificationPermission", () => ({
+  useNotificationPermission: vi.fn(),
+}));
+
 import { useAuth } from "@/hooks/useAuth";
+import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 
 const SIGNED_IN_USER = {
   id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -34,6 +39,11 @@ const SIGNED_IN_USER = {
 describe("SiteHeader OIDC providers", () => {
   beforeEach(() => {
     vi.mocked(useAuth).mockReset();
+    vi.mocked(useNotificationPermission).mockReset().mockReturnValue({
+      supported: false,
+      permission: "default",
+      request: vi.fn(),
+    });
   });
 
   it("shows the application version in the header", () => {
@@ -212,5 +222,74 @@ describe("SiteHeader OIDC providers", () => {
     render(<SiteHeader />);
 
     expect(screen.queryByText("Save a backup of your private key")).not.toBeInTheDocument();
+  });
+
+  it("shows an Enable notifications button when supported and not yet decided", () => {
+    const request = vi.fn();
+    vi.mocked(useNotificationPermission).mockReturnValue({
+      supported: true,
+      permission: "default",
+      request,
+    });
+    vi.mocked(useAuth).mockReturnValue({
+      user: SIGNED_IN_USER,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+
+    render(<SiteHeader />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable notifications" }));
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Enable notifications button once permission has been decided", () => {
+    vi.mocked(useNotificationPermission).mockReturnValue({
+      supported: true,
+      permission: "granted",
+      request: vi.fn(),
+    });
+    vi.mocked(useAuth).mockReturnValue({
+      user: SIGNED_IN_USER,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+
+    render(<SiteHeader />);
+
+    expect(
+      screen.queryByRole("button", { name: "Enable notifications" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the Enable notifications button when unsupported", () => {
+    vi.mocked(useNotificationPermission).mockReturnValue({
+      supported: false,
+      permission: "default",
+      request: vi.fn(),
+    });
+    vi.mocked(useAuth).mockReturnValue({
+      user: SIGNED_IN_USER,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+
+    render(<SiteHeader />);
+
+    expect(
+      screen.queryByRole("button", { name: "Enable notifications" }),
+    ).not.toBeInTheDocument();
   });
 });

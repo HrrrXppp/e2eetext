@@ -10,6 +10,12 @@ import { fetchChats, type Chat } from "@/lib/chats";
 import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/session";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import { filterActiveMessages } from "@/lib/disappear";
+import {
+  consumePendingNotificationChatId,
+  notifyNewMessage,
+  NOTIFICATION_CHAT_SELECT_EVENT,
+  type NotificationChatSelectDetail,
+} from "@/lib/notifications";
 import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
 
 export function ChatsPage() {
@@ -121,6 +127,32 @@ export function ChatsPage() {
     void loadMessages(selectedChatId, user.id);
   }, [selectedChatId, user?.id, loadMessages]);
 
+  // Clicking a desktop notification while this tab is already open
+  // dispatches this event (see lib/notifications.ts); select the chat it
+  // points at.
+  useEffect(() => {
+    function handleNotificationChatSelect(event: Event) {
+      const detail = (event as CustomEvent<NotificationChatSelectDetail>).detail;
+      if (detail?.chatId) {
+        setSelectedChatId(detail.chatId);
+      }
+    }
+
+    window.addEventListener(NOTIFICATION_CHAT_SELECT_EVENT, handleNotificationChatSelect);
+    return () =>
+      window.removeEventListener(NOTIFICATION_CHAT_SELECT_EVENT, handleNotificationChatSelect);
+  }, []);
+
+  // Defensive fallback for the rare case where a notification was clicked
+  // after the tab had been fully closed: pick up the chat id the click
+  // handler stashed in sessionStorage before this fresh mount existed.
+  useEffect(() => {
+    const pendingChatId = consumePendingNotificationChatId();
+    if (pendingChatId) {
+      setSelectedChatId(pendingChatId);
+    }
+  }, []);
+
   function handleChatCreated(chat: Chat) {
     setChats((current) => [chat, ...current]);
     setSelectedChatId(chat.id);
@@ -143,6 +175,24 @@ export function ChatsPage() {
 
         if (incomingCount !== previousCount && user?.id) {
           void loadMessages(selectedChatId, user.id);
+        }
+      }
+
+      // Notify for any chat whose unread count just increased, except the
+      // chat the user is actively looking at right now (selected, and this
+      // tab is in the foreground). A background tab still notifies for the
+      // open conversation too, since the visibility check covers that.
+      const isTabVisible = document.visibilityState === "visible";
+      for (const chat of chats) {
+        const unread = unreadByChatId.get(chat.id);
+        if (!unread) {
+          continue;
+        }
+
+        const previousCount = chat.unreadMessageCount ?? 0;
+        const isOpenAndVisible = chat.id === selectedChatId && isTabVisible;
+        if (unread.unreadMessageCount > previousCount && !isOpenAndVisible) {
+          notifyNewMessage(chat);
         }
       }
 

@@ -29,10 +29,24 @@ vi.mock("@/hooks/useChatSocket", () => ({
   useChatSocket: vi.fn(),
 }));
 
+vi.mock("@/lib/notifications", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/notifications")>();
+  return {
+    ...actual,
+    notifyNewMessage: vi.fn(),
+    consumePendingNotificationChatId: vi.fn(() => null),
+  };
+});
+
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { fetchChats } from "@/lib/chats";
 import { createMessage, fetchMessages } from "@/lib/messages";
+import {
+  consumePendingNotificationChatId,
+  notifyNewMessage,
+  NOTIFICATION_CHAT_SELECT_EVENT,
+} from "@/lib/notifications";
 import type { ChatUnreadEvent } from "@/lib/ws";
 
 let onChatUnread: ((event: ChatUnreadEvent) => void) | undefined;
@@ -66,11 +80,21 @@ const sampleMessage = {
   updatedAt: "2026-06-11T12:00:00.000Z",
 };
 
+const otherChat = {
+  id: "22222222-2222-2222-2222-222222222222",
+  name: "Random",
+  disappearAfterMinutes: 86400,
+  createdAt: "2026-06-10T12:00:00.000Z",
+  updatedAt: "2026-06-10T12:00:00.000Z",
+};
+
 describe("ChatsPage", () => {
   beforeEach(() => {
     onChatUnread = undefined;
     vi.mocked(fetchMessages).mockReset();
     vi.mocked(fetchChats).mockReset();
+    vi.mocked(notifyNewMessage).mockReset();
+    vi.mocked(consumePendingNotificationChatId).mockReset().mockReturnValue(null);
   });
 
   it("renders chats and messages in a split layout", async () => {
@@ -253,5 +277,98 @@ describe("ChatsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Back to chats" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("notifies for a background chat whose unread count increases, but not for the open one", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([
+      { ...sampleChat, unreadMessageCount: 0 },
+      { ...otherChat, unreadMessageCount: 0 },
+    ]);
+    vi.mocked(fetchMessages).mockResolvedValue([sampleMessage]);
+
+    render(<ChatsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("hello")).toBeInTheDocument();
+    });
+
+    // sampleChat is selected (first chat) and the tab is visible by
+    // default in jsdom, so only otherChat's increase should notify.
+    await act(async () => {
+      onChatUnread?.({
+        type: "chat.unread",
+        chats: [
+          { chatId: sampleChat.id, unreadMessageCount: 1, updatedAt: "2026-06-11T12:05:00.000Z" },
+          { chatId: otherChat.id, unreadMessageCount: 1, updatedAt: "2026-06-11T12:05:00.000Z" },
+        ],
+      });
+    });
+
+    expect(notifyNewMessage).toHaveBeenCalledTimes(1);
+    expect(notifyNewMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: otherChat.id }),
+    );
+  });
+
+  it("selects the chat referenced by a notification click event", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([sampleChat, otherChat]);
+    vi.mocked(fetchMessages).mockResolvedValue([]);
+
+    render(<ChatsPage />);
+
+    await waitFor(() => {
+      expect(fetchMessages).toHaveBeenCalledWith(sampleChat.id);
+    });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(NOTIFICATION_CHAT_SELECT_EVENT, {
+          detail: { chatId: otherChat.id },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(fetchMessages).toHaveBeenCalledWith(otherChat.id);
+    });
+  });
+
+  it("selects a chat left pending by a notification click from before this tab existed", async () => {
+    vi.mocked(consumePendingNotificationChatId).mockReturnValue(otherChat.id);
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([sampleChat, otherChat]);
+    vi.mocked(fetchMessages).mockResolvedValue([]);
+
+    render(<ChatsPage />);
+
+    await waitFor(() => {
+      expect(fetchMessages).toHaveBeenCalledWith(otherChat.id);
+    });
   });
 });

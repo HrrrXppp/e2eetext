@@ -246,6 +246,19 @@ The User Settings dialog (opened from the Name button in the header) exposes **B
 - Chat names remain plaintext.
 - Legacy plaintext messages (non-envelope `data`) are shown as-is.
 
+## Browser notifications (desktop)
+
+Desktop-only for now (see Limitations below). When signed in, an **Enable notifications** button appears in the header if the browser supports the `Notification` API; clicking it triggers the browser's own native permission prompt.
+
+- Fires one OS notification per chat whose unread count increases over the existing WebSocket connection (`client/src/hooks/useChatSocket.ts`), while the tab is backgrounded or another chat is open — never for the chat the user is actively viewing in the foreground.
+- Notification copy is deliberately generic (`New message in {chat name}`) — no message preview or sender, since that would be E2EE plaintext landing in an OS notification center/log.
+- Clicking a notification focuses the tab and opens that chat.
+- Requires a secure context (HTTPS, or `http://localhost` in dev) — the `Notification` API is unavailable otherwise.
+- Each user may also need to check their OS's own notification settings (Focus/Do Not Disturb on macOS, Focus Assist on Windows, notifications enabled for the browser) — the app cannot read or change that per-user OS preference.
+- If a user blocks the permission prompt, the app cannot re-prompt; they can re-enable it later via the browser's own site settings (the lock icon in the address bar).
+
+**Limitations**: mobile is out of scope for this pass and the button is hidden there — Android Chrome requires a service worker (`ServiceWorkerRegistration.showNotification`) for notifications at all, and iOS Safari only supports them for a site installed to the Home Screen (iOS 16.4+) with a web app manifest, service worker and the Push API; a normal mobile tab also gets its WebSocket suspended in the background, so a socket-driven notification wouldn't arrive anyway. Reliable mobile delivery needs Web Push (service worker + server-side subscription storage), tracked as a separate follow-up.
+
 ## Disappearing messages
 
 Chat-level TTL only. Column `chats.disappear_after_minutes` (API `disappearAfterMinutes`), **default 60 days (86400 minutes)**. A message is live while:

@@ -3,6 +3,7 @@ import { EditNameDialog } from "@/components/auth/EditNameDialog";
 import { IdentityBackupPrompt } from "@/components/auth/IdentityBackupPrompt";
 import { SignInDialog } from "@/components/auth/SignInDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { appVersion } from "@/lib/version";
 import { userDisplayName } from "@/lib/users";
 
@@ -16,6 +17,11 @@ export function SiteHeader() {
     justCreatedIdentity,
     acknowledgeIdentityBackup,
   } = useAuth();
+  const {
+    supported: notificationsSupported,
+    permission: notificationPermission,
+    request: requestNotificationPermission,
+  } = useNotificationPermission();
   const [signInOpen, setSignInOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [skipProfile, setSkipProfile] = useState(false);
@@ -60,6 +66,15 @@ export function SiteHeader() {
                   {userDisplayName(user.name)}
                 </button>
               </div>
+              {notificationsSupported && notificationPermission === "default" ? (
+                <button
+                  type="button"
+                  className="site-head__sign-in"
+                  onClick={() => void requestNotificationPermission()}
+                >
+                  Enable notifications
+                </button>
+              ) : null}
               <a
                 className={`site-head__sign-in site-head__chats${onChatsPage ? " site-head__chats--active" : ""}`}
                 href="/chats"
