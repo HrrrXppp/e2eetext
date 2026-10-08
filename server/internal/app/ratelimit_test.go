@@ -70,6 +70,27 @@ func TestRateLimit_AuthRouteRejectsOverBurst(t *testing.T) {
 	}
 }
 
+// TestRateLimit_HealthNeverLimited confirms /health has no limiter wired in
+// at all, even when every route class is configured aggressively enough to
+// reject a second request outright — Docker/ALB health checks must not be
+// able to trip it.
+func TestRateLimit_HealthNeverLimited(t *testing.T) {
+	tight := config.RateLimitConfig{RequestsPerMinute: 1, Burst: 1}
+	handler := newRateLimitedTestHandler(t, config.RateLimits{
+		Auth: tight, Search: tight, Message: tight, Default: tight, WS: tight,
+	})
+
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i, rec.Code)
+		}
+	}
+}
+
 // TestRateLimit_DisabledByDefaultInTests confirms the zero-value
 // config.RateLimits used by the other app tests (which build Config{}
 // directly rather than going through config.Load) leaves rate limiting off,
