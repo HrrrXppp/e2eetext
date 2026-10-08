@@ -258,6 +258,15 @@ There is no per-message `expires_at`. Changing a chat’s TTL retargets existing
 - **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose and RDS Terraform both set `cron.database_name` to the app DB; on RDS enable `shared_preload_libraries=pg_cron` via a custom parameter group and reboot the instance after apply before migrating.
 - **Client** — default 60-day TTL on create; countdown from `createdAt` + chat TTL; local drop on a timer.
 
+## Browser notifications
+
+Desktop browsers only. When a `chat.unread` WebSocket event raises a chat's unread count, the client shows a `Notification` titled "New message in {chat name}" (no message text, so plaintext never reaches the OS notification center). It is suppressed for the open chat while the tab is visible. Same-chat notifications share a tag and replace each other; clicking one focuses the tab and selects that chat.
+
+- **Enable** — signed-in users see an "Enable notifications" header button while permission is `default`; it triggers the browser's native prompt. A blocked site can be re-enabled via the address-bar lock icon, Notifications.
+- **Requirements** — HTTPS (or `localhost`). The button is hidden when the API is unavailable and on Android/iOS, which need a service worker plus Web Push (tracked separately).
+- **OS settings** — Do Not Disturb / Focus Assist must be off and the browser allowed in OS notification settings, or the OS hides the notification.
+- **Limits** — only works while a tab is open; multiple open tabs may briefly double-notify.
+
 ## Authentication flow
 
 ```
