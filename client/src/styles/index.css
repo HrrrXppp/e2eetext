@@ -1017,6 +1017,14 @@ body.has-dev-instance-banner .site-head {
   font-size: 0.9375rem;
 }
 
+.identity-backup-prompt__secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
 .sign-in-dialog__providers {
   display: grid;
   gap: 0.75rem;

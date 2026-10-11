@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Client
+
+- Post-login private-key prompt keeps space between "Restore from a backup instead" and "Skip for now"
+
 ## [0.3.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
 ### Added
