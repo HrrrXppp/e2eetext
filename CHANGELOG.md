@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- Prod example RDS engine version is `16.15`. PostgreSQL `16.4` is no longer offered for new instances in us-east-2
+
 ### Added
 
 #### Tooling & deployment
