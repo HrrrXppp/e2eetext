@@ -938,7 +938,7 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
 ```
 maintenance/claude-runner/
 ├── Dockerfile          # node:22-bookworm-slim + go, docker CLI, aws-cli, git, curl, the claude-code npm package
-├── entrypoint.sh        # clone/fetch dev, run `claude -p` on a timer, exec passthrough for ad hoc/interactive commands
+├── entrypoint.sh        # clone/fetch main, run `claude -p` on a timer, exec passthrough for ad hoc/interactive commands
 ├── docker-compose.yml   # standalone compose service (not the app's root docker-compose.yml)
 └── .env.example          # runtime config template
 ```

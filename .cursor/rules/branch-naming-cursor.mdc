@@ -1,11 +1,14 @@
 ---
-description: Feature branches created by Cursor must end with -cursor
+description: Cursor feature branches start from main and end with -cursor
 alwaysApply: true
 ---
 
 # Branch naming (Cursor)
 
-When creating a new git feature branch for work done in this Cursor session, **always** suffix the name with `-cursor`.
+When creating a new git feature branch for work done in this Cursor session:
+
+- **Start from `main`.** Fetch `origin/main` and create the branch from that tip. The `dev` branch has been removed. Do not branch from `dev`, and do not open pull requests against it. Pull requests target `main`.
+- **Always** suffix the branch name with `-cursor`.
 
 Examples:
 
