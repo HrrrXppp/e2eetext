@@ -103,9 +103,14 @@ func TestRateLimit_HealthNeverLimited(t *testing.T) {
 		Auth: tight, Search: tight, Message: tight, Default: tight, WS: tight,
 	})
 
+	const (
+		method     = http.MethodGet
+		path       = "/health"
+		remoteAddr = "192.0.2.1:1234"
+	)
 	for i := 0; i < 20; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
-		req.RemoteAddr = "192.0.2.1:1234"
+		req := httptest.NewRequest(method, path, nil)
+		req.RemoteAddr = remoteAddr
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -121,9 +126,14 @@ func TestRateLimit_HealthNeverLimited(t *testing.T) {
 func TestRateLimit_DisabledByDefaultInTests(t *testing.T) {
 	handler := newRateLimitedTestHandler(t, config.RateLimits{})
 
+	const (
+		method     = http.MethodPost
+		path       = "/api/v1/auth/refresh"
+		remoteAddr = "192.0.2.1:1234"
+	)
 	for i := 0; i < 20; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
-		req.RemoteAddr = "192.0.2.1:1234"
+		req := httptest.NewRequest(method, path, nil)
+		req.RemoteAddr = remoteAddr
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code == http.StatusTooManyRequests {
