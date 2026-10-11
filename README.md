@@ -584,12 +584,12 @@ IMAGE_TAG=latest bash maintenance/ec2/deploy.sh
 ```hcl
 # dig — terraform/envs/dev/ec2_image_tag.tf
 locals {
-  ec2_boot_deploy_image_tag = "v0.2.0"
+  ec2_boot_deploy_image_tag = "v0.3.1"
 }
 
 # prod — terraform/envs/prod/ec2_image_tag.tf
 locals {
-  ec2_boot_deploy_image_tag = "v0.2.0"  # may differ from dig
+  ec2_boot_deploy_image_tag = "v0.3.1"  # may differ from dig
 }
 ```
 
@@ -597,7 +597,7 @@ Edit the relevant `ec2_image_tag.tf`, commit, and `terraform apply` that env. Ap
 
 Prerequisites on the box (still one-time host setup, not the boot unit itself): Docker, AWS CLI, cloned repo, `maintenance/ec2/.env` + `config/*.json`. After the first apply attaches IAM, wait until the instance is SSM-managed before expecting the association to succeed. `user_data` stays `ignore_changes` for brownfield — dig is not replaced.
 
-Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.2.0 bash maintenance/ec2/install-boot-service.sh`.
+Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.3.1 bash maintenance/ec2/install-boot-service.sh`.
 
 Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
 
