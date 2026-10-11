@@ -10,6 +10,7 @@ import { fetchChats, type Chat } from "@/lib/chats";
 import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/session";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import { filterActiveMessages } from "@/lib/disappear";
+import { NOTIFICATION_CHAT_SELECT_EVENT, notifyNewMessage } from "@/lib/notifications";
 import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
 
 export function ChatsPage() {
@@ -121,6 +122,17 @@ export function ChatsPage() {
     void loadMessages(selectedChatId, user.id);
   }, [selectedChatId, user?.id, loadMessages]);
 
+  useEffect(() => {
+    function onNotificationSelect(event: Event) {
+      const chatId = (event as CustomEvent<{ chatId?: string }>).detail?.chatId;
+      if (chatId) {
+        setSelectedChatId(chatId);
+      }
+    }
+    window.addEventListener(NOTIFICATION_CHAT_SELECT_EVENT, onNotificationSelect);
+    return () => window.removeEventListener(NOTIFICATION_CHAT_SELECT_EVENT, onNotificationSelect);
+  }, []);
+
   function handleChatCreated(chat: Chat) {
     setChats((current) => [chat, ...current]);
     setSelectedChatId(chat.id);
@@ -143,6 +155,14 @@ export function ChatsPage() {
 
         if (incomingCount !== previousCount && user?.id) {
           void loadMessages(selectedChatId, user.id);
+        }
+      }
+
+      const viewing = document.visibilityState === "visible";
+      for (const chat of chats) {
+        const incoming = unreadByChatId.get(chat.id)?.unreadMessageCount ?? 0;
+        if (incoming > (chat.unreadMessageCount ?? 0) && !(viewing && chat.id === selectedChatId)) {
+          notifyNewMessage(chat);
         }
       }
 

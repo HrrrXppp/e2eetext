@@ -25,6 +25,11 @@ vi.mock("@/lib/messages", () => ({
   markMessageRead: vi.fn(),
 }));
 
+vi.mock("@/lib/notifications", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/notifications")>();
+  return { ...actual, notifyNewMessage: vi.fn() };
+});
+
 vi.mock("@/hooks/useChatSocket", () => ({
   useChatSocket: vi.fn(),
 }));
@@ -33,6 +38,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { fetchChats } from "@/lib/chats";
 import { createMessage, fetchMessages } from "@/lib/messages";
+import { notifyNewMessage } from "@/lib/notifications";
 import type { ChatUnreadEvent } from "@/lib/ws";
 
 let onChatUnread: ((event: ChatUnreadEvent) => void) | undefined;
@@ -69,6 +75,7 @@ const sampleMessage = {
 describe("ChatsPage", () => {
   beforeEach(() => {
     onChatUnread = undefined;
+    vi.mocked(notifyNewMessage).mockClear();
     vi.mocked(fetchMessages).mockReset();
     vi.mocked(fetchChats).mockReset();
   });
@@ -253,5 +260,95 @@ describe("ChatsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Back to chats" }),
     ).not.toBeInTheDocument();
+  });
+
+  describe("notifications", () => {
+    const otherChat = {
+      ...sampleChat,
+      id: "22222222-2222-2222-2222-222222222222",
+      name: "Other",
+      updatedAt: "2026-06-11T11:00:00.000Z",
+      unreadMessageCount: 0,
+    };
+
+    async function renderWithTwoChats() {
+      vi.mocked(useAuth).mockReturnValue({
+        user: authUser,
+        providers: [],
+        loading: false,
+        signOut: vi.fn(),
+        setDisplayName: vi.fn(),
+        justCreatedIdentity: false,
+        acknowledgeIdentityBackup: vi.fn(),
+      });
+      vi.mocked(fetchChats).mockResolvedValue([
+        { ...sampleChat, unreadMessageCount: 0 },
+        otherChat,
+      ]);
+      vi.mocked(fetchMessages).mockResolvedValue([]);
+      render(<ChatsPage />);
+      await waitFor(() => {
+        expect(screen.getByRole("option", { name: /General/i })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+      });
+    }
+
+    function unread(chatId: string, count: number): ChatUnreadEvent {
+      return {
+        type: "chat.unread",
+        chats: [{ chatId, unreadMessageCount: count, updatedAt: "2026-06-11T12:05:00.000Z" }],
+      };
+    }
+
+    it("notifies for an increased count on a background chat", async () => {
+      await renderWithTwoChats();
+      await act(async () => {
+        onChatUnread?.(unread(otherChat.id, 1));
+      });
+      expect(notifyNewMessage).toHaveBeenCalledTimes(1);
+      expect(notifyNewMessage).toHaveBeenCalledWith(expect.objectContaining({ id: otherChat.id }));
+    });
+
+    it("does not notify for the selected chat while the tab is visible", async () => {
+      await renderWithTwoChats();
+      await act(async () => {
+        onChatUnread?.(unread(sampleChat.id, 1));
+      });
+      expect(notifyNewMessage).not.toHaveBeenCalled();
+    });
+
+    it("notifies for the selected chat when the tab is hidden", async () => {
+      await renderWithTwoChats();
+      const spy = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      try {
+        await act(async () => {
+          onChatUnread?.(unread(sampleChat.id, 1));
+        });
+        expect(notifyNewMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ id: sampleChat.id }),
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("selects the chat when a notification is clicked", async () => {
+      await renderWithTwoChats();
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent("messenger:notification-chat-select", {
+            detail: { chatId: otherChat.id },
+          }),
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("option", { name: /Other/i })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+      });
+    });
   });
 });
