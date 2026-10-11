@@ -13,7 +13,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Changed
 
-- Footer now shows a single "Donate" link to the Stripe donation page (opens in a new tab, `rel="noopener noreferrer"`) instead of the "sustained through advertisement and donations — coming soon" text (#92)
+- Footer keeps the "sustained through advertisement and donations" text, with "donations" linking to the Stripe donation page (opens in a new tab, `rel="noopener noreferrer"`); the URL lives in `client/src/lib/config.ts` and can be overridden at build time with `VITE_DONATE_URL` (#92)
 
 ## [0.3.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
