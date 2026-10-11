@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Changed
+
+- Footer now shows a single "Donate" link to the Stripe donation page (opens in a new tab, `rel="noopener noreferrer"`) instead of the "sustained through advertisement and donations — coming soon" text (#92)
+
 ## [0.3.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
 ### Added

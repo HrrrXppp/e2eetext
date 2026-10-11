@@ -180,7 +180,7 @@ describe("ChatsPage", () => {
 
     expect(screen.getByText("Sign in to view your chats.")).toBeInTheDocument();
     expect(
-      screen.getByText(/E2EE Text will be sustained through/),
+      screen.getByRole("link", { name: "Donate" }),
     ).toBeInTheDocument();
   });
 

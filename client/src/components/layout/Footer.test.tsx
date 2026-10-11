@@ -3,13 +3,15 @@ import { describe, expect, it } from "vitest";
 import { Footer } from "@/components/layout/Footer";
 
 describe("Footer", () => {
-  it("shows the sustainability message", () => {
+  it("renders a Donate link that opens the Stripe page in a new tab", () => {
     render(<Footer />);
 
-    expect(
-      screen.getByText(/E2EE Text will be sustained through/),
-    ).toBeInTheDocument();
-    expect(screen.getByText("advertisement")).toBeInTheDocument();
-    expect(screen.getByText("donations")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Donate" });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://donate.stripe.com/8x214g0wr4bWe1RcXZ9R600",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 });
