@@ -57,12 +57,14 @@ export function IdentityBackupPrompt({ userId, onDismiss }: IdentityBackupPrompt
         <button type="button" className="new-chat-dialog__submit" onClick={() => setMode("backup")}>
           Back up now
         </button>
-        <button type="button" className="new-chat-dialog__back" onClick={() => setMode("restore")}>
-          Restore from a backup instead
-        </button>
-        <button type="button" className="new-chat-dialog__back" onClick={onDismiss}>
-          Skip for now
-        </button>
+        <div className="identity-backup-prompt__secondary">
+          <button type="button" className="new-chat-dialog__back" onClick={() => setMode("restore")}>
+            Restore from a backup instead
+          </button>
+          <button type="button" className="new-chat-dialog__back" onClick={onDismiss}>
+            Skip for now
+          </button>
+        </div>
       </div>
     </div>
   );

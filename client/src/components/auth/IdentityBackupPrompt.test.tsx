@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IdentityBackupPrompt } from "@/components/auth/IdentityBackupPrompt";
@@ -61,5 +64,23 @@ describe("IdentityBackupPrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restore from a backup instead" }));
 
     expect(screen.getByText("Restore your private key")).toBeInTheDocument();
+  });
+
+  it("spaces Restore and Skip instead of sitting them flush together", () => {
+    const cssPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../styles/index.css",
+    );
+    const css = readFileSync(cssPath, "utf8");
+    const match = css.match(/\.identity-backup-prompt__secondary\s*\{([^}]*)\}/);
+    expect(match).not.toBeNull();
+    expect(match![1]).toMatch(/display:\s*flex/);
+    expect(match![1]).toMatch(/gap:\s*0\.75rem\s+1\.25rem/);
+
+    render(<IdentityBackupPrompt userId="user-1" onDismiss={vi.fn()} />);
+    const restore = screen.getByRole("button", { name: "Restore from a backup instead" });
+    const skip = screen.getByRole("button", { name: "Skip for now" });
+    expect(restore.parentElement).toBe(skip.parentElement);
+    expect(restore.parentElement).toHaveClass("identity-backup-prompt__secondary");
   });
 });
