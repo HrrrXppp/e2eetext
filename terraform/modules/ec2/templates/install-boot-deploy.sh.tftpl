@@ -5,19 +5,72 @@
 set -euo pipefail
 
 REPO_ROOT='${repo_root}'
+REPO_URL='${repo_url}'
+REPO_BRANCH='${repo_branch}'
 UNIT_DST=/etc/systemd/system/e2eetext.service
 DEPLOY_ENV_DIR=/etc/e2eetext
 DEPLOY_ENV_FILE="$DEPLOY_ENV_DIR/deploy.env"
 IMAGE_TAG='${image_tag}'
 START_NOW='${start_now}'
 
-if [ ! -d "$REPO_ROOT/maintenance/ec2" ]; then
-  echo "Repo root not found at $REPO_ROOT (clone the repo on the instance first)." >&2
-  exit 1
+install_host_packages() {
+  if [ -f /etc/os-release ]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+  fi
+  case "$${ID:-}" in
+    amzn)
+      dnf install -y docker git awscli
+      ;;
+    ubuntu)
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y docker.io git awscli
+      ;;
+    *)
+      echo "Unsupported OS for boot-deploy package install: $${ID:-unknown}" >&2
+      exit 1
+      ;;
+  esac
+  systemctl enable --now docker
+  if ! docker compose version >/dev/null 2>&1; then
+    mkdir -p /usr/local/lib/docker/cli-plugins
+    arch=$(uname -m)
+    curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$arch" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+  fi
+  if id ec2-user >/dev/null 2>&1; then
+    usermod -aG docker ec2-user || true
+  fi
+}
+
+if ! command -v docker >/dev/null 2>&1 \
+  || ! command -v git >/dev/null 2>&1 \
+  || ! command -v aws >/dev/null 2>&1 \
+  || ! docker compose version >/dev/null 2>&1; then
+  install_host_packages
+fi
+systemctl enable --now docker
+
+mkdir -p /var/lib/e2eetext
+exec 9>/var/lib/e2eetext/bootstrap.lock
+flock -w 600 9
+
+if [ ! -d "$REPO_ROOT/.git" ]; then
+  mkdir -p "$(dirname "$REPO_ROOT")"
+  if [ -e "$REPO_ROOT" ]; then
+    if [ -n "$(ls -A "$REPO_ROOT" 2>/dev/null || true)" ]; then
+      echo "Refusing to clone into non-empty $REPO_ROOT (not a git checkout)." >&2
+      exit 1
+    fi
+    rmdir "$REPO_ROOT"
+  fi
+  git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" "$REPO_ROOT"
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is required before enabling the boot unit." >&2
+if [ ! -d "$REPO_ROOT/maintenance/ec2" ]; then
+  echo "Repo root $REPO_ROOT has no maintenance/ec2 after clone." >&2
   exit 1
 fi
 

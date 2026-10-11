@@ -238,8 +238,28 @@ variable "client_health_check_path" {
 }
 
 variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for the prod ALB's HTTPS listener (production domain)."
+  description = <<-EOT
+    Existing ACM certificate ARN in the ALB region (us-east-2) for the prod
+    HTTPS listener. Leave empty to create a DNS-validated certificate for
+    acm_domain_name plus acm_subject_alternative_names. Apply then waits
+    until that certificate is ISSUED (add the CNAMEs from output
+    acm_dns_validation at the DNS host; this account has no Route 53 zones).
+    Do not point this at the dig certificate.
+  EOT
   type        = string
+  default     = ""
+}
+
+variable "acm_domain_name" {
+  description = "Primary name on the Terraform-managed prod ACM certificate (used when acm_certificate_arn is empty)."
+  type        = string
+  default     = "e2eetext.com"
+}
+
+variable "acm_subject_alternative_names" {
+  description = "Additional names on the Terraform-managed prod ACM certificate."
+  type        = list(string)
+  default     = ["e2eetext.org", "e2eetext.net", "e2eetext.io"]
 }
 
 variable "tags" {
@@ -255,7 +275,7 @@ variable "tags" {
 # Live status not yet confirmed (see main.tf's rds module header) — audit
 # first, then either import real values or apply fresh with deliberate,
 # reviewed choices. Required variables below have no default for the same
-# reason ami_id/instance_type/alb_security_group_id/acm_certificate_arn
+# reason ami_id/instance_type/alb_security_group_id
 # don't: a wrong guess for an import target risks a forced replace, and for
 # a fresh apply these should be deliberate choices, not defaults.
 

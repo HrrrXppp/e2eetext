@@ -79,7 +79,7 @@ module "alb" {
 
   security_group_ids  = [var.alb_security_group_id]
   instance_id         = module.ec2.instance_id
-  acm_certificate_arn = var.acm_certificate_arn
+  acm_certificate_arn = local.prod_acm_certificate_arn
 
   server_target_group_name = var.server_target_group_name
   client_target_group_name = var.client_target_group_name

@@ -27,9 +27,14 @@ instance_type = "t3.small"
 # allowing 80/443 from 0.0.0.0/0 first if applying fresh).
 alb_security_group_id = "sg-xxxxxxxx"
 
-# Production domain's ACM certificate:
-#   aws acm list-certificates --region us-east-2
-acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxxxx"
+# Leave acm_certificate_arn unset. Prod then requests a us-east-2 ACM
+# certificate for e2eetext.com / .org / .net / .io (acm_domain_name and
+# acm_subject_alternative_names). Apply waits until it is ISSUED. This
+# account has no Route 53 zones, so create the CNAME records from output
+# acm_dns_validation at the DNS host while apply is waiting. A us-east-1
+# certificate cannot be attached to this ALB, and the dig certificate must
+# not be reused here.
+# acm_certificate_arn = "arn:aws:acm:us-east-2:<AWS_ACCOUNT_ID>:certificate/xxxxxxxx"
 
 # Optional — only if the live (or intended) security group/role/instance
 # profile names differ from this module's defaults.

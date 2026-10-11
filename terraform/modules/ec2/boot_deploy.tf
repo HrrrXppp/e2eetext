@@ -8,9 +8,11 @@ locals {
   boot_deploy_enabled = var.manage_boot_deploy
   boot_deploy_name    = var.name != "" ? "${var.name}-boot-deploy" : "e2eetext-boot-deploy"
   boot_deploy_script = local.boot_deploy_enabled ? templatefile("${path.module}/templates/install-boot-deploy.sh.tftpl", {
-    repo_root = var.boot_deploy_repo_root
-    image_tag = var.boot_deploy_image_tag
-    start_now = var.boot_deploy_start_now ? "true" : "false"
+    repo_root   = var.boot_deploy_repo_root
+    repo_url    = var.boot_deploy_repo_url
+    repo_branch = var.boot_deploy_repo_branch
+    image_tag   = var.boot_deploy_image_tag
+    start_now   = var.boot_deploy_start_now ? "true" : "false"
   }) : ""
   # Separate template + base64 avoids nested-heredoc collisions with the
   # install script body (and keeps the ternary parseable).
@@ -40,6 +42,13 @@ check "boot_deploy_image_tag_set" {
   }
 }
 
+check "boot_deploy_repo_url_set" {
+  assert {
+    condition     = !var.manage_boot_deploy || var.boot_deploy_repo_url != ""
+    error_message = "manage_boot_deploy=true requires boot_deploy_repo_url (public clone URL; do not embed a token)."
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
   count = var.create_iam_instance_profile && var.manage_boot_deploy ? 1 : 0
 
@@ -56,13 +65,13 @@ resource "aws_ssm_document" "boot_deploy" {
 
   content = jsonencode({
     schemaVersion = "2.2"
-    description   = "Install e2eetext systemd boot unit (ECR pull + compose up)"
+    description   = "Install Docker/git if needed, clone the repo if missing, install the e2eetext systemd boot unit (ECR pull + compose up)"
     mainSteps = [
       {
         action = "aws:runShellScript"
         name   = "InstallBootDeploy"
         inputs = {
-          timeoutSeconds = "900"
+          timeoutSeconds = "1800"
           runCommand     = [local.boot_deploy_script]
         }
       }
