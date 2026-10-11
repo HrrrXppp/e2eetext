@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/ekhrunov/messenger/server/internal/requestorigin"
 	"github.com/ekhrunov/messenger/server/internal/service"
 )
@@ -52,8 +50,11 @@ func RateLimit(cfg RateLimitConfig, keyFunc func(*http.Request) string) func(htt
 	return newRateLimiter(cfg, time.Now).middleware(keyFunc)
 }
 
+// bucket is a token bucket: tokens refill continuously at the class rate up to
+// the burst size, and each admitted request spends one.
 type bucket struct {
-	limiter  *rate.Limiter
+	tokens   float64
+	updated  time.Time
 	lastSeen time.Time
 }
 
@@ -99,20 +100,25 @@ func (l *rateLimiter) allow(key string) (time.Duration, bool) {
 
 	l.sweepLocked(now)
 
+	perSecond := float64(l.cfg.RequestsPerMinute) / 60
+	burst := float64(l.cfg.Burst)
+
 	b, ok := l.buckets[key]
 	if !ok {
-		perSecond := rate.Limit(float64(l.cfg.RequestsPerMinute) / 60)
-		b = &bucket{limiter: rate.NewLimiter(perSecond, l.cfg.Burst)}
+		b = &bucket{tokens: burst, updated: now}
 		l.buckets[key] = b
 	}
 	b.lastSeen = now
 
-	reservation := b.limiter.ReserveN(now, 1)
-	if delay := reservation.DelayFrom(now); delay > 0 {
-		reservation.CancelAt(now)
-		return delay, false
+	if elapsed := now.Sub(b.updated).Seconds(); elapsed > 0 {
+		b.tokens = min(burst, b.tokens+elapsed*perSecond)
+		b.updated = now
 	}
-	return 0, true
+	if b.tokens >= 1 {
+		b.tokens--
+		return 0, true
+	}
+	return time.Duration((1 - b.tokens) / perSecond * float64(time.Second)), false
 }
 
 // sweepLocked bounds memory by dropping buckets idle long enough to have fully
