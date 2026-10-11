@@ -80,7 +80,7 @@ alb_security_group_id = "sg-xxxxxxxx"
 # commands). If nothing comes back, choose deliberately for a fresh apply
 # — get sign-off on instance class/storage/Multi-AZ first.
 rds_identifier        = "e2eetext-prod"
-rds_engine_version    = "16.4"
+rds_engine_version    = "16.15"
 rds_instance_class    = "db.t3.micro"
 rds_allocated_storage = 20
 rds_storage_type      = "gp3"

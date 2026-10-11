@@ -285,7 +285,7 @@ variable "rds_identifier" {
 }
 
 variable "rds_engine_version" {
-  description = "Engine version, e.g. \"16.4\" (real value if importing; a deliberately chosen supported PostgreSQL 16.x minor version if applying fresh)."
+  description = "Engine version, e.g. \"16.15\" (real value if importing; a deliberately chosen supported PostgreSQL 16.x minor version if applying fresh). 16.4 is no longer offered for new instances in us-east-2."
   type        = string
 }
 
