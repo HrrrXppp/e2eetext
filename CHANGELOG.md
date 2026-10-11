@@ -11,6 +11,21 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
+
+### Added
+
+#### Tooling & deployment
+
+- Prod HTTPS uses a Terraform-managed ACM certificate in the ALB region (`e2eetext.com`, `.org`, `.net`, `.io`) when `acm_certificate_arn` is empty. Apply waits for DNS validation; this account has no Route 53 zones, so the CNAME records from output `acm_dns_validation` are created at the DNS host
+- EC2 boot deploy installs Docker, git, and the AWS CLI when they are missing, and clones `https://github.com/HrrrXppp/e2eetext.git` (branch `main`) when the checkout is missing. `maintenance/ec2/.env` and the JSON config files are still supplied separately
+
+### Changed
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.2`
+
 ### Fixed
 
 #### Client
@@ -20,13 +35,6 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Tooling & deployment
 
 - Prod example RDS engine version is `16.15`. PostgreSQL `16.4` is no longer offered for new instances in us-east-2
-
-### Added
-
-#### Tooling & deployment
-
-- Prod HTTPS uses a Terraform-managed ACM certificate in the ALB region (`e2eetext.com`, `.org`, `.net`, `.io`) when `acm_certificate_arn` is empty. Apply waits for DNS validation; this account has no Route 53 zones, so the CNAME records from output `acm_dns_validation` are created at the DNS host
-- EC2 boot deploy installs Docker, git, and the AWS CLI when they are missing, and clones `https://github.com/HrrrXppp/e2eetext.git` (branch `main`) when the checkout is missing. `maintenance/ec2/.env` and the JSON config files are still supplied separately
 
 ## [0.3.1](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
