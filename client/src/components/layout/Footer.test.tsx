@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import { Footer } from "@/components/layout/Footer";
 
 describe("Footer", () => {
-  it("renders a Donate link that opens the Stripe page in a new tab", () => {
+  it("keeps the sustain text and links donations so it opens the Stripe page in a new tab", () => {
     render(<Footer />);
 
-    const link = screen.getByRole("link", { name: "Donate" });
+    expect(screen.getByText(/E2EE Text will be sustained through/)).toBeInTheDocument();
+    expect(screen.getByText("advertisement")).toBeInTheDocument();
+
+    const link = screen.getByRole("link", { name: "donations" });
     expect(link).toHaveAttribute(
       "href",
       "https://donate.stripe.com/8x214g0wr4bWe1RcXZ9R600",

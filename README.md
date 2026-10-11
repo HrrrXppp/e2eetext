@@ -153,6 +153,8 @@ Open **http://localhost:5173**.
 | `DATABASE_URL`  | _(required)_                                                         | PostgreSQL connection string       |
 | `CONFIG_PATH`   | _(required)_                                                         | Path to server JSON config file (e.g. `server/config.json`) |
 
+The client reads one optional build-time variable: `VITE_DONATE_URL` overrides the footer's donation link (default lives in `client/src/lib/config.ts`).
+
 OAuth client credentials live in `server/config.json` under `oauth_credentials`, keyed by provider slug (e.g. `google`).
 
 ## Versioning
