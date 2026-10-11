@@ -1,11 +1,24 @@
 name: Build and push images
 
 on:
+  push:
+    branches: [main]
+    paths: [VERSION]
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Overwrite release images on main even if the version tag already exists in ECR"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
   contents: read
+
+# Queue (never cancel) so two quick version bumps build in order.
+concurrency:
+  group: build-images
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
@@ -15,20 +28,74 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check whether VERSION changed
+        id: version
+        run: |
+          current="$(tr -d '[:space:]' < VERSION)"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            previous="$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+            if [ "$current" = "$previous" ]; then
+              echo "VERSION unchanged ($current); nothing to build."
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$current" >> "$GITHUB_ENV"
+
+      - name: Check version bump is complete
+        if: steps.version.outputs.build == 'true' && github.ref_name == 'main'
+        run: |
+          pkg="$(python3 -c 'import json; print(json.load(open("client/package.json"))["version"])')"
+          if [ "$pkg" != "$VERSION" ]; then
+            echo "::error::client/package.json version ($pkg) does not match VERSION ($VERSION)"
+            exit 1
+          fi
+          for f in terraform/envs/dev/ec2_image_tag.tf terraform/envs/prod/ec2_image_tag.tf; do
+            if ! grep -q "ec2_boot_deploy_image_tag = \"v$VERSION\"" "$f"; then
+              echo "::error::$f does not pin ec2_boot_deploy_image_tag to v$VERSION"
+              exit 1
+            fi
+          done
+
       - name: Compute image tag
+        if: steps.version.outputs.build == 'true'
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "IMAGE_TAG=v$(cat VERSION)" >> "$GITHUB_ENV"
+            echo "IMAGE_TAG=v$VERSION" >> "$GITHUB_ENV"
           else
             echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           fi
 
       - uses: aws-actions/configure-aws-credentials@v6
+        if: steps.version.outputs.build == 'true'
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Skip if release images already exist
+        id: exists
+        if: steps.version.outputs.build == 'true' && github.ref_name == 'main' && inputs.force != true
+        run: |
+          missing=0
+          for repo in e2eetext-server e2eetext-client; do
+            if out="$(aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$IMAGE_TAG" 2>&1)"; then
+              echo "$repo:$IMAGE_TAG already exists in ECR."
+            elif echo "$out" | grep -q ImageNotFoundException; then
+              echo "$repo:$IMAGE_TAG not found in ECR."
+              missing=1
+            else
+              echo "$out"
+              exit 1
+            fi
+          done
+          if [ "$missing" = "0" ]; then
+            echo "Both images already exist; not overwriting a released tag."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
+        if: steps.version.outputs.build == 'true' && steps.exists.outputs.skip != 'true'
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |

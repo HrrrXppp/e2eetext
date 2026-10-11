@@ -166,6 +166,8 @@ The release version lives in the repo-root `VERSION` file (currently semver, e.g
 
 Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Record user-facing release notes in [`CHANGELOG.md`](./CHANGELOG.md). On feature branches, use a **`NEXT RELEASE`** section until the change is merged to `main` and versioned.
 
+**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes `e2eetext-server` and `e2eetext-client` tagged `vX.Y.Z`. It fails if `client/package.json` or the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins don't match `VERSION`, and skips (never overwrites) if both images already exist in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
+
 ## API
 
 All JSON and WebSocket endpoints are versioned under `/api/v1`. `/health` is unversioned.
@@ -483,7 +485,7 @@ bash maintenance/ecr/build-and-push.sh
 
 This builds `server` and `client` Docker images and pushes them to ECR. Set `IMAGE_TAG` in `maintenance/ecr/.env` to version releases (default: `latest`). On Apple Silicon Macs, `DOCKER_PLATFORM=linux/amd64` is set by default for EC2.
 
-Requires IAM permissions: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`.
+Requires IAM permissions: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`. The CI role additionally needs `ecr:DescribeImages` (used by `build-images.yml` to skip existing tags).
 
 Use the **same client image** on prod and dev. The dev banner is controlled at **deploy time**, not build time:
 
