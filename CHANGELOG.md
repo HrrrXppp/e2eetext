@@ -13,6 +13,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Fixed
 
+#### Client
+
+- On a phone, the chat list is narrower and the message composer keeps the Send button inside the screen
+
 #### Tooling & deployment
 
 - Prod example RDS engine version is `16.15`. PostgreSQL `16.4` is no longer offered for new instances in us-east-2
