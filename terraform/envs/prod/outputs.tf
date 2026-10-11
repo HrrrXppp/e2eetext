@@ -1,3 +1,20 @@
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN on the prod HTTPS listener."
+  value       = local.prod_acm_certificate_arn
+}
+
+output "acm_dns_validation" {
+  description = "CNAME records to create so the Terraform-managed prod certificate can be issued. Empty when acm_certificate_arn is set."
+  value = try([
+    for dvo in aws_acm_certificate.prod[0].domain_validation_options : {
+      domain = dvo.domain_name
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      value  = dvo.resource_record_value
+    }
+  ], [])
+}
+
 output "alb_dns_name" {
   description = "DNS name of the prod ALB — point your production domain's Route 53 alias/CNAME here."
   value       = module.alb.alb_dns_name

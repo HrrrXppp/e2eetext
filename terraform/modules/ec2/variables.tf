@@ -98,7 +98,9 @@ variable "tags" {
 variable "manage_boot_deploy" {
   description = <<-EOT
     When true, manage a systemd unit that on every boot runs deploy.sh
-    (ECR login, compose pull if needed, compose up). Applied to the
+    (ECR login, compose pull if needed, compose up). The install script
+    also installs Docker, git, and the AWS CLI when missing, and clones
+    boot_deploy_repo_url when the checkout is missing. Applied to the
     instance via SSM Association (and as user_data on first launch for
     greenfield). Requires create_iam_instance_profile=true so the instance
     can pull from ECR and the SSM agent can run the association.
@@ -109,9 +111,21 @@ variable "manage_boot_deploy" {
 }
 
 variable "boot_deploy_repo_root" {
-  description = "Absolute path to the e2eetext git checkout on the instance (WorkingDirectory for the boot unit)."
+  description = "Absolute path to the e2eetext git checkout on the instance (WorkingDirectory for the boot unit). Cloned here when the directory is not already a git checkout."
   type        = string
   default     = "/home/ec2-user/e2eetext"
+}
+
+variable "boot_deploy_repo_url" {
+  description = "Git URL cloned into boot_deploy_repo_root when that path is not already a checkout. Public HTTPS only — do not embed a token."
+  type        = string
+  default     = "https://github.com/HrrrXppp/e2eetext.git"
+}
+
+variable "boot_deploy_repo_branch" {
+  description = "Branch passed to git clone --branch for a missing checkout."
+  type        = string
+  default     = "main"
 }
 
 variable "boot_deploy_image_tag" {
