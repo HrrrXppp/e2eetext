@@ -48,7 +48,7 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 	mux.Handle("GET /health", handler.NewHealthHandler())
 
 	authHandler := handler.NewAuthHandler(authService, nodeRegistry)
-	mux.HandleFunc("GET /api/v1/auth/providers", authHandler.ListProviders)
+	mux.Handle("GET /api/v1/auth/providers", authLimit(http.HandlerFunc(authHandler.ListProviders)))
 	mux.Handle("GET /api/v1/auth/{provider}/login", authLimit(http.HandlerFunc(authHandler.Login)))
 	mux.Handle("GET /api/v1/auth/{provider}/callback", authLimit(http.HandlerFunc(authHandler.Callback)))
 	// POST callback: required by providers using response_mode=form_post
