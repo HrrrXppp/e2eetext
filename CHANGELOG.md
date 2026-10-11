@@ -9,7 +9,7 @@ Release version is defined in `[VERSION](./VERSION)`.
 
 On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changelog heading. When a release is cut on `main`, rename that section to the semver from `VERSION` and add the release date.
 
-## [NEXT RELEASE]
+## [0.3.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
 ### Added
 
@@ -21,6 +21,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - Shared `Footer` component (site chrome parity with `SiteHeader`) now also renders on the chats page; footer styling moved out of the landing-only `landing__footer` BEM block into a page-agnostic `site-foot` block, with a compact non-scrolling variant for the height-locked chats app shell and the original spacing preserved on the landing page
 - Export/import UI for the E2EE private identity key (#52): passphrase-protected `scrypt` + `AES-256-GCM` backup file, download-only (never clipboard), no minimum passphrase length; `Back up key` / `Restore key` buttons in the signed-in header, plus a one-time prompt right after a brand-new local keypair is generated offering to back up or restore instead. Import detects and rejects the legacy plaintext export format, and requires explicit confirmation before overwriting a different key already on file for the account.
+- Desktop browser notifications for new messages when the tab is in the background (#48)
 
 #### Tooling & deployment
 
@@ -37,6 +38,9 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Client
 
 - Chat list and message panel stay side by side at every width (narrower sidebar instead of stacking), so shrinking the window no longer jumps the chats list above the thread (#58)
+- Chat list items stay packed at the top of the sidebar instead of stretching to fill its height (#50)
+- Long unbroken message text wraps inside the bubble, and long author names truncate with an ellipsis (#63)
+- Search users dialog stays within the phone screen width (#66)
 
 ## [0.2.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD)
 
