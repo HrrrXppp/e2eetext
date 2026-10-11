@@ -69,7 +69,7 @@ if [ "$#" -gt 0 ]; then
 	exec claude "$@"
 fi
 
-# /workspace is a disposable mirror of origin/dev, not a place for durable
+# /workspace is a disposable mirror of origin/main, not a place for durable
 # work -- dispatched agents do their real editing in isolated git worktrees
 # per CLAUDE.md, so this checkout should always be clean between cycles. If
 # it ever isn't (a killed cycle, a stray write outside a worktree), discard
@@ -82,8 +82,8 @@ sync_repo() {
 	git reset --hard HEAD
 	git clean -fd
 	git fetch origin
-	git checkout dev
-	git reset --hard origin/dev
+	git checkout main
+	git reset --hard origin/main
 }
 
 sync_repo
