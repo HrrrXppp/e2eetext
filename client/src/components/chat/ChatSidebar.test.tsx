@@ -133,6 +133,15 @@ describe("ChatSidebar", () => {
     );
     expect(css).not.toMatch(/chats-page__layout--chat-open/);
     expect(css).not.toMatch(/\.chats-page__panel \{\s*display:\s*none/);
+
+    const sidebarMatch = css.match(/\.chats-page__sidebar\s*\{([^}]*)\}/);
+    expect(sidebarMatch).not.toBeNull();
+    expect(sidebarMatch![1]).toMatch(/width:\s*7\.25rem/);
+    expect(sidebarMatch![1]).toMatch(/max-width:\s*7\.25rem/);
+
+    const composerInput = css.match(/\.chats-page__composer-input\s*\{([^}]*)\}/);
+    expect(composerInput).not.toBeNull();
+    expect(composerInput![1]).toMatch(/min-width:\s*0/);
   });
 
   it("keeps the padded, rounded-corner card (no edge-to-edge phone treatment)", () => {
