@@ -203,11 +203,11 @@ Scoped resource IDs use the form `{nodeId}/{localId}` (e.g. `99999999-9999-9999-
 
 ### Rate limiting
 
-Every route above except `/health` and `GET /api/v1/auth/providers` is rate-limited with in-memory token buckets (one bucket per key; this assumes a single server instance — scaling out horizontally would need a shared store instead). A request over the limit gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a JSON body (`{"error": "too many requests"}`).
+Every route above except `/health` is rate-limited with in-memory token buckets (one bucket per key; this assumes a single server instance — scaling out horizontally would need a shared store instead). A request over the limit gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a JSON body (`{"error": "too many requests"}`).
 
 | Class | Routes | Keyed by |
 |-------|--------|----------|
-| `auth` | `/api/v1/auth/{provider}/login`, `/api/v1/auth/{provider}/callback`, `/api/v1/auth/refresh` | Client IP (no user identity yet) |
+| `auth` | `GET /api/v1/auth/providers`, `/api/v1/auth/{provider}/login`, `/api/v1/auth/{provider}/callback`, `/api/v1/auth/refresh` | Client IP (no user identity yet) |
 | `search` | `GET /api/v1/search` | Authenticated user |
 | `message` | `/api/v1/message*` | Authenticated user |
 | `default` | `/api/v1/user*`, `/api/v1/chat*`, identity-key and key-wraps routes | Authenticated user |

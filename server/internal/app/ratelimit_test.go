@@ -70,6 +70,29 @@ func TestRateLimit_AuthRouteRejectsOverBurst(t *testing.T) {
 	}
 }
 
+// TestRateLimit_ProvidersRouteRejectsOverBurst confirms the public provider
+// list shares the IP-keyed auth-class limiter.
+func TestRateLimit_ProvidersRouteRejectsOverBurst(t *testing.T) {
+	handler := newRateLimitedTestHandler(t, config.RateLimits{
+		Auth: config.RateLimitConfig{RequestsPerMinute: 60, Burst: 1},
+	})
+
+	providers := func() int {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/providers", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := providers(); code == http.StatusTooManyRequests {
+		t.Fatalf("first request status = %d, want anything but 429", code)
+	}
+	if code := providers(); code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", code)
+	}
+}
+
 // TestRateLimit_HealthNeverLimited confirms /health has no limiter wired in
 // at all, even when every route class is configured aggressively enough to
 // reject a second request outright — Docker/ALB health checks must not be
