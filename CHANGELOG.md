@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Release version is defined in `[VERSION](./VERSION)`.
 
-On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changelog heading. When a release is cut on `main`, rename that section to the semver from `VERSION` and add the release date.
+On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changelog heading. When a release is cut, add a dated semver section from `VERSION` under `NEXT RELEASE` and leave `NEXT RELEASE` in place for later changes.
+
+## [NEXT RELEASE]
 
 ## [0.3.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
