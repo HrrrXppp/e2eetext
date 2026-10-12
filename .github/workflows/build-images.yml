@@ -51,12 +51,6 @@ jobs:
             echo "::error::client/package.json version ($pkg) does not match VERSION ($VERSION)"
             exit 1
           fi
-          for f in terraform/envs/dev/ec2_image_tag.tf terraform/envs/prod/ec2_image_tag.tf; do
-            if ! grep -q "ec2_boot_deploy_image_tag = \"v$VERSION\"" "$f"; then
-              echo "::error::$f does not pin ec2_boot_deploy_image_tag to v$VERSION"
-              exit 1
-            fi
-          done
 
       - name: Compute image tag
         if: steps.version.outputs.build == 'true'

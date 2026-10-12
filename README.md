@@ -166,7 +166,7 @@ The release version lives in the repo-root `VERSION` file (currently semver, e.g
 
 Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Record user-facing release notes in [`CHANGELOG.md`](./CHANGELOG.md). On feature branches, use a **`NEXT RELEASE`** section until the change is merged to `main` and versioned.
 
-**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes `e2eetext-server` and `e2eetext-client` tagged `vX.Y.Z`. It fails if `client/package.json` or the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins don't match `VERSION`, and skips (never overwrites) if both images already exist in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
+**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes `e2eetext-server` and `e2eetext-client` tagged `vX.Y.Z`. It fails if `client/package.json` doesn't match `VERSION` (the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if both images already exist in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
 
 ## API
 
