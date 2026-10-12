@@ -1534,8 +1534,6 @@ body.has-dev-instance-banner .site-head {
 }
 
 .site-foot__donate {
-  display: inline-block;
-  padding: 0.5rem 0.75rem;
   color: var(--text-soft);
   font-weight: 600;
   text-decoration: underline;
