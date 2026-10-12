@@ -3,5 +3,5 @@
 # Dig has its own pin: terraform/envs/dev/ec2_image_tag.tf
 
 locals {
-  ec2_boot_deploy_image_tag = "v0.3.2"
+  ec2_boot_deploy_image_tag = "v0.3.3"
 }
