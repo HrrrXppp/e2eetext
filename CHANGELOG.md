@@ -11,9 +11,15 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.3](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
+
 ### Changed
 
 - Footer keeps the "sustained through advertisement and donations" text, with "donations" linking to the Stripe donation page (opens in a new tab, `rel="noopener noreferrer"`); the URL lives in `client/src/lib/config.ts` and can be overridden at build time with `VITE_DONATE_URL` (#92)
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.3`
 
 ### Fixed
 
