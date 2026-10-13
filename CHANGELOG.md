@@ -13,6 +13,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Added
 
+- Landing page News: "E2EE Text is live in production" entry (October 11, 2026), listed above the project-start entry (#89)
+
 #### Tooling & deployment
 
 - `build-images.yml` now runs automatically when a push to `main` changes `VERSION`: it checks `client/package.json` matches `VERSION` (deployed `ec2_image_tag.tf` pins are independent of new builds), skips if the `vX.Y.Z` images already exist in ECR (manual dispatch has a `force` override), and queues builds so quick bumps run in order

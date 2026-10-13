@@ -25,6 +25,13 @@ const features = [
 
 const news = [
   {
+    date: "October 11, 2026",
+    dateTime: "2026-10-11",
+    title: "E2EE Text is live in production",
+    body:
+      "E2EE Text is now live in production. You can sign in and start end-to-end encrypted chats protected by post-quantum cryptography (ML-KEM-1024 with AES-256-GCM). Thank you for following along.",
+  },
+  {
     date: "May 31, 2026",
     dateTime: "2026-05-31",
     title: "E2EE Text project started",
