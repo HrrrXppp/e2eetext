@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+#### News service (#97, step a)
+
+- New `news/` Go module: public `GET /api/v1/news` (keyset cursor pagination via `limit`/`before`, newest first, `Cache-Control` of 1 hour) and `GET /health`, backed by its own database and embedded migrations (seeded with the May 31 2026 launch item); Lambda (ALB target) entrypoint, local `news` server/`migrate` command and `news/Dockerfile`; unit and Postgres integration tests and a `news` CI job. Infra, CloudFront and the client switch follow in later PRs
+
 ## [0.3.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
 ### Fixed

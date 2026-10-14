@@ -49,6 +49,36 @@ jobs:
         working-directory: mockoidc
         run: go vet ./...
 
+  news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: news/go.mod
+          cache-dependency-path: news/go.sum
+
+      - name: Build
+        working-directory: news
+        run: go build ./...
+
+      - name: Vet
+        working-directory: news
+        run: go vet ./...
+
+      - name: Test
+        working-directory: news
+        run: go test ./...
+
+      - uses: ./.github/actions/start-pgcron-postgres
+
+      - name: Integration test
+        working-directory: news
+        env:
+          INTEGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test -tags=integration ./internal/news/...
+
   client:
     runs-on: ubuntu-latest
     steps:
