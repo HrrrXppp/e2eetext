@@ -74,15 +74,9 @@ data "aws_iam_policy_document" "ecr_push" {
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
+      # Lets build-images.yml skip the push when a release tag already exists.
+      "ecr:DescribeImages",
     ]
-    resources = var.ecr_repository_arns
-  }
-
-  # Lets build-images.yml skip the push when a release tag already exists.
-  statement {
-    sid       = "ECRDescribe"
-    effect    = "Allow"
-    actions   = ["ecr:DescribeImages"]
     resources = var.ecr_repository_arns
   }
 }
