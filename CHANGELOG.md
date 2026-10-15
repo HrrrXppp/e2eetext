@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.4](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-14
+
 ### Added
 
 - Landing page News: "E2EE Text is live in production" entry (October 11, 2026), listed above the project-start entry (#89)
@@ -19,6 +21,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - `build-images.yml` now runs automatically when a push to `main` changes `VERSION`: it checks `client/package.json` matches `VERSION` (deployed `ec2_image_tag.tf` pins are independent of new builds), skips if the `vX.Y.Z` images already exist in ECR (manual dispatch has a `force` override), and queues builds so quick bumps run in order
 - GitHub Actions ECR role policy gains `ecr:DescribeImages` on the two repos (apply `envs/shared` to update the live role)
+
+### Changed
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.4`
 
 ## [0.3.3](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-11
 
