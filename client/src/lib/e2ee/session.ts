@@ -85,6 +85,25 @@ export async function prepareE2EEChatCreation(input: {
   return { keyId, chatKey, wraps };
 }
 
+// In-flight de-duplication. Opening a chat decrypts every message in parallel
+// before any of them has populated the key cache, so without this each message
+// fires its own key-wraps request. Entries live only while a request is pending
+// and are removed in finally, so a failure never poisons later retries.
+const inflightChatKeys = new Map<string, Promise<{ keyId: string; chatKey: Uint8Array }>>();
+const inflightWraps = new Map<string, Promise<Awaited<ReturnType<typeof fetchChatKeyWraps>>>>();
+
+function dedupe<T>(map: Map<string, Promise<T>>, key: string, start: () => Promise<T>): Promise<T> {
+  const pending = map.get(key);
+  if (pending) {
+    return pending;
+  }
+  const promise = start().finally(() => {
+    map.delete(key);
+  });
+  map.set(key, promise);
+  return promise;
+}
+
 export async function ensureChatKey(
   userId: string,
   chatId: string,
@@ -97,12 +116,22 @@ export async function ensureChatKey(
     }
   }
 
+  return dedupe(inflightChatKeys, `${userId}:${chatId}:${preferredKeyId ?? ""}`, () =>
+    resolveChatKey(userId, chatId, preferredKeyId),
+  );
+}
+
+async function resolveChatKey(
+  userId: string,
+  chatId: string,
+  preferredKeyId?: string,
+): Promise<{ keyId: string; chatKey: Uint8Array }> {
   const identity = await loadStoredIdentity(userId);
   if (!identity) {
     throw new Error("missing identity keys");
   }
 
-  const wraps = await fetchChatKeyWraps(chatId);
+  const wraps = await dedupe(inflightWraps, `${userId}:${chatId}`, () => fetchChatKeyWraps(chatId));
   if (wraps.length === 0) {
     throw new Error("chat key wraps not found");
   }

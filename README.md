@@ -253,7 +253,7 @@ Hybrid **ML-KEM-768 + X25519** identity keys wrap a per-chat symmetric key `K_ch
 
 1. **Sign-in** — generate identity keypair if missing; `PUT identity-key`.
 2. **Create chat** — generate `K_chat` + `keyId`; fetch each member's public key; build wraps; `POST /chat` with `e2ee`.
-3. **Open chat** — `GET key-wraps`; unwrap `K_chat`; cache locally (wrapped with the non-extractable device key).
+3. **Open chat** — `GET key-wraps`; unwrap `K_chat`; cache locally (wrapped with the non-extractable device key). Concurrent lookups for the same chat share one in-flight request, so a chat with many messages issues a single `GET key-wraps`.
 4. **Send / receive** — encrypt/decrypt `MessageEnvelope` in the client.
 
 Private identity ciphertext is stored per account in `localStorage` (`e2ee_identity_v1:{userId}`) and encrypted with a **non-extractable AES-256-GCM** wrapping key kept in IndexedDB (Web Crypto). That blocks XSS from reading raw wrapping-key bytes out of storage. Active same-origin XSS can still invoke decrypt APIs while the tab is unlocked — a passphrase lock or isolated crypto origin would be needed to close that remaining gap. Sign-out clears that account's local E2EE material.

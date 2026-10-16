@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+- Opening a chat no longer requests key wraps once per message; concurrent key lookups for a chat share one in-flight request (#102)
+
 ## [0.3.4](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-14
 
 ### Added
