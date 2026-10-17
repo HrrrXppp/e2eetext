@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -23,7 +24,7 @@ func newTestHandler(t *testing.T) http.Handler {
 	t.Cleanup(func() { _ = db.Close() })
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	application, err := New(config.Config{}, logger, db, node.Registry{ID: "99999999-9999-9999-9999-999999999999"})
+	application, err := New(context.Background(), config.Config{}, logger, db, node.Registry{ID: "99999999-9999-9999-9999-999999999999"})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

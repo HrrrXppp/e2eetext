@@ -52,7 +52,10 @@ func main() {
 	}
 	logger.Info("node ready", "node_id", nodeRegistry.ID)
 
-	application, err := app.New(cfg, logger, db, nodeRegistry)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	application, err := app.New(ctx, cfg, logger, db, nodeRegistry)
 	if err != nil {
 		logger.Error("create app", "err", err)
 		os.Exit(1)
@@ -73,9 +76,6 @@ func main() {
 			os.Exit(1)
 		}
 	}()
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	<-ctx.Done()
 	logger.Info("shutting down")

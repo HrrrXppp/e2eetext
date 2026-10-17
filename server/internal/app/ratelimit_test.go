@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -23,6 +24,7 @@ func newRateLimitedTestHandler(t *testing.T, limits config.RateLimits) http.Hand
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	application, err := New(
+		context.Background(),
 		config.Config{RateLimits: limits},
 		logger,
 		db,
