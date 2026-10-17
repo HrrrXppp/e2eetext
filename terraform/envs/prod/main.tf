@@ -67,6 +67,9 @@ module "ec2" {
   boot_deploy_image_tag = local.ec2_boot_deploy_image_tag # pinned in ec2_image_tag.tf
   boot_deploy_start_now = var.ec2_boot_deploy_start_now
 
+  # #37: lets the server publish WebSocketConnections to CloudWatch.
+  metrics_namespace = var.metrics_namespace
+
   tags = var.tags
 }
 
@@ -176,6 +179,31 @@ module "rds" {
   performance_insights_kms_key_id       = var.rds_performance_insights_kms_key_id
   performance_insights_retention_period = var.rds_performance_insights_retention_period
   enabled_cloudwatch_logs_exports       = var.rds_enabled_cloudwatch_logs_exports
+
+  tags = var.tags
+}
+
+# --- Metrics (#37) ---
+# Scheduled Lambda publishing Messages/Chats/Users to CloudWatch. On by
+# default (set metrics_enabled = false to skip): needs a Secrets Manager secret
+# holding the DATABASE_URL (metrics_database_url_secret_arn) and a Lambda
+# package built by lambdas/metrics/build.sh. No public endpoint.
+module "metrics" {
+  source = "../../modules/metrics"
+  count  = var.metrics_enabled ? 1 : 0
+
+  name        = var.name_prefix
+  environment = "prod"
+  namespace   = var.metrics_namespace
+
+  lambda_zip_path         = "${path.module}/../../../lambdas/metrics/build/metrics.zip"
+  database_url_secret_arn = var.metrics_database_url_secret_arn
+
+  vpc_id     = module.network.vpc_id
+  subnet_ids = length(var.metrics_subnet_ids) > 0 ? var.metrics_subnet_ids : [var.ec2_subnet_id != "" ? var.ec2_subnet_id : module.network.subnet_ids[0]]
+
+  rds_security_group_id = var.metrics_rds_security_group_id != "" ? var.metrics_rds_security_group_id : (module.rds.security_group_id != null ? module.rds.security_group_id : "")
+  create_vpc_endpoints  = var.metrics_create_vpc_endpoints
 
   tags = var.tags
 }

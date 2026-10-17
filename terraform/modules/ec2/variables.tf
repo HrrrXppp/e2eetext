@@ -89,6 +89,12 @@ variable "iam_instance_profile_name" {
   type        = string
 }
 
+variable "metrics_namespace" {
+  description = "CloudWatch namespace the server publishes its WebSocketConnections metric to (#37). When non-empty and the module creates the IAM role, the role gets cloudwatch:PutMetricData restricted to this namespace. Leave empty to grant nothing."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to the instance, security group, and IAM role/instance profile."
   type        = map(string)

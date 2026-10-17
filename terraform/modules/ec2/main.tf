@@ -109,6 +109,32 @@ resource "aws_iam_role_policy_attachment" "ecr_read_only" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
+# #37: each server node publishes its own WebSocketConnections count to
+# CloudWatch with the instance role; no static credentials on the box.
+data "aws_iam_policy_document" "put_metrics" {
+  count = var.create_iam_instance_profile && var.metrics_namespace != "" ? 1 : 0
+
+  statement {
+    effect    = "Allow"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [var.metrics_namespace]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "put_metrics" {
+  count = var.create_iam_instance_profile && var.metrics_namespace != "" ? 1 : 0
+
+  name   = "put-metrics"
+  role   = aws_iam_role.this[0].id
+  policy = data.aws_iam_policy_document.put_metrics[0].json
+}
+
 resource "aws_iam_instance_profile" "this" {
   count = var.create_iam_instance_profile ? 1 : 0
 
