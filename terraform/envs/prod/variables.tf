@@ -542,3 +542,41 @@ variable "rds_enabled_cloudwatch_logs_exports" {
   type        = list(string)
   default     = []
 }
+
+# --- Metrics (#37) ---
+
+variable "metrics_namespace" {
+  description = "CloudWatch namespace for the app metrics. The server publishes WebSocketConnections here (METRICS_CLOUDWATCH_NAMESPACE) and the metrics Lambda publishes Messages/Chats/Users."
+  type        = string
+  default     = "E2EEText/Messenger"
+}
+
+variable "metrics_enabled" {
+  description = "Deploy the scheduled metrics Lambda in prod. Requires metrics_database_url_secret_arn and a Lambda package built by lambdas/metrics/build.sh."
+  type        = bool
+  default     = false
+}
+
+variable "metrics_database_url_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the prod DATABASE_URL, read by the metrics Lambda. Required when metrics_enabled is true."
+  type        = string
+  default     = ""
+}
+
+variable "metrics_subnet_ids" {
+  description = "Subnets for the metrics Lambda and its VPC endpoints (at most one per AZ). Empty (default) uses the EC2 instance's subnet."
+  type        = list(string)
+  default     = []
+}
+
+variable "metrics_rds_security_group_id" {
+  description = "RDS security group to open for the metrics Lambda on 5432. Empty (default) uses the rds module's own security group when it creates one, else adds no rule."
+  type        = string
+  default     = ""
+}
+
+variable "metrics_create_vpc_endpoints" {
+  description = "Create monitoring and secretsmanager interface VPC endpoints for the metrics Lambda. Set false if the VPC already has them or has NAT egress."
+  type        = bool
+  default     = true
+}

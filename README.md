@@ -18,6 +18,8 @@ messenger/
 ├── VERSION          # release version (server + client)
 ├── CHANGELOG.md     # release notes
 ├── client/          # React SPA
+├── lambdas/
+│   └── metrics/     # scheduled Lambda: Messages/Chats/Users counts to CloudWatch
 ├── server/          # Go API
 │   ├── cmd/messenger/
 │   └── internal/
@@ -26,6 +28,7 @@ messenger/
 │       ├── database/      # postgres + migrations
 │       ├── domain/        # entities
 │       ├── handler/       # HTTP handlers
+│       ├── metrics/       # CloudWatch publisher (WebSocket connections)
 │       ├── middleware/    # logging, auth, rate limiting
 │       ├── repository/    # data access
 │       └── service/       # business logic
@@ -152,6 +155,9 @@ Open **http://localhost:5173**.
 | `SERVER_ADDR`   | `:8080`                                                              | HTTP listen address                |
 | `DATABASE_URL`  | _(required)_                                                         | PostgreSQL connection string       |
 | `CONFIG_PATH`   | _(required)_                                                         | Path to server JSON config file (e.g. `server/config.json`) |
+| `AWS_REGION`    | _(unset)_                                                            | AWS region for CloudWatch metrics publishing (see [Metrics](#metrics)) |
+| `METRICS_CLOUDWATCH_NAMESPACE` | _(unset)_                                             | CloudWatch namespace, e.g. `E2EEText/Messenger`. Publishing is enabled only when this and `AWS_REGION` are both set |
+| `METRICS_ENVIRONMENT` | _(unset)_                                                      | Value of the `Environment` metric dimension (`dev`/`prod`); omitted when empty |
 
 The client reads one optional build-time variable: `VITE_DONATE_URL` overrides the footer's donation link (default lives in `client/src/lib/config.ts`).
 
@@ -294,6 +300,23 @@ Desktop browsers only. When a `chat.unread` WebSocket event raises a chat's unre
 - **Requirements** — HTTPS (or `localhost`). The button is hidden when the API is unavailable and on Android/iOS, which need a service worker plus Web Push (tracked separately).
 - **OS settings** — Do Not Disturb / Focus Assist must be off and the browser allowed in OS notification settings, or the OS hides the notification.
 - **Limits** — only works while a tab is open; multiple open tabs may briefly double-notify.
+
+## Metrics
+
+Metrics go to **Amazon CloudWatch**, namespace `E2EEText/Messenger`, at 1 minute resolution. The server exposes **no** `/metrics` endpoint and nothing new is reachable from outside AWS.
+
+| Metric | Dimensions | Published by |
+|--------|------------|--------------|
+| `Messages` | `Environment` | scheduled Lambda (`lambdas/metrics`) |
+| `Chats` | `Environment` | scheduled Lambda |
+| `Users` | `Environment` | scheduled Lambda |
+| `WebSocketConnections` | `Environment`, `NodeId` | each server node |
+
+- **Messages / Chats / Users** are dataset-wide counts from the shared PostgreSQL, fetched with one combined `SELECT` per run. A single EventBridge-scheduled Lambda (`rate(1 minute)`) per environment publishes them, so adding nodes never double counts. The Lambda runs in the VPC, reads the DB connection string from a Secrets Manager secret, has no function URL or API Gateway (only the EventBridge rule can invoke it), and its IAM policy allows `cloudwatch:PutMetricData` only for the namespace.
+- **WebSocketConnections** is per-process state, so each server node publishes its own count (dimension `NodeId` = the node's ID) using the EC2 instance role. In CloudWatch the cluster total is `SUM` across `NodeId`. Publishing is off unless `AWS_REGION` and `METRICS_CLOUDWATCH_NAMESPACE` are set, so local dev and tests are unaffected. The instance role needs `cloudwatch:PutMetricData` for the namespace (`terraform/modules/ec2`, `metrics_namespace`; requires the module to manage the IAM role).
+- **Viewing:** CloudWatch console, Metrics, All metrics, namespace `E2EEText/Messenger`.
+- **Deploying the Lambda:** build the package with `lambdas/metrics/build.sh` (writes `lambdas/metrics/build/metrics.zip`; CI builds it too), create a Secrets Manager secret whose string value is the environment's `DATABASE_URL`, then set `metrics_enabled = true` and `metrics_database_url_secret_arn` in the env's tfvars and apply (`terraform/modules/metrics`). By default the module also creates `monitoring` and `secretsmanager` interface VPC endpoints (`metrics_create_vpc_endpoints = false` if the VPC already has them or has NAT) and opens RDS port 5432 to the Lambda's security group.
+- Alarms and a dashboard are not part of this change.
 
 ## Authentication flow
 
@@ -558,6 +581,8 @@ Edit `maintenance/ec2/.env`:
 | `AWS_ACCOUNT_ID` | same as in `maintenance/ecr/.env` |
 | `AWS_REGION` | e.g. `us-east-1` |
 | `IMAGE_TAG` | `latest` (or the tag you pushed) |
+| `METRICS_CLOUDWATCH_NAMESPACE` | optional, e.g. `E2EEText/Messenger` — enables [CloudWatch metrics](#metrics) |
+| `METRICS_ENVIRONMENT` | optional, `dev` or `prod` |
 
 Edit `maintenance/ec2/config/config.json` with Google OAuth `client_id` and `client_secret`.
 

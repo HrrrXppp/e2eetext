@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 )
@@ -10,6 +11,10 @@ import (
 type Hub struct {
 	mu    sync.RWMutex
 	conns map[string]map[*websocket.Conn]struct{}
+
+	// total mirrors the number of registered connections so ConnectionCount
+	// can read it without taking mu.
+	total atomic.Int64
 }
 
 func NewHub() *Hub {
@@ -25,7 +30,10 @@ func (h *Hub) Register(userID string, conn *websocket.Conn) {
 	if h.conns[userID] == nil {
 		h.conns[userID] = make(map[*websocket.Conn]struct{})
 	}
-	h.conns[userID][conn] = struct{}{}
+	if _, exists := h.conns[userID][conn]; !exists {
+		h.conns[userID][conn] = struct{}{}
+		h.total.Add(1)
+	}
 }
 
 func (h *Hub) Unregister(userID string, conn *websocket.Conn) {
@@ -37,10 +45,19 @@ func (h *Hub) Unregister(userID string, conn *websocket.Conn) {
 		return
 	}
 
-	delete(userConns, conn)
+	if _, exists := userConns[conn]; exists {
+		delete(userConns, conn)
+		h.total.Add(-1)
+	}
 	if len(userConns) == 0 {
 		delete(h.conns, userID)
 	}
+}
+
+// ConnectionCount returns the number of WebSocket connections currently
+// registered on this node (all users combined).
+func (h *Hub) ConnectionCount() int {
+	return int(h.total.Load())
 }
 
 func (h *Hub) NotifyChatUnread(userID string, event ChatUnreadEvent) {

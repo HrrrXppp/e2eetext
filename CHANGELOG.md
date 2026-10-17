@@ -11,6 +11,17 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- CloudWatch metrics (#37): a scheduled AWS Lambda (`lambdas/metrics`) publishes `Messages`, `Chats` and `Users` counts every minute, and each server node publishes its own `WebSocketConnections` (dimension `NodeId`) when `AWS_REGION` and `METRICS_CLOUDWATCH_NAMESPACE` are set. No public endpoint is added.
+
+### Changed
+
+#### Tooling & deployment
+
+- New `terraform/modules/metrics` (Lambda, IAM, security group, EventBridge schedule, log group, optional VPC endpoints), wired into `terraform/envs/{dev,prod}` behind `metrics_enabled`; the EC2 module role can grant `cloudwatch:PutMetricData` scoped to the namespace
+- CI builds and tests the metrics Lambda and packages `metrics.zip`; the Terraform plan job builds it first
+
 ## [0.3.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
 ### Fixed

@@ -49,6 +49,29 @@ jobs:
         working-directory: mockoidc
         run: go vet ./...
 
+  # Scheduled metrics Lambda (#37). build.sh produces the zip that
+  # terraform/modules/metrics deploys.
+  lambda-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: lambdas/metrics/go.mod
+          cache-dependency-path: lambdas/metrics/go.sum
+
+      - name: Vet
+        working-directory: lambdas/metrics
+        run: go vet ./...
+
+      - name: Test
+        working-directory: lambdas/metrics
+        run: go test ./...
+
+      - name: Build package
+        run: lambdas/metrics/build.sh
+
   client:
     runs-on: ubuntu-latest
     steps:

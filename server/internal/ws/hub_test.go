@@ -131,3 +131,29 @@ func TestHub_NotifyChatUnread_SendsEvent(t *testing.T) {
 		t.Fatalf("UnreadMessageCount = %d, want 2", event.Chats[0].UnreadMessageCount)
 	}
 }
+
+func TestHub_ConnectionCount(t *testing.T) {
+	hub := NewHub()
+	if got := hub.ConnectionCount(); got != 0 {
+		t.Fatalf("empty hub count = %d, want 0", got)
+	}
+
+	a, b, c := new(websocket.Conn), new(websocket.Conn), new(websocket.Conn)
+	hub.Register("user-1", a)
+	hub.Register("user-1", b)
+	hub.Register("user-2", c)
+	if got := hub.ConnectionCount(); got != 3 {
+		t.Fatalf("count = %d, want 3", got)
+	}
+
+	hub.Unregister("user-1", a)
+	if got := hub.ConnectionCount(); got != 2 {
+		t.Fatalf("count after first unregister = %d, want 2", got)
+	}
+
+	hub.Unregister("user-2", c)
+	hub.Unregister("user-2", c) // idempotent
+	if got := hub.ConnectionCount(); got != 1 {
+		t.Fatalf("count after unregister = %d, want 1", got)
+	}
+}
