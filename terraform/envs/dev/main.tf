@@ -253,6 +253,12 @@ module "metrics" {
 
   rds_security_group_id = var.metrics_rds_security_group_id != "" ? var.metrics_rds_security_group_id : (module.rds.security_group_id != null ? module.rds.security_group_id : "")
   create_vpc_endpoints  = var.metrics_create_vpc_endpoints
+  # Dev EC2 keeps hand-made SGs (launch-wizard-2, ec2-rds-1). The module
+  # does not create one, so security_group_id is null — pass the resolved IDs.
+  endpoint_ingress_security_group_ids = distinct(concat(
+    local.ec2_security_group_ids,
+    module.ec2.security_group_id != null ? [module.ec2.security_group_id] : [],
+  ))
 
   tags = var.tags
 }

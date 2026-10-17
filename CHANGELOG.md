@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- The metrics `monitoring` and `secretsmanager` interface VPC endpoints allow TCP 443 from the EC2 instance security groups, not only from the metrics Lambda. Private DNS was sending the server's `PutMetricData` to an endpoint that dropped it, so `WebSocketConnections` publishes timed out.
+
 ## [0.3.6](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
 ### Fixed

@@ -5,6 +5,14 @@
 
 locals {
   function_name = "${var.name}-metrics"
+
+  # The Lambda is always a source. EC2 security groups are required as well:
+  # private DNS on the monitoring endpoint steers the server's PutMetricData
+  # at this endpoint, and a Lambda-only ingress rule drops that traffic.
+  endpoint_ingress_security_group_ids = distinct(concat(
+    [aws_security_group.lambda.id],
+    var.endpoint_ingress_security_group_ids,
+  ))
 }
 
 data "aws_vpc" "this" {
@@ -58,12 +66,14 @@ resource "aws_security_group" "endpoints" {
   description = "Interface VPC endpoints used by the metrics Lambda"
   vpc_id      = var.vpc_id
 
+  # One permission with every source group. A for_each keyed on the
+  # Lambda security group id is unknown until apply and cannot be planned.
   ingress {
-    description     = "HTTPS from the metrics Lambda"
+    description     = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
+    security_groups = local.endpoint_ingress_security_group_ids
   }
 
   tags = var.tags

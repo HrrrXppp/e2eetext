@@ -1,0 +1,10 @@
+---
+description: Change AWS infrastructure only in local Terraform files
+alwaysApply: true
+---
+
+# AWS changes stay in the repo
+
+- Change infrastructure by editing Terraform, plus the README and changelog entries that go with it. Do not mutate live AWS from a Cursor session: no `authorize-security-group-ingress`, no other console or CLI resource edits, and no `terraform apply` unless the user explicitly asks to apply.
+- The metrics interface VPC endpoints (`monitoring`, `secretsmanager`) use private DNS. The server's `PutMetricData` goes to that endpoint. `terraform/modules/metrics` must allow TCP 443 from every security group attached to the EC2 instance, in addition to the metrics Lambda. Lambda-only ingress makes the publish time out (`context deadline exceeded`, HTTP status 0).
+- Dev's instance uses the pre-existing groups resolved from `ec2_security_group_names` (`launch-wizard-2`, `ec2-rds-1`). Pass `local.ec2_security_group_ids`. `module.ec2.security_group_id` is null in that case. Prod uses the security group the EC2 module creates, unless `ec2_security_group_ids` is set.
