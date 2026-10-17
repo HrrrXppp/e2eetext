@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.6](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
+
 ### Fixed
 
 #### Tooling & deployment
@@ -27,6 +29,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - New `terraform/modules/metrics` (Lambda, IAM, security group, EventBridge schedule, log group, optional VPC endpoints), wired into `terraform/envs/{dev,prod}` behind `metrics_enabled` (default `true`; requires `metrics_database_url_secret_arn`); the EC2 module role can grant `cloudwatch:PutMetricData` scoped to the namespace
 - CI builds and tests the metrics Lambda and packages `metrics.zip`; the Terraform plan job builds it first
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.6`
 
 ## [0.3.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
