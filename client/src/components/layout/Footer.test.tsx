@@ -17,4 +17,16 @@ describe("Footer", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it("links privacy, terms and contact and shows the owner copyright", () => {
+    render(<Footer />);
+
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
+      "href",
+      "https://github.com/HrrrXppp/e2eetext/issues",
+    );
+    expect(screen.getByText(/2026 Evgenii Khrunov/)).toBeInTheDocument();
+  });
 });

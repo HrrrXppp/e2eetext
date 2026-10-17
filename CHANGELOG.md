@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- AdSense readiness: `/privacy` Privacy Policy and `/terms` Terms of Service pages (draft content, owner should review legally), site footer with Privacy/Terms/Contact links and copyright, placeholder `ads.txt`, `sitemap.xml`, and a `Sitemap:` line in `robots.txt` (#33)
+
 ## [0.3.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
 ### Fixed
