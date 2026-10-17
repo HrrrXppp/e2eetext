@@ -552,13 +552,13 @@ variable "metrics_namespace" {
 }
 
 variable "metrics_enabled" {
-  description = "Deploy the scheduled metrics Lambda in prod (on by default; set false to skip). Requires metrics_database_url_secret_arn and a Lambda package built by lambdas/metrics/build.sh."
+  description = "Deploy the scheduled metrics Lambda in prod when metrics_database_url_secret_arn is set. Set false to skip. An empty ARN does not create the Lambda (that would put Resource \"\" on its IAM policy)."
   type        = bool
   default     = true
 }
 
 variable "metrics_database_url_secret_arn" {
-  description = "ARN of the Secrets Manager secret holding the prod DATABASE_URL, read by the metrics Lambda. Required when metrics_enabled is true."
+  description = "ARN of the Secrets Manager secret holding the prod DATABASE_URL, read by the metrics Lambda. When empty, the Lambda is not created even if metrics_enabled is true."
   type        = string
   default     = ""
 }

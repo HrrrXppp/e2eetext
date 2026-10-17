@@ -184,13 +184,21 @@ module "rds" {
 }
 
 # --- Metrics (#37) ---
-# Scheduled Lambda publishing Messages/Chats/Users to CloudWatch. On by
-# default (set metrics_enabled = false to skip): needs a Secrets Manager secret
-# holding the DATABASE_URL (metrics_database_url_secret_arn) and a Lambda
-# package built by lambdas/metrics/build.sh. No public endpoint.
+# Scheduled Lambda publishing Messages/Chats/Users to CloudWatch. Skipped
+# unless metrics_enabled is true and metrics_database_url_secret_arn is a
+# Secrets Manager ARN. An empty ARN must not be planned: the Lambda IAM
+# policy would send Resource "" and AWS would reject it. Also needs the
+# package from lambdas/metrics/build.sh. No public endpoint.
+check "metrics_database_secret" {
+  assert {
+    condition     = !var.metrics_enabled || trimspace(var.metrics_database_url_secret_arn) != ""
+    error_message = "metrics_enabled is true but metrics_database_url_secret_arn is empty, so the metrics Lambda is not created. Set the Secrets Manager ARN, or set metrics_enabled = false."
+  }
+}
+
 module "metrics" {
   source = "../../modules/metrics"
-  count  = var.metrics_enabled ? 1 : 0
+  count  = var.metrics_enabled && trimspace(var.metrics_database_url_secret_arn) != "" ? 1 : 0
 
   name        = var.name_prefix
   environment = "prod"

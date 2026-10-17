@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- Dev and prod skip the metrics Lambda when `metrics_database_url_secret_arn` is empty, instead of planning an IAM policy with `Resource = ""`
+
 ### Added
 
 - CloudWatch metrics (#37): a scheduled AWS Lambda (`lambdas/metrics`) publishes `Messages`, `Chats` and `Users` counts every minute, and each server node publishes its own `WebSocketConnections` (dimension `NodeId`) when `AWS_REGION` and `METRICS_CLOUDWATCH_NAMESPACE` are set. No public endpoint is added.
