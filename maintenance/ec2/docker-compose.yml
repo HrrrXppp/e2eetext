@@ -23,6 +23,10 @@ services:
       SERVER_ADDR: ":8080"
       DATABASE_URL: ${DATABASE_URL}
       CONFIG_PATH: /config/config.json
+      # CloudWatch metrics (#37): publishing is on only when the namespace is set.
+      AWS_REGION: ${AWS_REGION}
+      METRICS_CLOUDWATCH_NAMESPACE: ${METRICS_CLOUDWATCH_NAMESPACE:-}
+      METRICS_ENVIRONMENT: ${METRICS_ENVIRONMENT:-}
     volumes:
       - ./config:/config:ro
     healthcheck:
