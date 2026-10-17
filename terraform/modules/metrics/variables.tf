@@ -51,6 +51,12 @@ variable "create_vpc_endpoints" {
   default     = true
 }
 
+variable "endpoint_ingress_security_group_ids" {
+  description = "Security groups allowed to call the interface VPC endpoints on TCP 443, in addition to the metrics Lambda. Pass every security group attached to the EC2 instance. Private DNS sends the server's PutMetricData to the monitoring endpoint, and the endpoint drops sources that are not listed here (the publish times out)."
+  type        = list(string)
+  default     = []
+}
+
 variable "schedule_expression" {
   description = "EventBridge schedule. 1 minute matches the server nodes' publish interval."
   type        = string

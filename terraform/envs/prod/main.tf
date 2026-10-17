@@ -212,6 +212,10 @@ module "metrics" {
 
   rds_security_group_id = var.metrics_rds_security_group_id != "" ? var.metrics_rds_security_group_id : (module.rds.security_group_id != null ? module.rds.security_group_id : "")
   create_vpc_endpoints  = var.metrics_create_vpc_endpoints
+  endpoint_ingress_security_group_ids = distinct(concat(
+    var.ec2_security_group_ids,
+    module.ec2.security_group_id != null ? [module.ec2.security_group_id] : [],
+  ))
 
   tags = var.tags
 }
