@@ -4,3 +4,5 @@ Allow: /
 Disallow: /api/
 Disallow: /oauth/
 Disallow: /health/
+
+Sitemap: https://app.example.com/sitemap.xml

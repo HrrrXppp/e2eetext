@@ -605,6 +605,10 @@ Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.3.5 bash mai
 
 Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
 
+### AdSense and SEO static files
+
+The client serves `/privacy` and `/terms` (draft policy pages; review them legally before relying on them) and a footer linking them plus a Contact link (GitHub issues). `client/public/` also holds `sitemap.xml`, a `Sitemap:` line in `robots.txt`, and a placeholder `ads.txt`. Before go-live replace `app.example.com` in `sitemap.xml` and `robots.txt` with the real domain. After AdSense approval, put the real `google.com, pub-..., DIRECT, f08c47fec0942fa0` line in `client/public/ads.txt` and redeploy. A cookie-consent mechanism is still needed once ads are actually served.
+
 ### 7. Google OAuth
 
 In [Google Cloud Console](https://console.cloud.google.com/) → Credentials, add **Authorized redirect URI**:

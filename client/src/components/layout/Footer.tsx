@@ -1,5 +1,7 @@
 import { donateUrl } from "@/lib/config";
 
+export const CONTACT_URL = "https://github.com/HrrrXppp/e2eetext/issues";
+
 export function Footer() {
   return (
     <footer className="site-foot">
@@ -15,6 +17,23 @@ export function Footer() {
           <strong>donations</strong>
         </a>
       </p>
+      <nav className="site-foot__nav" aria-label="Legal and contact">
+        <a className="site-foot__link" href="/privacy">
+          Privacy Policy
+        </a>
+        <a className="site-foot__link" href="/terms">
+          Terms of Service
+        </a>
+        <a
+          className="site-foot__link"
+          href={CONTACT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Contact
+        </a>
+      </nav>
+      <p className="site-foot__copy">&copy; 2026 Evgenii Khrunov</p>
     </footer>
   );
 }
