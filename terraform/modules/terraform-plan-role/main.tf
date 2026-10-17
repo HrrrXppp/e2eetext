@@ -117,10 +117,8 @@ data "aws_iam_policy_document" "plan" {
     sid    = "MetricsLambdaRead"
     effect = "Allow"
     actions = [
-      "lambda:GetFunction",
-      "lambda:GetFunctionCodeSigningConfig",
-      "lambda:GetPolicy",
-      "lambda:ListTags",
+      "lambda:Get*",
+      "lambda:List*",
     ]
     resources = [
       "arn:aws:lambda:*:${local.account_id}:function:*-metrics",
