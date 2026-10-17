@@ -22,6 +22,11 @@ variable "lambda_zip_path" {
 variable "database_url_secret_arn" {
   description = "ARN of the Secrets Manager secret whose string value is the PostgreSQL connection string (same format as the server's DATABASE_URL). The secret itself is created out of band so the password never enters Terraform state."
   type        = string
+
+  validation {
+    condition     = can(regex("^arn:aws[a-z0-9-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+", var.database_url_secret_arn))
+    error_message = "database_url_secret_arn must be a Secrets Manager secret ARN. An empty value would be written into the Lambda IAM policy as Resource \"\"."
+  }
 }
 
 variable "vpc_id" {
