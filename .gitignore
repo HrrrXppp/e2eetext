@@ -56,3 +56,6 @@ maintenance/alb/create-alb.sh
 crash.log
 crash.*.log
 
+
+# Lambda build output
+lambdas/metrics/build/
