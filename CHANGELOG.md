@@ -16,6 +16,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Tooling & deployment
 
 - The metrics `monitoring` and `secretsmanager` interface VPC endpoints allow TCP 443 from the EC2 instance security groups, not only from the metrics Lambda. Private DNS was sending the server's `PutMetricData` to an endpoint that dropped it, so `WebSocketConnections` publishes timed out.
+- The read-only Terraform plan role can refresh the metrics Lambda, its log group, and its EventBridge rule (`iam:GetRole` on `*-metrics`, `logs:DescribeLogGroups`, `events:DescribeRule`). Apply `envs/shared` to update the live role.
 
 ## [0.3.6](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
