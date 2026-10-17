@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/ekhrunov/messenger/server/internal/config"
 	"github.com/ekhrunov/messenger/server/internal/handler"
+	"github.com/ekhrunov/messenger/server/internal/metrics"
 	"github.com/ekhrunov/messenger/server/internal/middleware"
 	"github.com/ekhrunov/messenger/server/internal/node"
 	"github.com/ekhrunov/messenger/server/internal/repository/postgres"
@@ -19,7 +24,9 @@ type App struct {
 	db      *sql.DB
 }
 
-func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.Registry) (*App, error) {
+// New wires the application. Background workers (the optional CloudWatch
+// metrics publisher) are started here and stop when ctx is cancelled.
+func New(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.Registry) (*App, error) {
 	oidcProviderRepo := postgres.NewOIDCProviderRepository(db)
 	userRepo := postgres.NewUserRepository(db)
 	chatRepo := postgres.NewChatRepository(db)
@@ -84,7 +91,27 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 
 	root := middleware.Logging(logger)(mux)
 
-	return &App{handler: root, db: db}, nil
+	application := &App{handler: root, db: db}
+
+	if cfg.Metrics.Enabled() {
+		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Metrics.Region))
+		if err != nil {
+			return nil, fmt.Errorf("load aws config for metrics: %w", err)
+		}
+		logger.Info("cloudwatch metrics enabled", "namespace", cfg.Metrics.Namespace, "environment", cfg.Metrics.Environment)
+		publisher := metrics.NewPublisher(
+			cloudwatch.NewFromConfig(awsCfg),
+			cfg.Metrics.Namespace,
+			cfg.Metrics.Environment,
+			nodeRegistry.ID,
+			hub.ConnectionCount,
+			metrics.DefaultInterval,
+			logger,
+		)
+		go publisher.Run(ctx)
+	}
+
+	return application, nil
 }
 
 func (a *App) DB() *sql.DB {

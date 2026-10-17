@@ -38,6 +38,21 @@ type Config struct {
 	DatabaseURL      string
 	OAuthCredentials map[string]OAuthCredential
 	RateLimits       RateLimits
+	Metrics          MetricsConfig
+}
+
+// MetricsConfig configures the optional CloudWatch publisher for this node's
+// WebSocket connection count (#37). Publishing is enabled only when both
+// Region and Namespace are set, so local dev and tests are unaffected.
+type MetricsConfig struct {
+	Region      string
+	Namespace   string
+	Environment string
+}
+
+// Enabled reports whether the CloudWatch publisher should run.
+func (m MetricsConfig) Enabled() bool {
+	return m.Region != "" && m.Namespace != ""
 }
 
 // RateLimitConfig describes one token bucket class: it refills at
@@ -145,6 +160,11 @@ func Load() (Config, error) {
 		DatabaseURL:      databaseURL,
 		OAuthCredentials: oauthCredentials,
 		RateLimits:       normalizeRateLimits(fileCfg.RateLimits),
+		Metrics: MetricsConfig{
+			Region:      strings.TrimSpace(os.Getenv("AWS_REGION")),
+			Namespace:   strings.TrimSpace(os.Getenv("METRICS_CLOUDWATCH_NAMESPACE")),
+			Environment: strings.TrimSpace(os.Getenv("METRICS_ENVIRONMENT")),
+		},
 	}, nil
 }
 

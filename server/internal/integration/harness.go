@@ -92,7 +92,7 @@ func newHarness(t *testing.T) *harness {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	application, err := app.New(cfg, logger, db, nodeRegistry)
+	application, err := app.New(context.Background(), cfg, logger, db, nodeRegistry)
 	if err != nil {
 		t.Fatalf("build app: %v", err)
 	}
