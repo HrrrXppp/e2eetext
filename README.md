@@ -864,7 +864,7 @@ aws rds describe-db-subnet-groups
 
 The live RDS master password is intentionally **not** part of `DEV_TFVARS`/`PROD_TFVARS` (each `rds_password` variable's own description already says never put it in a `.tfvars` file) — it's sourced from its own dedicated `DEV_RDS_PASSWORD` / `PROD_RDS_PASSWORD` secret instead, exported as `TF_VAR_rds_password` only for the `terraform plan` step. This keeps the full tfvars-blob secret shareable/rotatable without also carrying the database password.
 
-CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role is managed in `terraform/modules/terraform-plan-role` (wired from `envs/shared`); this is the policy document that module applies (state reads for every `envs/*` key; ECR/IAM reads for Phase 1 OIDC plus dig/prod EC2 instance profiles; EC2/ELBv2/ACM describes for Phase 2; RDS describes for Phase 3; SSM document/association reads for boot deploy):
+CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role is managed in `terraform/modules/terraform-plan-role` (wired from `envs/shared`); this is the policy document that module applies (state reads for every `envs/*` key; ECR/IAM reads for Phase 1 OIDC plus dig/prod EC2 instance profiles and the metrics Lambda roles; EC2/ELBv2/ACM describes for Phase 2; RDS describes for Phase 3; SSM document/association reads for boot deploy; Lambda, CloudWatch Logs, and EventBridge reads for the metrics module). Apply `envs/shared` after changing this policy — CI keeps using the live role until that apply.
 
 ```json
 {
@@ -910,11 +910,37 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/terraform-plan-role",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/e2eetext-dev-ec2-role",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:role/e2eetext-prod-ec2-role",
+        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/*-metrics",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:instance-profile/e2eetext-dev-ec2-profile",
         "arn:aws:iam::<AWS_ACCOUNT_ID>:instance-profile/e2eetext-prod-ec2-profile",
         "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
       ]
+    },
+    {
+      "Sid": "MetricsLambdaRead",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunction", "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetPolicy", "lambda:ListTags"
+      ],
+      "Resource": [
+        "arn:aws:lambda:*:<AWS_ACCOUNT_ID>:function:*-metrics",
+        "arn:aws:lambda:*:<AWS_ACCOUNT_ID>:function:*-metrics:*"
+      ]
+    },
+    {
+      "Sid": "MetricsLogsRead",
+      "Effect": "Allow",
+      "Action": ["logs:DescribeLogGroups", "logs:ListTagsForResource"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "MetricsEventsRead",
+      "Effect": "Allow",
+      "Action": ["events:DescribeRule", "events:ListTagsForResource", "events:ListTargetsByRule"],
+      "Resource": "arn:aws:events:*:<AWS_ACCOUNT_ID>:rule/*-metrics"
     },
     {
       "Sid": "IAMListAccount",

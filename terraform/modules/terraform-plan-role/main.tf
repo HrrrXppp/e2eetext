@@ -100,11 +100,53 @@ data "aws_iam_policy_document" "plan" {
       # dig / prod EC2 instance profiles (boot deploy + ECR pull).
       "arn:aws:iam::${local.account_id}:role/e2eetext-dev-ec2-role",
       "arn:aws:iam::${local.account_id}:role/e2eetext-prod-ec2-role",
+      # Metrics Lambda roles are "<name_prefix>-metrics" (dev-ec2-metrics, e2eetext-prod-metrics).
+      "arn:aws:iam::${local.account_id}:role/*-metrics",
       "arn:aws:iam::${local.account_id}:instance-profile/e2eetext-dev-ec2-profile",
       "arn:aws:iam::${local.account_id}:instance-profile/e2eetext-prod-ec2-profile",
       "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
       "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
     ]
+  }
+
+  # Refresh of the metrics module (Lambda, its log group, EventBridge rule).
+  # logs:DescribeLogGroups is authorized against an empty log-group ARN, so it
+  # cannot be limited to /aws/lambda/*-metrics.
+  statement {
+    sid    = "MetricsLambdaRead"
+    effect = "Allow"
+    actions = [
+      "lambda:GetFunction",
+      "lambda:GetFunctionCodeSigningConfig",
+      "lambda:GetPolicy",
+      "lambda:ListTags",
+    ]
+    resources = [
+      "arn:aws:lambda:*:${local.account_id}:function:*-metrics",
+      "arn:aws:lambda:*:${local.account_id}:function:*-metrics:*",
+    ]
+  }
+
+  statement {
+    sid    = "MetricsLogsRead"
+    effect = "Allow"
+    actions = [
+      "logs:DescribeLogGroups",
+      "logs:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "MetricsEventsRead"
+    effect = "Allow"
+    actions = [
+      "events:DescribeRule",
+      "events:ListTagsForResource",
+      "events:ListTargetsByRule",
+    ]
+    resources = ["arn:aws:events:*:${local.account_id}:rule/*-metrics"]
   }
 
   statement {
