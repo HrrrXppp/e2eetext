@@ -58,6 +58,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	application.StartBackground(ctx)
+
 	server := &http.Server{
 		Addr:         cfg.Addr,
 		Handler:      application.Handler(),
@@ -73,9 +78,6 @@ func main() {
 			os.Exit(1)
 		}
 	}()
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	<-ctx.Done()
 	logger.Info("shutting down")

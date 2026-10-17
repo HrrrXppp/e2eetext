@@ -330,3 +330,21 @@ func TestLoadDisablesClassWithExplicitZero(t *testing.T) {
 		t.Fatalf("RateLimits.Auth = %+v, want the default since config.json didn't set it", cfg.RateLimits.Auth)
 	}
 }
+
+func TestMetricsConfigEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  MetricsConfig
+		want bool
+	}{
+		{"both set", MetricsConfig{Region: "us-east-2", Namespace: "E2EEText/Messenger"}, true},
+		{"no namespace", MetricsConfig{Region: "us-east-2"}, false},
+		{"no region", MetricsConfig{Namespace: "E2EEText/Messenger"}, false},
+		{"empty", MetricsConfig{}, false},
+	}
+	for _, tt := range tests {
+		if got := tt.cfg.Enabled(); got != tt.want {
+			t.Errorf("%s: Enabled() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

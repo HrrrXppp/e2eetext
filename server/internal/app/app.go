@@ -1,12 +1,17 @@
 package app
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/ekhrunov/messenger/server/internal/config"
 	"github.com/ekhrunov/messenger/server/internal/handler"
+	"github.com/ekhrunov/messenger/server/internal/metrics"
 	"github.com/ekhrunov/messenger/server/internal/middleware"
 	"github.com/ekhrunov/messenger/server/internal/node"
 	"github.com/ekhrunov/messenger/server/internal/repository/postgres"
@@ -17,6 +22,9 @@ import (
 type App struct {
 	handler http.Handler
 	db      *sql.DB
+
+	// metricsPublisher is nil unless CloudWatch metrics are configured.
+	metricsPublisher *metrics.Publisher
 }
 
 func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.Registry) (*App, error) {
@@ -84,7 +92,34 @@ func New(cfg config.Config, logger *slog.Logger, db *sql.DB, nodeRegistry node.R
 
 	root := middleware.Logging(logger)(mux)
 
-	return &App{handler: root, db: db}, nil
+	application := &App{handler: root, db: db}
+
+	if cfg.Metrics.Enabled() {
+		awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), awsconfig.WithRegion(cfg.Metrics.Region))
+		if err != nil {
+			return nil, fmt.Errorf("load aws config for metrics: %w", err)
+		}
+		logger.Info("cloudwatch metrics enabled", "namespace", cfg.Metrics.Namespace, "environment", cfg.Metrics.Environment)
+		application.metricsPublisher = metrics.NewPublisher(
+			cloudwatch.NewFromConfig(awsCfg),
+			cfg.Metrics.Namespace,
+			cfg.Metrics.Environment,
+			nodeRegistry.ID,
+			hub.ConnectionCount,
+			metrics.DefaultInterval,
+			logger,
+		)
+	}
+
+	return application, nil
+}
+
+// StartBackground starts the app's background workers (currently the optional
+// CloudWatch metrics publisher). They stop when ctx is cancelled.
+func (a *App) StartBackground(ctx context.Context) {
+	if a.metricsPublisher != nil {
+		go a.metricsPublisher.Run(ctx)
+	}
 }
 
 func (a *App) DB() *sql.DB {
