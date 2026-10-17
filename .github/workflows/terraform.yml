@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "terraform/**"
+      - "lambdas/**"
       - ".github/workflows/terraform.yml"
 
 permissions:
@@ -120,6 +121,16 @@ jobs:
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
+      # terraform/modules/metrics deploys lambdas/metrics/build/metrics.zip
+      # (#37); the plan needs that file to exist when metrics_enabled is true.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: lambdas/metrics/go.mod
+          cache-dependency-path: lambdas/metrics/go.sum
+
+      - name: Build metrics Lambda package
+        run: lambdas/metrics/build.sh
 
       - name: Check AWS secrets are configured
         id: secrets-check
