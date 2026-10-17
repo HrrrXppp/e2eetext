@@ -921,10 +921,7 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
     {
       "Sid": "MetricsLambdaRead",
       "Effect": "Allow",
-      "Action": [
-        "lambda:GetFunction", "lambda:GetFunctionCodeSigningConfig",
-        "lambda:GetPolicy", "lambda:ListTags"
-      ],
+      "Action": ["lambda:Get*", "lambda:List*"],
       "Resource": [
         "arn:aws:lambda:*:<AWS_ACCOUNT_ID>:function:*-metrics",
         "arn:aws:lambda:*:<AWS_ACCOUNT_ID>:function:*-metrics:*"
