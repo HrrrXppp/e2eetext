@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.8](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-18
+
 ### Added
 
 - AdSense readiness: `/privacy` Privacy Policy and `/terms` Terms of Service pages (draft content, owner should review legally), site footer with Privacy/Terms/Contact links and copyright, placeholder `ads.txt`, `sitemap.xml`, and a `Sitemap:` line in `robots.txt`; Terraform ALB rules (priorities 15-16, dev and prod) forward `/privacy`, `/terms`, `/robots.txt`, `/ads.txt` and `/sitemap.xml` to the client target group (#33)
@@ -22,6 +24,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 - Prod reuses dig's `monitoring` and `secretsmanager` interface endpoints instead of creating a second private-DNS pair in the same VPC. It opens TCP 443 on `dev-ec2-metrics-endpoints` for the prod metrics Lambda and the prod EC2 security group. Apply dig before prod so that security group stops using an inline rule, which would delete the prod rules.
 - Prod RDS keeps the CloudShell self-ingress on port 5432 (`rds_ingress_allow_self`, default true).
 - Dig adopts the existing TCP 443 rules on `dev-ec2-metrics-endpoints` instead of creating them again. A fresh authorize was rejected as `InvalidPermission.Duplicate`.
+
+### Changed
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.8`
 
 ## [0.3.7](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-17
 
