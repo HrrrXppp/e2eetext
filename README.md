@@ -613,12 +613,12 @@ IMAGE_TAG=latest bash maintenance/ec2/deploy.sh
 ```hcl
 # dig — terraform/envs/dev/ec2_image_tag.tf
 locals {
-  ec2_boot_deploy_image_tag = "v0.3.7"
+  ec2_boot_deploy_image_tag = "v0.3.8"
 }
 
 # prod — terraform/envs/prod/ec2_image_tag.tf
 locals {
-  ec2_boot_deploy_image_tag = "v0.3.7"  # may differ from dig
+  ec2_boot_deploy_image_tag = "v0.3.8"  # may differ from dig
 }
 ```
 
@@ -626,7 +626,7 @@ Edit the relevant `ec2_image_tag.tf`, commit, and `terraform apply` that env. Ap
 
 On first launch (and on the SSM association, which runs the same script), the instance installs Docker, git, and the AWS CLI when those commands are missing, and `git clone`s `https://github.com/HrrrXppp/e2eetext.git` branch `main` into `/home/ec2-user/e2eetext` when that path is not already a checkout. An existing checkout is left as-is. `maintenance/ec2/.env`, `config/config.json`, and `config/instance.json` are gitignored, so they are still placed on the box by hand — without them `deploy.sh` exits and `start_now` fails until they exist. After the first apply attaches IAM, wait until the instance is SSM-managed before expecting the association to succeed. `user_data` stays `ignore_changes` for brownfield — dig is not replaced.
 
-Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.3.7 bash maintenance/ec2/install-boot-service.sh`.
+Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.3.8 bash maintenance/ec2/install-boot-service.sh`.
 
 Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
 
