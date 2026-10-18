@@ -6,13 +6,10 @@
 locals {
   function_name = "${var.name}-metrics"
 
-  # The Lambda is always a source. EC2 security groups are required as well:
-  # private DNS on the monitoring endpoint steers the server's PutMetricData
-  # at this endpoint, and a Lambda-only ingress rule drops that traffic.
-  endpoint_ingress_security_group_ids = distinct(concat(
-    [aws_security_group.lambda.id],
-    var.endpoint_ingress_security_group_ids,
-  ))
+  # One rule for the Lambda, plus one per caller security group. The Lambda
+  # id is unknown until apply, so it must not go through distinct()/length():
+  # that makes count unknown and the plan fails.
+  endpoint_https_rule_count = 1 + length(var.endpoint_ingress_security_group_ids)
 }
 
 data "aws_vpc" "this" {
@@ -74,7 +71,7 @@ resource "aws_security_group" "endpoints" {
 # delete rules another state added (prod Lambda on the dig-owned endpoints).
 # count, not for_each: the Lambda security group id is unknown until apply.
 resource "aws_security_group_rule" "endpoints_https" {
-  count = var.create_vpc_endpoints ? length(local.endpoint_ingress_security_group_ids) : 0
+  count = var.create_vpc_endpoints ? local.endpoint_https_rule_count : 0
 
   type                     = "ingress"
   description              = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
@@ -82,11 +79,11 @@ resource "aws_security_group_rule" "endpoints_https" {
   to_port                  = 443
   protocol                 = "tcp"
   security_group_id        = aws_security_group.endpoints[0].id
-  source_security_group_id = local.endpoint_ingress_security_group_ids[count.index]
+  source_security_group_id = count.index == 0 ? aws_security_group.lambda.id : var.endpoint_ingress_security_group_ids[count.index - 1]
 }
 
 resource "aws_security_group_rule" "existing_endpoint_https" {
-  count = !var.create_vpc_endpoints && var.existing_vpc_endpoint_security_group_id != "" ? length(local.endpoint_ingress_security_group_ids) : 0
+  count = var.create_vpc_endpoints ? 0 : local.endpoint_https_rule_count
 
   type                     = "ingress"
   description              = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
@@ -94,7 +91,14 @@ resource "aws_security_group_rule" "existing_endpoint_https" {
   to_port                  = 443
   protocol                 = "tcp"
   security_group_id        = var.existing_vpc_endpoint_security_group_id
-  source_security_group_id = local.endpoint_ingress_security_group_ids[count.index]
+  source_security_group_id = count.index == 0 ? aws_security_group.lambda.id : var.endpoint_ingress_security_group_ids[count.index - 1]
+
+  lifecycle {
+    precondition {
+      condition     = var.existing_vpc_endpoint_security_group_id != ""
+      error_message = "Set existing_vpc_endpoint_security_group_id when create_vpc_endpoints is false."
+    }
+  }
 }
 
 resource "aws_vpc_endpoint" "interface" {
