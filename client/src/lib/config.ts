@@ -4,3 +4,5 @@ const DEFAULT_DONATE_URL = "https://donate.stripe.com/8x214g0wr4bWe1RcXZ9R600";
 
 export const donateUrl: string =
   import.meta.env.VITE_DONATE_URL || DEFAULT_DONATE_URL;
+
+export const CONTACT_URL = "https://github.com/HrrrXppp/e2eetext/issues";
