@@ -60,32 +60,11 @@ resource "aws_security_group" "this" {
   description = "e2eetext RDS instance: PostgreSQL (5432) from the app tier only"
   vpc_id      = var.vpc_id
 
-  # If the live instance's real SG was hand-made (as Phase 2 found for the
-  # dev EC2 instance's "launch-wizard-2"/"ec2-rds-1" SGs), pass its ID via
-  # var.security_group_ids instead of creating a new one here — swapping a
-  # live RDS instance's SG is a real firewall change, not a no-op.
-  dynamic "ingress" {
-    for_each = var.ingress_security_group_id != "" ? [1] : []
-    content {
-      description     = "PostgreSQL from the app security group"
-      from_port       = 5432
-      to_port         = 5432
-      protocol        = "tcp"
-      security_groups = [var.ingress_security_group_id]
-    }
-  }
-
-  dynamic "ingress" {
-    for_each = var.ingress_allow_self ? [1] : []
-    content {
-      description = "PostgreSQL from CloudShell"
-      from_port   = 5432
-      to_port     = 5432
-      protocol    = "tcp"
-      self        = true
-    }
-  }
-
+  # Ingress is not inline. The AWS provider replaces the whole inline set
+  # on every apply, which revokes rules added by aws_security_group_rule
+  # (the metrics Lambda on port 5432). Those permissions are the standalone
+  # rules below. ignore_changes keeps a removed inline block from clearing
+  # the live rules during that move.
   egress {
     from_port   = 0
     to_port     = 0
@@ -96,6 +75,8 @@ resource "aws_security_group" "this" {
   tags = var.tags
 
   lifecycle {
+    ignore_changes = [ingress]
+
     # PR #32 review: on dev, module.ec2's own security_group_id output is
     # null (dev's EC2 instance uses pre-existing, hand-made SGs), so an
     # unset var.ingress_security_group_id combined with an empty
@@ -108,6 +89,30 @@ resource "aws_security_group" "this" {
       error_message = "modules/rds is creating its own security group (var.security_group_ids is empty) but var.ingress_security_group_id is unset — that would create an RDS security group with no ingress rule at all. Set ingress_security_group_id explicitly (e.g. the app tier's SG id), or pass pre-existing security_group_ids instead of letting this module create one."
     }
   }
+}
+
+resource "aws_security_group_rule" "from_app" {
+  count = local.create_security_group && var.ingress_security_group_id != "" ? 1 : 0
+
+  type                     = "ingress"
+  description              = "PostgreSQL from the app security group"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.this[0].id
+  source_security_group_id = var.ingress_security_group_id
+}
+
+resource "aws_security_group_rule" "from_self" {
+  count = local.create_security_group && var.ingress_allow_self ? 1 : 0
+
+  type              = "ingress"
+  description       = "PostgreSQL from CloudShell"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.this[0].id
+  self              = true
 }
 
 # #20's plan: "create or modify a custom DB parameter group with

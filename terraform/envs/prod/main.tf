@@ -184,6 +184,25 @@ module "rds" {
   tags = var.tags
 }
 
+# The app and CloudShell 5432 rules already exist on the prod RDS group.
+# Creating them again returns InvalidPermission.Duplicate. Import adopts
+# them. Lookups stay outside module.rds so the import id does not cycle
+# with the rule it adopts.
+data "aws_security_group" "rds" {
+  name   = var.rds_security_group_name
+  vpc_id = module.network.vpc_id
+}
+
+import {
+  to = module.rds.aws_security_group_rule.from_app[0]
+  id = "${data.aws_security_group.rds.id}_ingress_tcp_5432_5432_${var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : module.ec2.security_group_id}"
+}
+
+import {
+  to = module.rds.aws_security_group_rule.from_self[0]
+  id = "${data.aws_security_group.rds.id}_ingress_tcp_5432_5432_self"
+}
+
 # --- Metrics (#37) ---
 # Scheduled Lambda publishing Messages/Chats/Users to CloudWatch. Skipped
 # unless metrics_enabled is true and metrics_database_url_secret_arn is a
