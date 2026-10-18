@@ -262,3 +262,34 @@ module "metrics" {
 
   tags = var.tags
 }
+
+# These 443 permissions already exist on the dig endpoint group (Lambda,
+# launch-wizard-2, ec2-rds-1). Creating them again returns
+# InvalidPermission.Duplicate. Import adopts each one into
+# aws_security_group_rule so apply does not call AuthorizeSecurityGroupIngress.
+# Lookups stay outside module.metrics: an import id that reads that module
+# cycles with the rule it is importing.
+data "aws_security_group" "metrics_endpoints" {
+  name   = "${var.name_prefix}-metrics-endpoints"
+  vpc_id = module.network.vpc_id
+}
+
+data "aws_security_group" "metrics_lambda" {
+  name   = "${var.name_prefix}-metrics-lambda"
+  vpc_id = module.network.vpc_id
+}
+
+import {
+  to = module.metrics[0].aws_security_group_rule.endpoints_https[0]
+  id = "${data.aws_security_group.metrics_endpoints.id}_ingress_tcp_443_443_${data.aws_security_group.metrics_lambda.id}"
+}
+
+import {
+  to = module.metrics[0].aws_security_group_rule.endpoints_https[1]
+  id = "${data.aws_security_group.metrics_endpoints.id}_ingress_tcp_443_443_${local.ec2_security_group_ids[0]}"
+}
+
+import {
+  to = module.metrics[0].aws_security_group_rule.endpoints_https[2]
+  id = "${data.aws_security_group.metrics_endpoints.id}_ingress_tcp_443_443_${local.ec2_security_group_ids[1]}"
+}
