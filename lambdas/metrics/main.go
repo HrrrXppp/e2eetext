@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,34 +26,55 @@ type runtime struct {
 	cw          *cloudwatch.Client
 	sm          *secretsmanager.Client
 
-	once sync.Once
-	db   *sql.DB
-	err  error
+	mu  sync.Mutex
+	db  *sql.DB
+	dsn string
 }
 
-// open reads DATABASE_URL from Secrets Manager once per execution environment
-// and caches the connection pool across invocations.
+// normalizeDatabaseURL trims the secret. A trailing newline makes pgx treat
+// sslmode as invalid, and the raw string is what we compare so a secret
+// update replaces the cached pool.
+func normalizeDatabaseURL(secret string) (string, error) {
+	dsn := strings.TrimSpace(secret)
+	if dsn == "" {
+		return "", fmt.Errorf("database secret has no string value")
+	}
+	return dsn, nil
+}
+
+// open reads DATABASE_URL from Secrets Manager on every invocation. A warm
+// execution environment otherwise keeps the pool from the first read, so a
+// secret change never reaches Postgres.
 func (r *runtime) open(ctx context.Context) (*sql.DB, error) {
-	r.once.Do(func() {
-		out, err := r.sm.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{SecretId: &r.secretID})
-		if err != nil {
-			r.err = fmt.Errorf("read database secret: %w", err)
-			return
-		}
-		if out.SecretString == nil || *out.SecretString == "" {
-			r.err = fmt.Errorf("database secret has no string value")
-			return
-		}
-		db, err := sql.Open("pgx", *out.SecretString)
-		if err != nil {
-			r.err = fmt.Errorf("open database: %w", err)
-			return
-		}
-		db.SetMaxOpenConns(1)
-		db.SetConnMaxLifetime(5 * time.Minute)
-		r.db = db
-	})
-	return r.db, r.err
+	out, err := r.sm.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{SecretId: &r.secretID})
+	if err != nil {
+		return nil, fmt.Errorf("read database secret: %w", err)
+	}
+	if out.SecretString == nil {
+		return nil, fmt.Errorf("database secret has no string value")
+	}
+	dsn, err := normalizeDatabaseURL(*out.SecretString)
+	if err != nil {
+		return nil, err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.db != nil && r.dsn == dsn {
+		return r.db, nil
+	}
+	if r.db != nil {
+		_ = r.db.Close()
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	r.db = db
+	r.dsn = dsn
+	return r.db, nil
 }
 
 func (r *runtime) handle(ctx context.Context) error {

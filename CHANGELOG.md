@@ -16,6 +16,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Tooling & deployment
 
 - The prod RDS security group no longer drops the metrics Lambda's port 5432 rule. App and CloudShell access stay as standalone rules, and the security group does not reconcile inline ingress.
+- The metrics Lambda reads the database secret on every run and trims it. A warm execution environment was keeping the first password, and a trailing newline made `sslmode` invalid.
 
 ## [0.3.8](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-18
 
