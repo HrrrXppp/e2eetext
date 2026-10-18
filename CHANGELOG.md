@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- AdSense readiness: `/privacy` Privacy Policy and `/terms` Terms of Service pages (draft content, owner should review legally), site footer with Privacy/Terms/Contact links and copyright, placeholder `ads.txt`, `sitemap.xml`, and a `Sitemap:` line in `robots.txt`; Terraform ALB rules (priorities 15-16, dev and prod) forward `/privacy`, `/terms`, `/robots.txt`, `/ads.txt` and `/sitemap.xml` to the client target group (#33)
+
 ### Fixed
 
 #### Tooling & deployment

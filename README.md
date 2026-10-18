@@ -630,6 +630,10 @@ Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.3.7 bash mai
 
 Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
 
+### AdSense and SEO static files
+
+The client serves `/privacy` and `/terms` (draft policy pages; review them legally before relying on them) and a footer linking them plus a Contact link (GitHub issues). `client/public/` also holds `sitemap.xml`, a `Sitemap:` line in `robots.txt`, and a placeholder `ads.txt`. Because the dev and prod HTTPS listeners default to a fixed 404, `terraform/envs/dev` and `terraform/envs/prod` add ALB rules at priority 15 (`/privacy`, `/terms`) and 16 (`/robots.txt`, `/ads.txt`, `/sitemap.xml`) that forward to the client target group; apply them before expecting these URLs to resolve. Before go-live replace `app.example.com` in `sitemap.xml` and `robots.txt` with the real domain. After AdSense approval, put the real `google.com, pub-..., DIRECT, f08c47fec0942fa0` line in `client/public/ads.txt` and redeploy. A cookie-consent mechanism is still needed once ads are actually served.
+
 ### 7. Google OAuth
 
 In [Google Cloud Console](https://console.cloud.google.com/) → Credentials, add **Authorized redirect URI**:
@@ -768,7 +772,7 @@ Replace `<AWS_ACCOUNT_ID>` with the real account (`aws sts get-caller-identity`)
 
 ### One-time import bootstrap (`envs/dev` — Phase 2)
 
-A live dev EC2/ALB/VPC stack already exists (confirmed by the repo owner on [#27](https://github.com/HrrrXppp/e2eetext/issues/27)) — it was created by hand, and an audit against the AWS API (2026-07-26) showed it diverges from `maintenance/alb/create-alb.example.sh` in nearly every detail: the ALB is named `dev-e2eetext` (not `e2eetext-dev`), the target groups are named `dev-server` and `client`, the idle timeout is 60 (not the script's 3600), the HTTPS listener's default action is a fixed 404 (client routing lives in hand-made path rules at priorities 10–14 instead of a catch-all forward), the `/api/*` rule sits at priority 100, there is no `/health` listener rule, the instance runs with **no IAM instance profile** and with hand-made security groups (`launch-wizard-2` + `ec2-rds-1`), and nothing is tagged. `terraform/envs/dev`'s variable defaults record all of those audited values, so it describes what is actually live with **no `terraform.tfvars` needed** — `terraform plan` works out of the box (it looks the ALB security group and ACM certificate ARN up from the live ALB by name, so no account-specific IDs are committed to the repo).
+A live dev EC2/ALB/VPC stack already exists (confirmed by the repo owner on [#27](https://github.com/HrrrXppp/e2eetext/issues/27)) — it was created by hand, and an audit against the AWS API (2026-07-26) showed it diverges from `maintenance/alb/create-alb.example.sh` in nearly every detail: the ALB is named `dev-e2eetext` (not `e2eetext-dev`), the target groups are named `dev-server` and `client`, the idle timeout is 60 (not the script's 3600), the HTTPS listener's default action is a fixed 404 (client routing lives in hand-made path rules at priorities 10–14, plus Terraform-added 15–16 for `/privacy`, `/terms` and the static SEO files, instead of a catch-all forward), the `/api/*` rule sits at priority 100, there is no `/health` listener rule, the instance runs with **no IAM instance profile** and with hand-made security groups (`launch-wizard-2` + `ec2-rds-1`), and nothing is tagged. `terraform/envs/dev`'s variable defaults record all of those audited values, so it describes what is actually live with **no `terraform.tfvars` needed** — `terraform plan` works out of the box (it looks the ALB security group and ACM certificate ARN up from the live ALB by name, so no account-specific IDs are committed to the repo).
 
 As with Phase 1, Terraform must **import** the live resources, not create them:
 
@@ -797,7 +801,7 @@ terraform import module.alb.aws_lb_target_group.client <DEV_CLIENT_TG_ARN>
 terraform import module.alb.aws_lb_listener.https <DEV_HTTPS_LISTENER_ARN>
 terraform import module.alb.aws_lb_listener.http_redirect <DEV_HTTP_LISTENER_ARN>
 terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # priority-100 /api/*
-# Client SPA rules (priorities 10–14 → client TG). Look up ARNs with
+# Client SPA rules (priorities 10–14 → client TG; 15–16 are new and created by apply). Look up ARNs with
 # `aws elbv2 describe-rules --listener-arn <HTTPS_LISTENER_ARN>`.
 terraform import 'module.alb.aws_lb_listener_rule.extra["10"]' <RULE_ARN_PRIO_10>   # /
 terraform import 'module.alb.aws_lb_listener_rule.extra["11"]' <RULE_ARN_PRIO_11>   # /assets/*
