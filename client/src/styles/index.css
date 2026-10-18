@@ -1578,3 +1578,32 @@ body.has-dev-instance-banner .site-head {
   font-size: 0.8125rem;
   color: var(--muted);
 }
+
+.legal {
+  max-width: 48rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+  box-sizing: border-box;
+  color: var(--text-soft);
+  line-height: 1.65;
+}
+
+.legal__title {
+  margin: 0 0 0.25rem;
+}
+
+.legal__updated {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.legal h2 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.legal a {
+  color: var(--accent-bright);
+}

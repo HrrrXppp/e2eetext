@@ -12,6 +12,13 @@ vi.mock("@/app/LandingPage", () => ({
   LandingPage: () => <div>Landing page</div>,
 }));
 
+vi.mock("@/app/PrivacyPolicyPage", () => ({
+  PrivacyPolicyPage: () => <div>Privacy page</div>,
+}));
+vi.mock("@/app/TermsPage", () => ({
+  TermsPage: () => <div>Terms page</div>,
+}));
+
 describe("App", () => {
   it("routes oauth callback path", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/oauth/callback" });
@@ -29,5 +36,15 @@ describe("App", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/" });
     render(<App />);
     expect(screen.getByText("Landing page")).toBeInTheDocument();
+  });
+
+  it("routes privacy and terms paths", () => {
+    vi.stubGlobal("location", { ...window.location, pathname: "/privacy" });
+    const { unmount } = render(<App />);
+    expect(screen.getByText("Privacy page")).toBeInTheDocument();
+    unmount();
+    vi.stubGlobal("location", { ...window.location, pathname: "/terms" });
+    render(<App />);
+    expect(screen.getByText("Terms page")).toBeInTheDocument();
   });
 });
