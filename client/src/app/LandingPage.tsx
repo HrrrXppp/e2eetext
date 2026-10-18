@@ -25,6 +25,14 @@ const features = [
 
 const news = [
   {
+    date: "October 18, 2026",
+    dateTime: "2026-10-18",
+    title: "Roadmap published",
+    body:
+      "We published the E2EE Text roadmap: base improvements and separated services with a custom load balancer in Q4 2026, then audio and video calls in Q1 2027.",
+    link: { href: "/roadmap", label: "View the roadmap" },
+  },
+  {
     date: "October 11, 2026",
     dateTime: "2026-10-11",
     title: "E2EE Text is live in production",
@@ -125,7 +133,11 @@ export function LandingPage() {
 
         <section className="landing__panel landing__news" aria-labelledby="news-heading">
           <SectionHeading id="news-heading">News</SectionHeading>
-          <ul className="landing__news-list">
+          <ul
+            className="landing__news-list"
+            tabIndex={0}
+            aria-label="News items"
+          >
             {news.map((item) => (
               <li key={item.title} className="landing__news-item">
                 <time className="landing__news-date" dateTime={item.dateTime}>
@@ -133,6 +145,11 @@ export function LandingPage() {
                 </time>
                 <h3 className="landing__news-title">{item.title}</h3>
                 <p className="landing__news-body">{item.body}</p>
+                {"link" in item && (
+                  <a className="landing__news-link" href={item.link.href}>
+                    {item.link.label}
+                  </a>
+                )}
               </li>
             ))}
           </ul>

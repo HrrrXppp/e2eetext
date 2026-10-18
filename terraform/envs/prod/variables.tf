@@ -188,7 +188,7 @@ variable "create_health_rule" {
 variable "additional_https_rules" {
   description = <<-EOT
     Extra HTTPS listener rules (path → client or server TG). Default matches
-    live-dev / envs/dev SPA routes (priorities 10–14) plus the /privacy, /terms and static SEO file rules (15–16) with HTTPS default
+    live-dev / envs/dev SPA routes (priorities 10–14) plus the /privacy, /terms, /roadmap and static SEO file rules (15–16) with HTTPS default
     action fixed-404. Override to [] only if prod intentionally uses
     forward-client as the HTTPS default instead.
   EOT
@@ -203,7 +203,7 @@ variable "additional_https_rules" {
     { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
     { priority = 13, path_patterns = ["/chats"], target = "client" },
     { priority = 14, path_patterns = ["/instance.json"], target = "client" },
-    { priority = 15, path_patterns = ["/privacy", "/terms"], target = "client" },
+    { priority = 15, path_patterns = ["/privacy", "/terms", "/roadmap"], target = "client" },
     { priority = 16, path_patterns = ["/robots.txt", "/ads.txt", "/sitemap.xml"], target = "client" },
   ]
 }

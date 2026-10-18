@@ -3,6 +3,7 @@ import { AuthCallback } from "@/app/AuthCallback";
 import { ChatsPage } from "@/app/ChatsPage";
 import { LandingPage } from "@/app/LandingPage";
 import { PrivacyPolicyPage } from "@/app/PrivacyPolicyPage";
+import { RoadmapPage } from "@/app/RoadmapPage";
 import { TermsPage } from "@/app/TermsPage";
 
 export function App() {
@@ -22,6 +23,10 @@ export function App() {
 
   if (pathname === "/terms") {
     return <TermsPage />;
+  }
+
+  if (pathname === "/roadmap") {
+    return <RoadmapPage />;
   }
 
   return <LandingPage />;

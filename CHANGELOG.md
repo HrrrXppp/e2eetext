@@ -11,6 +11,15 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- Client `/roadmap` page listing four planned milestones (base improvement, separated services with a custom load balancer, audio calls, video calls) with quarters and status badges, a Roadmap footer link, and a "Roadmap published" news item (#116)
+- The landing page news list keeps a fixed maximum height and scrolls (keyboard focusable) (#116)
+
+#### Tooling & deployment
+
+- ALB priority 15 rule (dev and prod) and `sitemap.xml` include `/roadmap` (#116)
+
 ### Fixed
 
 #### Tooling & deployment

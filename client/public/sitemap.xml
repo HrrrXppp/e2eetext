@@ -3,4 +3,5 @@
   <url><loc>https://app.example.com/</loc></url>
   <url><loc>https://app.example.com/privacy</loc></url>
   <url><loc>https://app.example.com/terms</loc></url>
+  <url><loc>https://app.example.com/roadmap</loc></url>
 </urlset>
