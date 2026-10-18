@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.9](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-18
+
 ### Added
 
 - Client `/roadmap` page listing four planned milestones (base improvement, separated services with a custom load balancer, audio calls, video calls) with quarters and status badges, a Roadmap footer link, and a "Roadmap published" news item (#116)
@@ -26,6 +28,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - The prod RDS security group no longer drops the metrics Lambda's port 5432 rule. App and CloudShell access stay as standalone rules, and the security group does not reconcile inline ingress.
 - The metrics Lambda reads the database secret on every run and trims it. A warm execution environment was keeping the first password, and a trailing newline made `sslmode` invalid.
+
+### Changed
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.9`
 
 ## [0.3.8](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-18
 
