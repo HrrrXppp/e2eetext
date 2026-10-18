@@ -46,9 +46,15 @@ variable "rds_security_group_id" {
 }
 
 variable "create_vpc_endpoints" {
-  description = "Create interface VPC endpoints for CloudWatch (monitoring) and Secrets Manager so the Lambda needs no internet/NAT egress. Set false if the VPC already has them or has a NAT gateway."
+  description = "Create interface VPC endpoints for CloudWatch (monitoring) and Secrets Manager so the Lambda needs no internet/NAT egress. Set false if the VPC already has them (only one private-DNS endpoint per service is allowed) or has a NAT gateway."
   type        = bool
   default     = true
+}
+
+variable "existing_vpc_endpoint_security_group_id" {
+  description = "Security group on VPC endpoints that already exist, used when create_vpc_endpoints is false. TCP 443 is opened from the metrics Lambda and endpoint_ingress_security_group_ids. Leave empty when this module creates the endpoints."
+  type        = string
+  default     = ""
 }
 
 variable "endpoint_ingress_security_group_ids" {

@@ -576,7 +576,19 @@ variable "metrics_rds_security_group_id" {
 }
 
 variable "metrics_create_vpc_endpoints" {
-  description = "Create monitoring and secretsmanager interface VPC endpoints for the metrics Lambda. Set false if the VPC already has them or has NAT egress."
+  description = "Create monitoring and secretsmanager interface VPC endpoints for the prod metrics Lambda. Default false: dig already created those endpoints with private DNS in this VPC, and AWS allows only one private-DNS endpoint per service. Set true only in a VPC that does not already have them."
+  type        = bool
+  default     = false
+}
+
+variable "metrics_vpc_endpoint_security_group_name" {
+  description = "Name of the existing interface-endpoint security group to open for the prod metrics Lambda and prod EC2 instance when metrics_create_vpc_endpoints is false."
+  type        = string
+  default     = "dev-ec2-metrics-endpoints"
+}
+
+variable "rds_ingress_allow_self" {
+  description = "Keep TCP 5432 open to ENIs attached to the prod RDS security group (CloudShell). Default true so apply does not drop that live rule."
   type        = bool
   default     = true
 }

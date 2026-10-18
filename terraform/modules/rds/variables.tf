@@ -188,6 +188,12 @@ variable "security_group_name" {
   default     = "e2eetext-rds"
 }
 
+variable "ingress_allow_self" {
+  description = "Allow TCP 5432 from other ENIs that use this security group (CloudShell attached to the RDS security group). Only used when this module creates the security group."
+  type        = bool
+  default     = false
+}
+
 variable "ingress_security_group_id" {
   description = <<-EOT
     Security group ID allowed to reach port 5432 on the created SG (the
