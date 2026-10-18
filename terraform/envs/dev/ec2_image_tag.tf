@@ -3,5 +3,5 @@
 # Prod has its own pin: terraform/envs/prod/ec2_image_tag.tf
 
 locals {
-  ec2_boot_deploy_image_tag = "v0.3.6"
+  ec2_boot_deploy_image_tag = "v0.3.7"
 }
