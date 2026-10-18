@@ -10,6 +10,16 @@ vi.mock("@/components/layout/Footer", () => ({
 }));
 
 describe("LandingPage news", () => {
+  it("announces the roadmap in a keyboard-focusable scrollable list", () => {
+    render(<LandingPage />);
+    expect(screen.getByText("October 18, 2026")).toHaveAttribute("datetime", "2026-10-18");
+    expect(screen.getByRole("heading", { level: 3, name: "Roadmap published" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View the roadmap" })).toHaveAttribute("href", "/roadmap");
+    const list = screen.getByRole("list", { name: "News items" });
+    expect(list).toHaveAttribute("tabindex", "0");
+    expect(list).toHaveClass("landing__news-list");
+  });
+
   it("lists the production launch first, above the project start entry", () => {
     render(<LandingPage />);
     const titles = screen

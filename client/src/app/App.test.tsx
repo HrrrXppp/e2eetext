@@ -19,6 +19,10 @@ vi.mock("@/app/TermsPage", () => ({
   TermsPage: () => <div>Terms page</div>,
 }));
 
+vi.mock("@/app/RoadmapPage", () => ({
+  RoadmapPage: () => <div>Roadmap page</div>,
+}));
+
 describe("App", () => {
   it("routes oauth callback path", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/oauth/callback" });
@@ -46,5 +50,11 @@ describe("App", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/terms" });
     render(<App />);
     expect(screen.getByText("Terms page")).toBeInTheDocument();
+  });
+
+  it("routes roadmap path", () => {
+    vi.stubGlobal("location", { ...window.location, pathname: "/roadmap" });
+    render(<App />);
+    expect(screen.getByText("Roadmap page")).toBeInTheDocument();
   });
 });

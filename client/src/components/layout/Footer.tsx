@@ -15,12 +15,15 @@ export function Footer() {
           <strong>donations</strong>
         </a>
       </p>
-      <nav className="site-foot__nav" aria-label="Legal and contact">
+      <nav className="site-foot__nav" aria-label="Legal, roadmap and contact">
         <a className="site-foot__link" href="/privacy">
           Privacy Policy
         </a>
         <a className="site-foot__link" href="/terms">
           Terms of Service
+        </a>
+        <a className="site-foot__link" href="/roadmap">
+          Roadmap
         </a>
         <a
           className="site-foot__link"
