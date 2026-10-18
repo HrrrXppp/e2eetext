@@ -75,6 +75,17 @@ resource "aws_security_group" "this" {
     }
   }
 
+  dynamic "ingress" {
+    for_each = var.ingress_allow_self ? [1] : []
+    content {
+      description = "PostgreSQL from CloudShell"
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      self        = true
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

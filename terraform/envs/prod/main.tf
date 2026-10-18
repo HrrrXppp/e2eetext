@@ -149,6 +149,7 @@ module "rds" {
   # branch hasn't fired live here, but the expression is identical and just
   # as capable of erroring).
   ingress_security_group_id = var.rds_ingress_security_group_id != "" ? var.rds_ingress_security_group_id : (module.ec2.security_group_id != null ? module.ec2.security_group_id : "")
+  ingress_allow_self        = var.rds_ingress_allow_self
 
   create_parameter_group   = var.rds_create_parameter_group
   parameter_group_name     = var.rds_parameter_group_name
@@ -189,6 +190,16 @@ module "rds" {
 # Secrets Manager ARN. An empty ARN must not be planned: the Lambda IAM
 # policy would send Resource "" and AWS would reject it. Also needs the
 # package from lambdas/metrics/build.sh. No public endpoint.
+# Dig already owns the private-DNS monitoring and secretsmanager endpoints
+# in this VPC. Prod must not create a second pair (AWS rejects it) and
+# instead opens the existing endpoint security group.
+data "aws_security_group" "metrics_endpoints" {
+  count = var.metrics_enabled && trimspace(var.metrics_database_url_secret_arn) != "" && !var.metrics_create_vpc_endpoints ? 1 : 0
+
+  name   = var.metrics_vpc_endpoint_security_group_name
+  vpc_id = module.network.vpc_id
+}
+
 check "metrics_database_secret" {
   assert {
     condition     = !var.metrics_enabled || trimspace(var.metrics_database_url_secret_arn) != ""
@@ -210,8 +221,9 @@ module "metrics" {
   vpc_id     = module.network.vpc_id
   subnet_ids = length(var.metrics_subnet_ids) > 0 ? var.metrics_subnet_ids : [var.ec2_subnet_id != "" ? var.ec2_subnet_id : module.network.subnet_ids[0]]
 
-  rds_security_group_id = var.metrics_rds_security_group_id != "" ? var.metrics_rds_security_group_id : (module.rds.security_group_id != null ? module.rds.security_group_id : "")
-  create_vpc_endpoints  = var.metrics_create_vpc_endpoints
+  rds_security_group_id                   = var.metrics_rds_security_group_id != "" ? var.metrics_rds_security_group_id : (module.rds.security_group_id != null ? module.rds.security_group_id : "")
+  create_vpc_endpoints                    = var.metrics_create_vpc_endpoints
+  existing_vpc_endpoint_security_group_id = length(data.aws_security_group.metrics_endpoints) > 0 ? data.aws_security_group.metrics_endpoints[0].id : ""
   endpoint_ingress_security_group_ids = distinct(concat(
     var.ec2_security_group_ids,
     module.ec2.security_group_id != null ? [module.ec2.security_group_id] : [],

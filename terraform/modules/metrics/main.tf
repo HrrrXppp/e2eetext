@@ -66,17 +66,35 @@ resource "aws_security_group" "endpoints" {
   description = "Interface VPC endpoints used by the metrics Lambda"
   vpc_id      = var.vpc_id
 
-  # One permission with every source group. A for_each keyed on the
-  # Lambda security group id is unknown until apply and cannot be planned.
-  ingress {
-    description     = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = local.endpoint_ingress_security_group_ids
-  }
-
   tags = var.tags
+}
+
+# Standalone rules, not an inline ingress block. Inline rules make this
+# security group the sole owner of its permissions, so the next apply would
+# delete rules another state added (prod Lambda on the dig-owned endpoints).
+# count, not for_each: the Lambda security group id is unknown until apply.
+resource "aws_security_group_rule" "endpoints_https" {
+  count = var.create_vpc_endpoints ? length(local.endpoint_ingress_security_group_ids) : 0
+
+  type                     = "ingress"
+  description              = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.endpoints[0].id
+  source_security_group_id = local.endpoint_ingress_security_group_ids[count.index]
+}
+
+resource "aws_security_group_rule" "existing_endpoint_https" {
+  count = !var.create_vpc_endpoints && var.existing_vpc_endpoint_security_group_id != "" ? length(local.endpoint_ingress_security_group_ids) : 0
+
+  type                     = "ingress"
+  description              = "HTTPS from the metrics Lambda and instances that publish CloudWatch metrics"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = var.existing_vpc_endpoint_security_group_id
+  source_security_group_id = local.endpoint_ingress_security_group_ids[count.index]
 }
 
 resource "aws_vpc_endpoint" "interface" {
