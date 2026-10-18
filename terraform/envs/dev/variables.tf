@@ -203,7 +203,7 @@ variable "api_path_patterns" {
 variable "additional_https_rules" {
   description = <<-EOT
     Extra HTTPS listener rules managed by Terraform. Confirmed live on
-    2026-07-26 / README: priorities 10–14 forward SPA paths to the client
+    2026-07-26 / README: priorities 10–16 forward SPA paths and static files to the client
     TG (default listener action is fixed-404). Import each as
     module.alb.aws_lb_listener_rule.extra["<priority>"].
   EOT
@@ -218,6 +218,8 @@ variable "additional_https_rules" {
     { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
     { priority = 13, path_patterns = ["/chats"], target = "client" },
     { priority = 14, path_patterns = ["/instance.json"], target = "client" },
+    { priority = 15, path_patterns = ["/privacy", "/terms"], target = "client" },
+    { priority = 16, path_patterns = ["/robots.txt", "/ads.txt", "/sitemap.xml"], target = "client" },
   ]
 }
 
