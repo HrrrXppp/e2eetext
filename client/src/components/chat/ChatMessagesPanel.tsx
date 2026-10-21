@@ -48,7 +48,7 @@ export function ChatMessagesPanel({
   const [draft, setDraft] = useState("");
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const unreadDividerRef = useRef<HTMLDivElement>(null);
-  const scrolledToUnreadForChatRef = useRef<string | null>(null);
+  const scrolledForChatRef = useRef<string | null>(null);
   const unreadDividerIndex = useMemo(() => firstUnreadIndex(messages), [messages]);
   const setMessageRef = useMarkMessageReadOnView(
     chat?.id ?? null,
@@ -63,17 +63,21 @@ export function ChatMessagesPanel({
       return;
     }
 
-    if (scrolledToUnreadForChatRef.current === chat.id) {
+    if (scrolledForChatRef.current === chat.id) {
       return;
     }
 
-    if (unreadDividerIndex <= 0) {
-      scrolledToUnreadForChatRef.current = chat.id;
+    scrolledForChatRef.current = chat.id;
+
+    if (unreadDividerIndex > 0) {
+      unreadDividerRef.current?.scrollIntoView({ block: "start" });
       return;
     }
 
-    unreadDividerRef.current?.scrollIntoView({ block: "start" });
-    scrolledToUnreadForChatRef.current = chat.id;
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [chat, loading, error, unreadDividerIndex]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

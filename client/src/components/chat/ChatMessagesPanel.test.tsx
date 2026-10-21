@@ -166,6 +166,99 @@ describe("ChatMessagesPanel", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
+  describe("scrolling to the latest message", () => {
+    const readMessage = {
+      ...messagesWithUnread[0],
+      unread: false,
+    };
+    const firstUnread = {
+      ...messagesWithUnread[1],
+      id: "first-unread",
+      unread: true,
+    };
+    const otherChat = { ...chat, id: "22222222-2222-2222-2222-222222222222" };
+
+    function panel(
+      chatArg: typeof chat,
+      messages: Array<typeof readMessage>,
+      loading = false,
+    ) {
+      return (
+        <ChatMessagesPanel
+          chat={chatArg}
+          messages={messages}
+          currentUserId="current-user"
+          loading={loading}
+          error={null}
+          sending={false}
+          sendError={null}
+          onSend={vi.fn()}
+          onMarkRead={vi.fn()}
+        />
+      );
+    }
+
+    function stubScrollMetrics() {
+      vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+      vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(900);
+      const scrollTopSet = vi.fn();
+      vi.spyOn(HTMLElement.prototype, "scrollTop", "set").mockImplementation(scrollTopSet);
+      return scrollTopSet;
+    }
+
+    it("scrolls to the bottom once when a chat with no unread messages opens", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [], true));
+      expect(scrollTopSet).not.toHaveBeenCalled();
+
+      rerender(panel(chat, [readMessage]));
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+      expect(scrollTopSet).toHaveBeenCalledWith(900);
+    });
+
+    it("scrolls to the bottom when the first message is the first unread one", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      render(panel(chat, [firstUnread]));
+
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+      expect(scrollTopSet).toHaveBeenCalledWith(900);
+    });
+
+    it("does not scroll to the bottom when an unread divider is shown", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      render(panel(chat, messagesWithUnread));
+
+      expect(scrollTopSet).not.toHaveBeenCalled();
+    });
+
+    it("does not scroll again when new messages arrive in the same chat", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [readMessage]));
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+
+      rerender(panel(chat, [readMessage, { ...readMessage, id: "read-2" }]));
+      rerender(panel(chat, [readMessage, { ...readMessage, id: "read-2" }], true));
+      rerender(panel(chat, [readMessage, { ...readMessage, id: "read-2" }]));
+
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+    });
+
+    it("scrolls to the bottom again when switching to another chat", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [readMessage]));
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+
+      rerender(panel(otherChat, [{ ...readMessage, chatId: otherChat.id }]));
+
+      expect(scrollTopSet).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("does not show a back button when onBack is not provided", () => {
     render(
       <ChatMessagesPanel
