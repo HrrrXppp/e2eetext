@@ -247,6 +247,21 @@ describe("ChatMessagesPanel", () => {
       expect(scrollTopSet).toHaveBeenCalledTimes(1);
     });
 
+    it("waits for the opened chat's messages instead of scrolling on the pre-fetch render", () => {
+      const scrollTopSet = stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [readMessage]));
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+
+      // Chat switch: first render has loading=false and the previous chat's messages.
+      rerender(panel(otherChat, [readMessage]));
+      rerender(panel(otherChat, [], true));
+      expect(scrollTopSet).toHaveBeenCalledTimes(1);
+
+      rerender(panel(otherChat, [{ ...readMessage, chatId: otherChat.id }]));
+      expect(scrollTopSet).toHaveBeenCalledTimes(2);
+    });
+
     it("scrolls to the bottom again when switching to another chat", () => {
       const scrollTopSet = stubScrollMetrics();
 

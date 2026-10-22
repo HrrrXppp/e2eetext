@@ -67,6 +67,13 @@ export function ChatMessagesPanel({
       return;
     }
 
+    // Selecting a chat renders once before its fetch starts (loading is still false
+    // and messages are empty or belong to the previously open chat), so wait until
+    // the messages of this chat are actually present.
+    if (messages.length === 0 || messages.some((message) => message.chatId !== chat.id)) {
+      return;
+    }
+
     scrolledForChatRef.current = chat.id;
 
     if (unreadDividerIndex > 0) {
@@ -78,7 +85,7 @@ export function ChatMessagesPanel({
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [chat, loading, error, unreadDividerIndex]);
+  }, [chat, messages, loading, error, unreadDividerIndex]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
