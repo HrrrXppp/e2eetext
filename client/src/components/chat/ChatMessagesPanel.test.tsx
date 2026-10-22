@@ -262,6 +262,28 @@ describe("ChatMessagesPanel", () => {
       expect(scrollTopSet).toHaveBeenCalledTimes(2);
     });
 
+    it("keeps the message list mounted while the open chat reloads, so the scroll position is not reset", () => {
+      stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [readMessage]));
+      const list = screen.getByRole("list");
+
+      rerender(panel(chat, [readMessage], true));
+
+      expect(screen.getByRole("list")).toBe(list);
+      expect(screen.queryByText("Loading messages...")).not.toBeInTheDocument();
+    });
+
+    it("shows the loading state instead of the previous chat's messages while a new chat loads", () => {
+      stubScrollMetrics();
+
+      const { rerender } = render(panel(chat, [readMessage]));
+      rerender(panel(otherChat, [readMessage], true));
+
+      expect(screen.getByText("Loading messages...")).toBeInTheDocument();
+      expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    });
+
     it("scrolls to the bottom again when switching to another chat", () => {
       const scrollTopSet = stubScrollMetrics();
 

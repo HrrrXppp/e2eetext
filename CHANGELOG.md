@@ -13,7 +13,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Fixed
 
-- Opening a chat now scrolls the message list to the latest message when there is no unread divider to jump to (no unread messages, or the first message is unread). It scrolls once per opened chat, after that chat's messages have loaded, so later updates do not move the list (#120)
+- Opening a chat now scrolls the message list to the latest message when there is no unread divider to jump to (no unread messages, or the first message is unread). It scrolls once per opened chat, after that chat's messages have loaded, so later updates do not move the list. A background reload of the open chat (for example after a websocket unread update) no longer swaps the list for Loading messages, which reset the scroll position to the top (#120)
 
 ## [0.3.9](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-18
 
