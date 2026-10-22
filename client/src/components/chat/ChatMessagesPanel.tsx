@@ -50,6 +50,13 @@ export function ChatMessagesPanel({
   const unreadDividerRef = useRef<HTMLDivElement>(null);
   const scrolledForChatRef = useRef<string | null>(null);
   const unreadDividerIndex = useMemo(() => firstUnreadIndex(messages), [messages]);
+  const hasMessagesOfChat =
+    Boolean(chat) &&
+    messages.length > 0 &&
+    messages.every((message) => message.chatId === chat?.id);
+  // A background reload of the open chat (e.g. after a websocket unread update) keeps the
+  // list mounted; unmounting it would reset the scroll position to the top.
+  const showLoading = loading && !hasMessagesOfChat;
   const setMessageRef = useMarkMessageReadOnView(
     chat?.id ?? null,
     messages,
@@ -70,7 +77,7 @@ export function ChatMessagesPanel({
     // Selecting a chat renders once before its fetch starts (loading is still false
     // and messages are empty or belong to the previously open chat), so wait until
     // the messages of this chat are actually present.
-    if (messages.length === 0 || messages.some((message) => message.chatId !== chat.id)) {
+    if (!hasMessagesOfChat) {
       return;
     }
 
@@ -85,7 +92,7 @@ export function ChatMessagesPanel({
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [chat, messages, loading, error, unreadDividerIndex]);
+  }, [chat, hasMessagesOfChat, loading, error, unreadDividerIndex]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -131,7 +138,7 @@ export function ChatMessagesPanel({
       </header>
 
       <div className="chats-page__messages" ref={messagesContainerRef}>
-        {loading ? (
+        {showLoading ? (
           <p className="chats-page__status">Loading messages...</p>
         ) : error ? (
           <p className="chats-page__status chats-page__status--error" role="alert">
