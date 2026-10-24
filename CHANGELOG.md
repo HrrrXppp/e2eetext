@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Changed
+
+- The browser tab icon is now an E2 monogram under a padlock shackle (SVG, teal on dark) instead of the placeholder emoji. The file is `client/src/assets/favicon.svg`; the build emits it under `/assets/`, which the load balancer already routes to the client (#130).
+
 ## [0.3.11](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-24
 
 ### Fixed
