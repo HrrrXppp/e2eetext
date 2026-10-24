@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+- `/sitemap.xml` and `/robots.txt` are generated for the host that requested them (`e2eetext.com`, `e2eetext.io`, `e2eetext.net`, `e2eetext.org`). A sitemap may only list URLs on that same host, and the static file was still `https://app.example.com`, so search consoles rejected every URL. Dev and prod listeners send those two paths to the server; `/ads.txt` stays on the client. The files in `client/public/` remain the `e2eetext.com` copies.
+
 ## [0.3.10](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-22
 
 ### Fixed
