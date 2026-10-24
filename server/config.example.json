@@ -11,5 +11,9 @@
     "message": { "requests_per_minute": 120, "burst": 30 },
     "default": { "requests_per_minute": 300, "burst": 60 },
     "ws": { "requests_per_minute": 30, "burst": 10 }
+  },
+  "sitemap": {
+    "hosts": ["e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org"],
+    "paths": ["/", "/privacy", "/terms", "/roadmap"]
   }
 }

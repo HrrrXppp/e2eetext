@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -329,6 +330,110 @@ func TestLoadDisablesClassWithExplicitZero(t *testing.T) {
 	if cfg.RateLimits.Auth != defaultRateLimits().Auth {
 		t.Fatalf("RateLimits.Auth = %+v, want the default since config.json didn't set it", cfg.RateLimits.Auth)
 	}
+}
+
+func TestLoadDefaultsSitemapWhenOmitted(t *testing.T) {
+	cfg := loadTestConfig(t, `{
+  "oauth_credentials": {
+    "google": {"client_id": "id", "client_secret": "secret"}
+  }
+}`)
+	if !sameStrings(cfg.Sitemap.Hosts, DefaultSitemap().Hosts) || !sameStrings(cfg.Sitemap.Paths, DefaultSitemap().Paths) {
+		t.Fatalf("Sitemap = %+v, want default", cfg.Sitemap)
+	}
+}
+
+func TestLoadReadsSitemap(t *testing.T) {
+	cfg := loadTestConfig(t, `{
+  "oauth_credentials": {
+    "google": {"client_id": "id", "client_secret": "secret"}
+  },
+  "sitemap": {
+    "hosts": ["Example.COM.", "example.io"],
+    "paths": ["/", "/privacy"]
+  }
+}`)
+	if !sameStrings(cfg.Sitemap.Hosts, []string{"example.com", "example.io"}) {
+		t.Fatalf("Hosts = %#v", cfg.Sitemap.Hosts)
+	}
+	if cfg.Sitemap.CanonicalHost() != "example.com" {
+		t.Fatalf("CanonicalHost = %q", cfg.Sitemap.CanonicalHost())
+	}
+	if !sameStrings(cfg.Sitemap.Paths, []string{"/", "/privacy"}) {
+		t.Fatalf("Paths = %#v", cfg.Sitemap.Paths)
+	}
+}
+
+func TestLoadRejectsSitemapHostWithScheme(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.json")
+	contents := `{
+  "oauth_credentials": {"google": {"client_id": "id", "client_secret": "secret"}},
+  "sitemap": {"hosts": ["https://e2eetext.com"], "paths": ["/"]}
+}`
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	t.Setenv("CONFIG_PATH", configPath)
+	t.Setenv("DATABASE_URL", "postgres://messenger:messenger@localhost:5432/messenger?sslmode=disable")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "sitemap.hosts") {
+		t.Fatalf("Load() error = %v, want sitemap.hosts", err)
+	}
+}
+
+func TestExampleConfigsMatchDefaultSitemap(t *testing.T) {
+	paths := []string{
+		filepath.Join("..", "..", "..", "server", "config.example.json"),
+		filepath.Join("..", "..", "..", "maintenance", "ec2", "config", "config.example.json"),
+	}
+	want := DefaultSitemap()
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var cfg fileConfig
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		got, err := normalizeSitemap(cfg.Sitemap)
+		if err != nil {
+			t.Fatalf("normalize %s: %v", path, err)
+		}
+		if !sameStrings(got.Hosts, want.Hosts) || !sameStrings(got.Paths, want.Paths) {
+			t.Fatalf("%s sitemap = %+v, want %+v", path, got, want)
+		}
+	}
+}
+
+func loadTestConfig(t *testing.T, contents string) Config {
+	t.Helper()
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.json")
+	if err := os.WriteFile(configPath, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	t.Setenv("CONFIG_PATH", configPath)
+	t.Setenv("DATABASE_URL", "postgres://messenger:messenger@localhost:5432/messenger?sslmode=disable")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	return cfg
+}
+
+func sameStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestMetricsConfigEnabled(t *testing.T) {
