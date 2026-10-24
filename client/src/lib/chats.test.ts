@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createChat, fetchChats, formatChatUpdatedAt } from "@/lib/chats";
+import { createChat, fetchChats, formatChatUpdatedAt, getChatMembers, removeMember } from "@/lib/chats";
 
 const testNodeId = "99999999-9999-9999-9999-999999999999";
 const scopedUserId = `${testNodeId}/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
@@ -230,5 +230,56 @@ describe("createChat", () => {
         ],
       }),
     ).rejects.toThrow("failed to create chat");
+  });
+});
+
+describe("getChatMembers", () => {
+  it("requests the members of a chat", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    const members = [{ id: scopedUserId, isAdmin: true }];
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => members });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getChatMembers(sampleChat.id)).resolves.toEqual(members);
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/v1/chat/${sampleChat.id}/members`, {
+      headers: { Authorization: "Bearer token" },
+    });
+  });
+
+  it("throws when access is denied", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+
+    await expect(getChatMembers(sampleChat.id)).rejects.toThrow("chat access denied");
+  });
+});
+
+describe("removeMember", () => {
+  it("sends a DELETE for the member", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(removeMember(sampleChat.id, scopedUserId)).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/v1/chat/${sampleChat.id}/members/${scopedUserId}`, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer token" },
+    });
+  });
+
+  it("throws when the caller is not an admin", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+
+    await expect(removeMember(sampleChat.id, scopedUserId)).rejects.toThrow("chat admin required");
+  });
+
+  it("throws on other failures", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    await expect(removeMember(sampleChat.id, scopedUserId)).rejects.toThrow("failed to remove chat member");
   });
 });

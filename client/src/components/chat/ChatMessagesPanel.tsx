@@ -16,6 +16,7 @@ type ChatMessagesPanelProps = {
   onSend: (data: string) => Promise<void>;
   onMarkRead: (messageId: string) => void;
   onBack?: () => void;
+  onOpenSettings?: () => void;
 };
 
 function chatLabel(chat: Chat): string {
@@ -44,6 +45,7 @@ export function ChatMessagesPanel({
   onSend,
   onMarkRead,
   onBack,
+  onOpenSettings,
 }: ChatMessagesPanelProps) {
   const [draft, setDraft] = useState("");
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -128,6 +130,17 @@ export function ChatMessagesPanel({
             </button>
           ) : null}
           <h2 className="chats-page__panel-title">{chatLabel(chat)}</h2>
+          {onOpenSettings ? (
+            <button
+              type="button"
+              className="chats-page__panel-settings"
+              aria-label="Chat settings"
+              title="Chat settings"
+              onClick={onOpenSettings}
+            >
+              ⚙
+            </button>
+          ) : null}
         </div>
         <p className="chats-page__panel-meta">
           Updated{" "}

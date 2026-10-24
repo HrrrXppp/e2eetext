@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessagesPanel } from "@/components/chat/ChatMessagesPanel";
+import { ChatSettingsDialog } from "@/components/chat/ChatSettingsDialog";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { NewChatDialog } from "@/components/chat/NewChatDialog";
 import { Footer } from "@/components/layout/Footer";
@@ -11,7 +12,7 @@ import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/sessi
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import { filterActiveMessages } from "@/lib/disappear";
 import { NOTIFICATION_CHAT_SELECT_EVENT, notifyNewMessage } from "@/lib/notifications";
-import type { ChatAddedEvent, ChatUnreadEvent } from "@/lib/ws";
+import type { ChatAddedEvent, ChatRemovedEvent, ChatUnreadEvent } from "@/lib/ws";
 
 export function ChatsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -25,6 +26,7 @@ export function ChatsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -280,8 +282,14 @@ export function ChatsPage() {
     [loadChats, user?.id],
   );
 
+  const handleChatRemoved = useCallback((event: ChatRemovedEvent) => {
+    setChats((current) => current.filter((chat) => chat.id !== event.chatId));
+    setSelectedChatId((selected) => (selected === event.chatId ? null : selected));
+    setSettingsOpen(false);
+  }, []);
+
   const canManageChats = Boolean(user) && !authLoading;
-  useChatSocket(canManageChats, handleChatUnread, handleChatAdded);
+  useChatSocket(canManageChats, handleChatUnread, handleChatAdded, handleChatRemoved);
 
   return (
     <>
@@ -314,12 +322,21 @@ export function ChatsPage() {
                 sendError={sendError}
                 onSend={handleSendMessage}
                 onMarkRead={handleMarkMessageRead}
+                onOpenSettings={() => setSettingsOpen(true)}
               />
             </div>
           )}
         </main>
         <Footer />
       </div>
+
+      {settingsOpen && selectedChat && user ? (
+        <ChatSettingsDialog
+          chat={selectedChat}
+          currentUserId={user.id}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
 
       {createOpen && canManageChats && user ? (
         <NewChatDialog

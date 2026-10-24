@@ -40,6 +40,27 @@ describe("ChatMessagesPanel", () => {
     vi.restoreAllMocks();
   });
 
+  it("opens chat settings from the header button", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <ChatMessagesPanel
+        chat={chat}
+        messages={[]}
+        currentUserId="current-user"
+        loading={false}
+        error={null}
+        sending={false}
+        sendError={null}
+        onSend={vi.fn()}
+        onMarkRead={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Chat settings" }));
+    expect(onOpenSettings).toHaveBeenCalled();
+  });
+
   it("shows a divider between read and unread messages", () => {
     render(
       <ChatMessagesPanel
