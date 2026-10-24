@@ -14,3 +14,8 @@ func scopedIDFromPath(r *http.Request) string {
 
 	return strings.TrimSpace(r.PathValue("id"))
 }
+
+// scopedIDFromPathValues joins a node-id/local-id pair of path wildcards into a scoped ID.
+func scopedIDFromPathValues(r *http.Request, nodeKey, localKey string) string {
+	return strings.TrimSpace(r.PathValue(nodeKey)) + "/" + strings.TrimSpace(r.PathValue(localKey))
+}
