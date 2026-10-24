@@ -53,3 +53,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "static_site_bucket_names" {
+  description = "Names of the S3 buckets that hold the built client (#28). The role may list, upload to and delete from them, and create CloudFront invalidations. Empty (default) adds no static-site permissions."
+  type        = list(string)
+  default     = []
+}

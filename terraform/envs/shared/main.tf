@@ -27,6 +27,8 @@ module "github_oidc" {
   oidc_thumbprint_list = var.oidc_thumbprint_list
 
   ecr_repository_arns = values(module.ecr.repository_arns)
+
+  static_site_bucket_names = var.static_site_bucket_names
 }
 
 # Read-only role for terraform.yml plan jobs (AWS_TERRAFORM_PLAN_ROLE_ARN).
@@ -42,4 +44,6 @@ module "terraform_plan_role" {
   role_name           = var.terraform_plan_role_name
   inline_policy_name  = var.terraform_plan_inline_policy_name
   state_bucket        = var.terraform_state_bucket
+
+  static_site_bucket_names = var.static_site_bucket_names
 }

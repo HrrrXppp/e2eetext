@@ -41,3 +41,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "static_site_bucket_names" {
+  description = "Names of the static site S3 buckets (#28) the plan role may read for refresh. Empty (default) adds no static-site read permissions."
+  type        = list(string)
+  default     = []
+}

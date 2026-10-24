@@ -599,3 +599,23 @@ variable "metrics_create_vpc_endpoints" {
   type        = bool
   default     = true
 }
+
+# --- Static client site (#28) ---
+
+variable "static_site_bucket_name" {
+  description = "S3 bucket holding the built client for dev. Bucket names are global. Keep it in sync with static_site_bucket_names in envs/shared, which grants the GitHub Actions role upload access."
+  type        = string
+  default     = "e2eetext-dev-static-site"
+}
+
+variable "static_site_aliases" {
+  description = "Public hostnames the dev CloudFront distribution serves. The first is the primary name on its us-east-1 certificate."
+  type        = list(string)
+  default     = ["dev.e2eetext.com"]
+}
+
+variable "static_site_certificate_arn" {
+  description = "Existing us-east-1 ACM certificate ARN for the dev distribution. Leave empty to create a DNS-validated one for static_site_aliases (apply waits until the CNAMEs from output static_site_certificate_dns_validation exist at the DNS host)."
+  type        = string
+  default     = ""
+}
