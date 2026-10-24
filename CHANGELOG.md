@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- Admins can remove a member from a chat. New `GET /api/v1/chat/{nodeId}/{localId}/members` (member-only) lists members with an `isAdmin` flag, and `DELETE /api/v1/chat/{nodeId}/{localId}/members/{userNodeId}/{userLocalId}` removes one (admin only; self-removal and removing the last admin are rejected). The removed user's membership, unread state, key wraps and admin row are deleted in one transaction and they receive a `chat.removed` WebSocket event. The client gets a Chat Settings window, opened from the chat header, that lists members and offers Remove to admins. No key rotation yet: a removed member keeps any chat key they already hold (#125) (#12)
+
 ### Changed
 
 - The browser tab icon is now an E2 monogram under a padlock shackle (SVG, teal on dark) instead of the placeholder emoji. The file is `client/src/assets/favicon.svg`; the build emits it under `/assets/`, which the load balancer already routes to the client (#130).

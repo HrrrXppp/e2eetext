@@ -206,10 +206,14 @@ All routes below require `Authorization: Bearer <id_token>` (or `?token=` for th
 | `GET` | `/api/v1/chat?user_id=` | List chats for a user (scoped `user_id`; response `id` is scoped) |
 | `POST` | `/api/v1/chat` | Create E2EE chat (`name`, `users_uids`, optional `disappear_after_minutes`, `e2ee.key_id`, `e2ee.wraps`) |
 | `GET` | `/api/v1/chat/{nodeId}/{localId}/key-wraps` | List chat-key wraps for the current member |
+| `GET` | `/api/v1/chat/{nodeId}/{localId}/members` | List the chat's members (user fields plus `isAdmin`); caller must be a member (403 otherwise) |
+| `DELETE` | `/api/v1/chat/{nodeId}/{localId}/members/{userNodeId}/{userLocalId}` | Remove a member (chat admin only; 204). 403 if the caller is not a member or not an admin or the target is not a member, 400 for self-removal or if it would leave the chat without an admin |
 | `GET` | `/api/v1/message?chat_id=` | List messages in a chat (scoped `chat_id`; response `chatId` is scoped) |
 | `POST` | `/api/v1/message` | Create message (`chat_id`, `user_id`, `data`; scoped IDs) |
 | `PATCH` | `/api/v1/message/{nodeId}/{localId}` | Mark message read (`{"unread": false}`) |
-| `GET` | `/api/v1/ws` | WebSocket for realtime events (`chat.added`, `chat.unread`) |
+| `GET` | `/api/v1/ws` | WebSocket for realtime events (`chat.added`, `chat.removed`, `chat.unread`) |
+
+Removing a member deletes their membership, unread state, key wraps and admin row for that chat in one transaction and sends them a `chat.removed` WebSocket event (`{ "type": "chat.removed", "chatId": "{nodeId}/{localId}" }`), so their client drops the chat live. In the client, the open chat's header has a settings button that opens the **Chat Settings** window: it lists the members and, for chat admins, shows a Remove button (with a confirm prompt) next to every other member. Leaving a chat yourself is not part of this endpoint.
 
 Scoped resource IDs use the form `{nodeId}/{localId}` (e.g. `99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111`).
 
@@ -278,7 +282,7 @@ The User Settings dialog (opened from the Name button in the header) exposes **B
 
 - All chats require E2EE (`e2ee` payload mandatory on `POST /chat`).
 - One device per user (`device_id = default`).
-- No key rotation on member remove yet.
+- No key rotation on member remove yet (tracked in #125): a removed member keeps any chat key they already hold and can still read messages they already fetched.
 - Chat names remain plaintext.
 - Legacy plaintext messages (non-envelope `data`) are shown as-is.
 
