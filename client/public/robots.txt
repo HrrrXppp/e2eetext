@@ -5,4 +5,5 @@ Disallow: /api/
 Disallow: /oauth/
 Disallow: /health/
 
-Sitemap: https://app.example.com/sitemap.xml
+Sitemap: https://e2eetext.com/sitemap.xml
+Sitemap: https://e2eetext.com/sitemap.txt

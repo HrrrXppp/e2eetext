@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+- `/sitemap.txt` is served by the client and forwarded by the dev and prod ALB rules. The HTTPS listener's default response is `Don't have rule`, and that path was not in the priority 16 rule. Sitemap URLs use `https://e2eetext.com`.
+
 ## [0.3.10](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-22
 
 ### Fixed
