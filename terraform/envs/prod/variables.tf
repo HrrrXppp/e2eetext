@@ -188,9 +188,10 @@ variable "create_health_rule" {
 variable "additional_https_rules" {
   description = <<-EOT
     Extra HTTPS listener rules (path → client or server TG). Default matches
-    live-dev / envs/dev SPA routes (priorities 10–14) plus the /privacy, /terms, /roadmap and static SEO file rules (15–16) with HTTPS default
-    action fixed-404. Override to [] only if prod intentionally uses
-    forward-client as the HTTPS default instead.
+    live-dev / envs/dev SPA routes (priorities 10–14) plus the /privacy, /terms, /roadmap rule (15),
+    /ads.txt to the client (16), and /robots.txt plus /sitemap.xml to the server (17).
+    The server writes those two files for the request host. HTTPS default action is fixed-404.
+    Override to [] only if prod intentionally uses forward-client as the HTTPS default instead.
   EOT
   type = list(object({
     priority      = number
@@ -204,7 +205,8 @@ variable "additional_https_rules" {
     { priority = 13, path_patterns = ["/chats"], target = "client" },
     { priority = 14, path_patterns = ["/instance.json"], target = "client" },
     { priority = 15, path_patterns = ["/privacy", "/terms", "/roadmap"], target = "client" },
-    { priority = 16, path_patterns = ["/robots.txt", "/ads.txt", "/sitemap.xml"], target = "client" },
+    { priority = 16, path_patterns = ["/ads.txt"], target = "client" },
+    { priority = 17, path_patterns = ["/robots.txt", "/sitemap.xml"], target = "server" },
   ]
 }
 

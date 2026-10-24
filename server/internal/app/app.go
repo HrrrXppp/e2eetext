@@ -53,6 +53,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", handler.NewHealthHandler())
+	// Host-specific. The listener sends these two paths here; a static file
+	// can only name one of the four public domains.
+	seo := handler.NewSEOHandler()
+	mux.Handle("GET /sitemap.xml", seo)
+	mux.Handle("GET /robots.txt", seo)
 
 	authHandler := handler.NewAuthHandler(authService, nodeRegistry)
 	mux.Handle("GET /api/v1/auth/providers", authLimit(http.HandlerFunc(authHandler.ListProviders)))
