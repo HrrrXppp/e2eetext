@@ -40,7 +40,7 @@ describe("ChatMessagesPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens chat settings from the header button", () => {
+  it("opens chat settings from the chat name link", () => {
     const onOpenSettings = vi.fn();
     render(
       <ChatMessagesPanel
@@ -57,7 +57,7 @@ describe("ChatMessagesPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Chat settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chat settings for General" }));
     expect(onOpenSettings).toHaveBeenCalled();
   });
 

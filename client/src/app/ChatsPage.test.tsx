@@ -129,7 +129,7 @@ describe("ChatsPage", () => {
 
     render(<ChatsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Chat settings" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Chat settings for General" }));
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(getChatMembers).toHaveBeenCalledWith(sampleChat.id);
@@ -151,7 +151,7 @@ describe("ChatsPage", () => {
 
     render(<ChatsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Chat settings" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Chat settings for General" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
     act(() => {

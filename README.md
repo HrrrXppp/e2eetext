@@ -213,7 +213,7 @@ All routes below require `Authorization: Bearer <id_token>` (or `?token=` for th
 | `PATCH` | `/api/v1/message/{nodeId}/{localId}` | Mark message read (`{"unread": false}`) |
 | `GET` | `/api/v1/ws` | WebSocket for realtime events (`chat.added`, `chat.removed`, `chat.unread`) |
 
-Removing a member deletes their membership, unread state, key wraps and admin row for that chat in one transaction and sends them a `chat.removed` WebSocket event (`{ "type": "chat.removed", "chatId": "{nodeId}/{localId}" }`), so their client drops the chat live. In the client, the open chat's header has a settings button that opens the **Chat Settings** window: it lists the members and, for chat admins, shows a Remove button (with a confirm prompt) next to every other member. Leaving a chat yourself is not part of this endpoint.
+Removing a member deletes their membership, unread state, key wraps and admin row for that chat in one transaction and sends them a `chat.removed` WebSocket event (`{ "type": "chat.removed", "chatId": "{nodeId}/{localId}" }`), so their client drops the chat live. In the client, clicking the chat name in the open chat's header opens the **Chat Settings** window: it lists the members and, for chat admins, shows a Remove button (with a confirm prompt) next to every other member. Leaving a chat yourself is not part of this endpoint.
 
 Scoped resource IDs use the form `{nodeId}/{localId}` (e.g. `99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111`).
 
