@@ -22,3 +22,23 @@ output "rds_cron_database_name" {
   description = "Effective cron.database_name for dig RDS pg_cron (defaults to rds_app_database_name)."
   value       = module.rds.cron_database_name
 }
+
+output "static_site_bucket_name" {
+  description = "S3 bucket for the dev client build (STATIC_SITE_BUCKET_DEV for .github/workflows/deploy-client.yml)."
+  value       = module.static_site.bucket_name
+}
+
+output "static_site_distribution_id" {
+  description = "dev CloudFront distribution ID (STATIC_SITE_DISTRIBUTION_ID_DEV for .github/workflows/deploy-client.yml)."
+  value       = module.static_site.distribution_id
+}
+
+output "static_site_domain_name" {
+  description = "dev distribution *.cloudfront.net name, the DNS target for the public hostnames at cutover."
+  value       = module.static_site.distribution_domain_name
+}
+
+output "static_site_certificate_dns_validation" {
+  description = "CNAME records to create so the dev us-east-1 certificate can be issued. Empty when static_site_certificate_arn is set."
+  value       = module.static_site.certificate_dns_validation
+}

@@ -471,6 +471,8 @@ Internet → ALB (:443, ACM certificate)
            RDS PostgreSQL (private subnet)
 ```
 
+The client can also be served from S3 behind CloudFront, which then fronts this ALB too and removes the client container from the serving path. See [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront).
+
 The server reads `X-Forwarded-Host` and `X-Forwarded-Proto` from the ALB for OAuth redirects.
 
 ### 1. Create RDS PostgreSQL
@@ -714,6 +716,40 @@ bash maintenance/ec2/deploy.sh
 | `exec format error` | Rebuild with `DOCKER_PLATFORM=linux/amd64` |
 | `can only create extension in database postgres` / `run migrations` on `000006` | `DATABASE_URL` must be the **app** DB. On RDS, use a custom parameter group with `cron.database_name` = that app DB and `shared_preload_libraries=pg_cron`, then reboot the instance after apply before deploy. If `schema_migrations` is dirty at version 6, set `version=5, dirty=false` and redeploy. |
 
+## Static client on S3 + CloudFront
+
+The client is plain static files, so it does not need a running container. [#28](https://github.com/HrrrXppp/e2eetext/issues/28) moves it to a private S3 bucket behind CloudFront, defined in `terraform/modules/static-site` and instantiated by `terraform/envs/dev` and `terraform/envs/prod`:
+
+```
+Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
+              ├─ /assets/*                    → S3 (hashed files, cached one year)
+              ├─ /api/*, /health, /sitemap.xml,
+              │  /robots.txt                  → ALB → EC2:8081 → server (no cache, Host header and all cookies/query strings forwarded)
+              └─ everything else              → S3 (index.html, ads.txt, instance.json)
+```
+
+- **SPA routes.** A CloudFront Function rewrites extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `/index.html`. Paths with a file extension are not rewritten, and the ALB paths never run the function, so an unknown API path still returns the server's own 404.
+- **One host.** The browser keeps talking to one hostname, so there are no CORS or cookie changes. WebSocket upgrades on `/api/v1/ws` work through CloudFront. The viewer `Host` is forwarded to the ALB, so the server still builds the sitemap for the requested host and the ALB certificate must cover the public hostnames (it already does).
+- **Caching.** `/assets/*` is uploaded with `max-age=31536000, immutable`. `index.html`, `ads.txt` and `instance.json` are uploaded with `no-cache`, so a deploy only needs to invalidate `/index.html`.
+- **`instance.json`** (the dev banner) is an S3 object written at publish time from `maintenance/ec2/config/instance.development.example.json` (dev) or `instance.production.example.json` (prod). No bind mount is involved.
+- **Certificate.** CloudFront only accepts certificates from `us-east-1`. Leave `static_site_certificate_arn` empty and `terraform apply` requests one for `static_site_aliases` (dev: `dev.e2eetext.com`; prod: `e2eetext.com`, `.org`, `.net`, `.io`). This account has no Route 53 zones, so while apply waits (up to 45 minutes) add the CNAMEs from output `static_site_certificate_dns_validation` at the DNS host.
+- **Buckets.** Defaults are `e2eetext-dev-static-site` and `e2eetext-prod-static-site` (`static_site_bucket_name` in each env). Bucket names are global, so change them if taken, and keep `static_site_bucket_names` in `terraform/envs/shared` identical so the GitHub Actions role can upload to them. Apply `envs/shared` first; it also grants `cloudfront:CreateInvalidation` and gives the plan role read access.
+
+### Publishing the client
+
+Run **Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) from the Actions tab and pick `dev` or `prod` (prod runs from `main` only). It builds `client/dist`, syncs hashed assets, then the remaining files, writes `instance.json`, and invalidates `/index.html`. It assumes the existing `AWS_ROLE_ARN` role and needs four more repository secrets, taken from the Terraform outputs `static_site_bucket_name` and `static_site_distribution_id`:
+
+`STATIC_SITE_BUCKET_DEV`, `STATIC_SITE_DISTRIBUTION_ID_DEV`, `STATIC_SITE_BUCKET_PROD`, `STATIC_SITE_DISTRIBUTION_ID_PROD`
+
+### Cutover
+
+The change is staged so nothing breaks while it is rolled out:
+
+1. Apply `envs/shared`, then `envs/dev` / `envs/prod`. The distribution is created next to the existing ALB client rules and EC2 client container, and DNS still points at the ALB.
+2. Run the publish workflow, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. API and WebSocket paths through that name fail certificate validation at the ALB because the `Host` is the `cloudfront.net` name, so test them on the real hostname after step 3 (or `curl --resolve`).
+3. Switch each public hostname's DNS (CNAME / ALIAS) to `static_site_domain_name` at the DNS host. Check `/sitemap.xml` and `/robots.txt` on every hostname, a WebSocket connection, and the dev banner.
+4. A follow-up change removes the client target group, its ALB rules and attachment, the client service in `maintenance/ec2/docker-compose.yml`, `client/Dockerfile`, `maintenance/ec2/docker-compose.frontend.yml`, the client ECR repository and the client image build. Until then those stay in place for rollback (point DNS back at the ALB).
+
 ## Infrastructure as code (Terraform)
 
 AWS infrastructure is being migrated from the manual/scripted setup above to Terraform, in phases tracked by [#27](https://github.com/HrrrXppp/e2eetext/issues/27):
@@ -732,11 +768,12 @@ terraform/
 │   ├── network/         # data-source lookup of the VPC/subnets to deploy into
 │   ├── alb/              # ALB + target groups + listener rules (matches create-alb.example.sh)
 │   ├── ec2/              # instance + security group + IAM instance profile
+│   ├── static-site/      # S3 bucket + CloudFront for the client, ALB for the API (#28)
 │   └── rds/              # DB instance + subnet group + security group + pg_cron parameter group
 └── envs/
     ├── shared/          # root config instantiating ecr + github-oidc (Phase 1)
-    ├── dev/              # root config instantiating network + alb + ec2 + rds for dev (Phase 2/3)
-    └── prod/             # same, for prod (Phase 2/3)
+    ├── dev/              # root config instantiating network + alb + ec2 + rds + static-site for dev (Phase 2/3, #28)
+    └── prod/             # same, for prod (Phase 2/3, #28)
 ```
 
 `terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/alb` also does not create the ALB's own security group; like `create-alb.example.sh`, it takes an existing security group ID as input. The `alb` and `ec2` modules default to the topology `create-alb.example.sh` describes, but expose overrides (target-group names, idle timeout, listener default action, rule priority/patterns, pre-existing instance SGs, optional IAM instance profile) because the live, hand-made dev stack diverges from the script on all of those — `terraform/envs/dev`'s defaults record the audited live values. `terraform/modules/rds` has no such audited defaults for identifying attributes (engine version, instance class, storage, subnet/parameter group names, master username, ...) — every one is a required variable, the same "describe reality, don't guess" pattern `modules/ec2` uses for `ami_id`/`instance_type`, because no live RDS audit was possible while writing it.
@@ -992,6 +1029,25 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
         "rds:DescribeDBParameterGroups", "rds:DescribeDBParameters",
         "rds:ListTagsForResource"
       ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "StaticSiteBucketRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket", "s3:GetBucket*", "s3:GetEncryptionConfiguration",
+        "s3:GetAccelerateConfiguration", "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:s3:::e2eetext-dev-static-site",
+        "arn:aws:s3:::e2eetext-prod-static-site"
+      ]
+    },
+    {
+      "Sid": "StaticSiteCloudFrontRead",
+      "Effect": "Allow",
+      "Action": ["cloudfront:Get*", "cloudfront:List*", "cloudfront:DescribeFunction"],
       "Resource": "*"
     },
     {

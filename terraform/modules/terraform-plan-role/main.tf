@@ -202,6 +202,42 @@ data "aws_iam_policy_document" "plan" {
       "arn:aws:ssm:*:${local.account_id}:association/*",
     ]
   }
+
+  # Refresh of the static-site module (#28): the client S3 buckets and the
+  # CloudFront distribution, function and policies. CloudFront read actions
+  # do not support resource-level scoping for List*, so they use "*".
+  dynamic "statement" {
+    for_each = length(var.static_site_bucket_names) > 0 ? [1] : []
+
+    content {
+      sid    = "StaticSiteBucketRead"
+      effect = "Allow"
+      actions = [
+        "s3:ListBucket",
+        "s3:GetBucket*",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+      ]
+      resources = [for b in var.static_site_bucket_names : "arn:aws:s3:::${b}"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.static_site_bucket_names) > 0 ? [1] : []
+
+    content {
+      sid    = "StaticSiteCloudFrontRead"
+      effect = "Allow"
+      actions = [
+        "cloudfront:Get*",
+        "cloudfront:List*",
+        "cloudfront:DescribeFunction",
+      ]
+      resources = ["*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "this" {

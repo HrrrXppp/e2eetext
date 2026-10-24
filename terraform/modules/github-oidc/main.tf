@@ -79,7 +79,46 @@ data "aws_iam_policy_document" "ecr_push" {
     ]
     resources = var.ecr_repository_arns
   }
+
+  # .github/workflows/deploy-client.yml syncs client/dist into the site
+  # buckets (#28) and invalidates /index.html. CloudFront invalidations
+  # cannot be scoped below the distribution, and the distributions live in
+  # other state files, so any distribution in this account is allowed.
+  dynamic "statement" {
+    for_each = length(var.static_site_bucket_names) > 0 ? [1] : []
+
+    content {
+      sid       = "StaticSiteList"
+      effect    = "Allow"
+      actions   = ["s3:ListBucket"]
+      resources = [for b in var.static_site_bucket_names : "arn:aws:s3:::${b}"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.static_site_bucket_names) > 0 ? [1] : []
+
+    content {
+      sid       = "StaticSiteWrite"
+      effect    = "Allow"
+      actions   = ["s3:PutObject", "s3:DeleteObject"]
+      resources = [for b in var.static_site_bucket_names : "arn:aws:s3:::${b}/*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(var.static_site_bucket_names) > 0 ? [1] : []
+
+    content {
+      sid       = "StaticSiteInvalidate"
+      effect    = "Allow"
+      actions   = ["cloudfront:CreateInvalidation"]
+      resources = ["arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"]
+    }
+  }
 }
+
+data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role_policy" "ecr_push" {
   name   = var.inline_policy_name

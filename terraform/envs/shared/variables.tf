@@ -65,3 +65,9 @@ variable "terraform_state_bucket" {
   type        = string
   default     = "e2eetext-terraform-state"
 }
+
+variable "static_site_bucket_names" {
+  description = "S3 buckets that hold the built client for dev and prod (#28). Must match static_site_bucket_name in envs/dev and envs/prod. Grants the GitHub Actions role upload access and the plan role read access."
+  type        = list(string)
+  default     = ["e2eetext-dev-static-site", "e2eetext-prod-static-site"]
+}

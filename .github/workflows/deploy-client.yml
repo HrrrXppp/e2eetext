@@ -1,0 +1,97 @@
+name: Deploy client (S3 + CloudFront)
+
+# Builds client/dist and publishes it to the environment's private S3 bucket
+# behind CloudFront (terraform/modules/static-site, #28). Run it by hand from
+# the Actions tab: it never runs on push, so a release stays an explicit step
+# (like deploy.sh on the EC2 host).
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to publish to"
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+# Queue (never cancel) so two publishes to the same environment run in order.
+concurrency:
+  group: deploy-client-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_ENV: ${{ inputs.environment }}
+      BUCKET: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_BUCKET_PROD || secrets.STATIC_SITE_BUCKET_DEV }}
+      DISTRIBUTION_ID: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_DISTRIBUTION_ID_PROD || secrets.STATIC_SITE_DISTRIBUTION_ID_DEV }}
+    steps:
+      - name: Check configuration
+        run: |
+          if [ "$TARGET_ENV" = "prod" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::error::Production is published from main only (selected ref: ${{ github.ref_name }})."
+            exit 1
+          fi
+          if [ -z "$BUCKET" ] || [ -z "$DISTRIBUTION_ID" ]; then
+            echo "::error::STATIC_SITE_BUCKET_* and STATIC_SITE_DISTRIBUTION_ID_* secrets for '$TARGET_ENV' are not configured (see README, Static client on S3 + CloudFront)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build
+        working-directory: client
+        run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Hashed bundle files first, so the new index.html never points at a
+      # file that is not uploaded yet. Vite's file names carry a content
+      # hash, so they can be cached for a year.
+      - name: Upload hashed assets
+        run: |
+          aws s3 sync client/dist/assets/ "s3://$BUCKET/assets/" --delete \
+            --cache-control "public,max-age=31536000,immutable"
+
+      # Everything else (index.html, ads.txt, icons) has a stable name, so
+      # CloudFront must revalidate it. instance.json is written below.
+      - name: Upload index.html and other root files
+        run: |
+          aws s3 sync client/dist/ "s3://$BUCKET/" --delete \
+            --exclude "assets/*" --exclude "instance.json" \
+            --cache-control "no-cache"
+
+      # The dev or prod banner file replaces the container bind mount the
+      # old client service used.
+      - name: Upload instance.json
+        run: |
+          if [ "$TARGET_ENV" = "prod" ]; then
+            src=maintenance/ec2/config/instance.production.example.json
+          else
+            src=maintenance/ec2/config/instance.development.example.json
+          fi
+          aws s3 cp "$src" "s3://$BUCKET/instance.json" \
+            --cache-control "no-cache" --content-type "application/json"
+
+      - name: Invalidate index.html
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" --paths "/index.html"
