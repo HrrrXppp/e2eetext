@@ -18,6 +18,7 @@ func TestPublicSitemapHost(t *testing.T) {
 		{host: "E2EETEXT.IO", want: "e2eetext.io"},
 		{host: "e2eetext.net:443", want: "e2eetext.net"},
 		{host: "e2eetext.org.", want: "e2eetext.org"},
+		{host: "dev.e2eetext.com", want: "dev.e2eetext.com"},
 		{host: "app.example.com", want: "e2eetext.com"},
 		{host: "localhost:8081", want: "e2eetext.com"},
 		{host: "evil.example", want: "e2eetext.com"},
@@ -45,6 +46,9 @@ func TestSEOHandler_SitemapUsesRequestHost(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Type"); got != "application/xml; charset=utf-8" {
 		t.Fatalf("content-type = %q", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=300" {
+		t.Fatalf("cache-control = %q", got)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "<loc>https://e2eetext.org/</loc>") {
