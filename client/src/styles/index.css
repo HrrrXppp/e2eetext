@@ -353,6 +353,61 @@ body.has-dev-instance-banner .site-head {
   border-color: rgba(61, 214, 198, 0.3);
 }
 
+.chats-page__panel-settings {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chats-page__panel-settings:hover {
+  background: rgba(61, 214, 198, 0.1);
+  border-color: rgba(61, 214, 198, 0.3);
+}
+
+.chat-settings__members {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-settings__member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: rgba(20, 30, 51, 0.85);
+  color: var(--text-soft);
+  font-size: 0.875rem;
+}
+
+.chat-settings__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-settings__member > button {
+  flex-shrink: 0;
+}
+
+.chat-settings__badge {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .chats-page__panel-title {
   margin: 0;
   min-width: 0;

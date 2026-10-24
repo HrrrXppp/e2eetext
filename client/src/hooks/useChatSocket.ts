@@ -6,8 +6,10 @@ import {
   HEARTBEAT_INTERVAL_MS,
   isHeartbeatAckEvent,
   parseChatAddedEvent,
+  parseChatRemovedEvent,
   parseChatUnreadEvent,
   type ChatAddedEvent,
+  type ChatRemovedEvent,
   type ChatUnreadEvent,
 } from "@/lib/ws";
 
@@ -21,10 +23,12 @@ export function useChatSocket(
   enabled: boolean,
   onChatUnread?: (event: ChatUnreadEvent) => void,
   onChatAdded?: (event: ChatAddedEvent) => void,
+  onChatRemoved?: (event: ChatRemovedEvent) => void,
 ): ChatSocketState {
   const [state, setState] = useState<ChatSocketState>("idle");
   const onChatUnreadRef = useRef(onChatUnread);
   const onChatAddedRef = useRef(onChatAdded);
+  const onChatRemovedRef = useRef(onChatRemoved);
 
   useEffect(() => {
     onChatUnreadRef.current = onChatUnread;
@@ -33,6 +37,10 @@ export function useChatSocket(
   useEffect(() => {
     onChatAddedRef.current = onChatAdded;
   }, [onChatAdded]);
+
+  useEffect(() => {
+    onChatRemovedRef.current = onChatRemoved;
+  }, [onChatRemoved]);
 
   useEffect(() => {
     if (!enabled) {
@@ -168,6 +176,12 @@ export function useChatSocket(
         const addedEvent = parseChatAddedEvent(message.data);
         if (addedEvent) {
           onChatAddedRef.current?.(addedEvent);
+          return;
+        }
+
+        const removedEvent = parseChatRemovedEvent(message.data);
+        if (removedEvent) {
+          onChatRemovedRef.current?.(removedEvent);
         }
       };
     }
