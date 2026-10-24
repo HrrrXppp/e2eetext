@@ -122,7 +122,9 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
               return (
                 <li key={member.id} className="chat-settings__member">
                   <span className="chat-settings__name">
-                    {userLabel(member.name, member.id)}
+                    <span className="chat-settings__label" title={userLabel(member.name, member.id)}>
+                      {userLabel(member.name, member.id)}
+                    </span>
                     {self ? <span className="chat-settings__badge">you</span> : null}
                     {member.isAdmin ? <span className="chat-settings__badge">admin</span> : null}
                   </span>

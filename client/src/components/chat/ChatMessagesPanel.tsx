@@ -129,18 +129,21 @@ export function ChatMessagesPanel({
               ← Chats
             </button>
           ) : null}
-          <h2 className="chats-page__panel-title">{chatLabel(chat)}</h2>
-          {onOpenSettings ? (
-            <button
-              type="button"
-              className="chats-page__panel-settings"
-              aria-label="Chat settings"
-              title="Chat settings"
-              onClick={onOpenSettings}
-            >
-              ⚙
-            </button>
-          ) : null}
+          <h2 className="chats-page__panel-title">
+            {onOpenSettings ? (
+              <button
+                type="button"
+                className="chats-page__panel-title-link"
+                aria-label={`Chat settings for ${chatLabel(chat)}`}
+                title="Chat settings"
+                onClick={onOpenSettings}
+              >
+                {chatLabel(chat)}
+              </button>
+            ) : (
+              chatLabel(chat)
+            )}
+          </h2>
         </div>
         <p className="chats-page__panel-meta">
           Updated{" "}
