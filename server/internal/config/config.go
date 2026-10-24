@@ -39,6 +39,43 @@ type Config struct {
 	OAuthCredentials map[string]OAuthCredential
 	RateLimits       RateLimits
 	Metrics          MetricsConfig
+	Sitemap          SitemapConfig
+}
+
+// SitemapConfig is the public host list and the pages a sitemap may name.
+// Hosts[0] is the fallback when the request host is not in the list. A
+// sitemap is only valid for the host that served it, so each host gets its
+// own URL list built from Paths.
+type SitemapConfig struct {
+	Hosts []string
+	Paths []string
+}
+
+// CanonicalHost is the host used when the request is not for one of Hosts.
+func (s SitemapConfig) CanonicalHost() string {
+	if len(s.Hosts) == 0 {
+		return ""
+	}
+	return s.Hosts[0]
+}
+
+// DefaultSitemap is used when config.json omits the sitemap object, so an
+// existing file keeps serving the four public names. The same values are
+// written in server/config.example.json and maintenance/ec2/config/config.example.json.
+func DefaultSitemap() SitemapConfig {
+	return SitemapConfig{
+		Hosts: []string{"e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org"},
+		Paths: []string{"/", "/privacy", "/terms", "/roadmap"},
+	}
+}
+
+// WithDefaults fills a zero SitemapConfig from DefaultSitemap. A Config built
+// in tests, without Load, has no sitemap section.
+func (s SitemapConfig) WithDefaults() SitemapConfig {
+	if len(s.Hosts) == 0 && len(s.Paths) == 0 {
+		return DefaultSitemap()
+	}
+	return s
 }
 
 // MetricsConfig configures the optional CloudWatch publisher for this node's
@@ -127,9 +164,15 @@ func rateLimitOrDefault(cfg *RateLimitConfig, def RateLimitConfig) RateLimitConf
 	return *cfg
 }
 
+type fileSitemap struct {
+	Hosts []string `json:"hosts"`
+	Paths []string `json:"paths"`
+}
+
 type fileConfig struct {
 	OAuthCredentials map[string]OAuthCredential `json:"oauth_credentials"`
 	RateLimits       fileRateLimits             `json:"rate_limits"`
+	Sitemap          *fileSitemap               `json:"sitemap"`
 }
 
 func Load() (Config, error) {
@@ -155,11 +198,17 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	sitemap, err := normalizeSitemap(fileCfg.Sitemap)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Addr:             addr,
 		DatabaseURL:      databaseURL,
 		OAuthCredentials: oauthCredentials,
 		RateLimits:       normalizeRateLimits(fileCfg.RateLimits),
+		Sitemap:          sitemap,
 		Metrics: MetricsConfig{
 			Region:      strings.TrimSpace(os.Getenv("AWS_REGION")),
 			Namespace:   strings.TrimSpace(os.Getenv("METRICS_CLOUDWATCH_NAMESPACE")),
@@ -247,6 +296,64 @@ func normalizeOAuthCredentials(credentials map[string]OAuthCredential) (map[stri
 	}
 
 	return normalized, nil
+}
+
+func normalizeSitemap(file *fileSitemap) (SitemapConfig, error) {
+	if file == nil {
+		return DefaultSitemap(), nil
+	}
+	if len(file.Hosts) == 0 {
+		return SitemapConfig{}, fmt.Errorf("sitemap.hosts is required")
+	}
+	if len(file.Paths) == 0 {
+		return SitemapConfig{}, fmt.Errorf("sitemap.paths is required")
+	}
+
+	hosts := make([]string, 0, len(file.Hosts))
+	seenHosts := make(map[string]struct{}, len(file.Hosts))
+	for _, raw := range file.Hosts {
+		host, err := normalizeSitemapHost(raw)
+		if err != nil {
+			return SitemapConfig{}, err
+		}
+		if _, ok := seenHosts[host]; ok {
+			return SitemapConfig{}, fmt.Errorf("sitemap.hosts contains duplicate %q", host)
+		}
+		seenHosts[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+
+	paths := make([]string, 0, len(file.Paths))
+	seenPaths := make(map[string]struct{}, len(file.Paths))
+	for _, raw := range file.Paths {
+		path, err := normalizeSitemapPath(raw)
+		if err != nil {
+			return SitemapConfig{}, err
+		}
+		if _, ok := seenPaths[path]; ok {
+			return SitemapConfig{}, fmt.Errorf("sitemap.paths contains duplicate %q", path)
+		}
+		seenPaths[path] = struct{}{}
+		paths = append(paths, path)
+	}
+
+	return SitemapConfig{Hosts: hosts, Paths: paths}, nil
+}
+
+func normalizeSitemapHost(raw string) (string, error) {
+	host := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(raw)), ".")
+	if host == "" || strings.ContainsAny(host, "/: \t") {
+		return "", fmt.Errorf("sitemap.hosts entry %q must be a bare hostname", raw)
+	}
+	return host, nil
+}
+
+func normalizeSitemapPath(raw string) (string, error) {
+	path := strings.TrimSpace(raw)
+	if path == "" || !strings.HasPrefix(path, "/") || strings.Contains(path, "://") || strings.ContainsAny(path, " \t") || strings.Contains(path, "..") {
+		return "", fmt.Errorf("sitemap.paths entry %q must be an absolute path", raw)
+	}
+	return path, nil
 }
 
 func loadEnvFiles() {

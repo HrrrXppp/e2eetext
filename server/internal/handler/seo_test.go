@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ekhrunov/messenger/server/internal/config"
 )
 
 func TestPublicSitemapHost(t *testing.T) {
@@ -24,7 +26,7 @@ func TestPublicSitemapHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.host, func(t *testing.T) {
-			if got := publicSitemapHost(tt.host); got != tt.want {
+			if got := NewSEOHandler(config.DefaultSitemap()).publicSitemapHost(tt.host); got != tt.want {
 				t.Fatalf("publicSitemapHost(%q) = %q, want %q", tt.host, got, tt.want)
 			}
 		})
@@ -32,7 +34,7 @@ func TestPublicSitemapHost(t *testing.T) {
 }
 
 func TestSEOHandler_SitemapUsesRequestHost(t *testing.T) {
-	h := NewSEOHandler()
+	h := NewSEOHandler(config.DefaultSitemap())
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
 	req.Host = "e2eetext.org"
 	req.Header.Set("X-Forwarded-Host", "e2eetext.com")
@@ -62,7 +64,7 @@ func TestSEOHandler_SitemapUsesRequestHost(t *testing.T) {
 }
 
 func TestSEOHandler_RobotsPointsAtSameHost(t *testing.T) {
-	h := NewSEOHandler()
+	h := NewSEOHandler(config.DefaultSitemap())
 	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
 	req.Host = "e2eetext.io"
 	rec := httptest.NewRecorder()
@@ -72,8 +74,25 @@ func TestSEOHandler_RobotsPointsAtSameHost(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if got := rec.Body.String(); got != robotsTXT("e2eetext.io") {
-		t.Fatalf("robots =\n%s\nwant\n%s", got, robotsTXT("e2eetext.io"))
+	if got := rec.Body.String(); got != h.robotsTXT("e2eetext.io") {
+		t.Fatalf("robots =\n%s\nwant\n%s", got, h.robotsTXT("e2eetext.io"))
+	}
+}
+
+func TestSEOHandler_UsesConfiguredHostsAndPaths(t *testing.T) {
+	h := NewSEOHandler(config.SitemapConfig{
+		Hosts: []string{"alpha.example", "beta.example"},
+		Paths: []string{"/"},
+	})
+	if got := h.publicSitemapHost("beta.example"); got != "beta.example" {
+		t.Fatalf("known host = %q", got)
+	}
+	if got := h.publicSitemapHost("other.example"); got != "alpha.example" {
+		t.Fatalf("fallback = %q, want alpha.example", got)
+	}
+	body := h.sitemapXML("beta.example")
+	if !strings.Contains(body, "<loc>https://beta.example/</loc>") || strings.Contains(body, "/privacy") {
+		t.Fatalf("sitemap =\n%s", body)
 	}
 }
 
@@ -83,14 +102,15 @@ func TestCanonicalStaticSEOFilesMatchServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read sitemap.xml: %v", err)
 	}
-	if string(sitemap) != sitemapXML(canonicalPublicHost) {
-		t.Fatalf("client/public/sitemap.xml is not the %s sitemap the server writes", canonicalPublicHost)
+	h := NewSEOHandler(config.DefaultSitemap())
+	if string(sitemap) != h.sitemapXML(h.canonical) {
+		t.Fatalf("client/public/sitemap.xml is not the %s sitemap the server writes", h.canonical)
 	}
 	robots, err := os.ReadFile(filepath.Join(dir, "robots.txt"))
 	if err != nil {
 		t.Fatalf("read robots.txt: %v", err)
 	}
-	if string(robots) != robotsTXT(canonicalPublicHost) {
-		t.Fatalf("client/public/robots.txt is not the %s robots.txt the server writes", canonicalPublicHost)
+	if string(robots) != h.robotsTXT(h.canonical) {
+		t.Fatalf("client/public/robots.txt is not the %s robots.txt the server writes", h.canonical)
 	}
 }
