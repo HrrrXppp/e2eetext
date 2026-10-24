@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -332,5 +333,121 @@ func TestChatRepository_ListUnreadChatsForUser(t *testing.T) {
 				t.Fatalf("sql expectations: %v", err)
 			}
 		})
+	}
+}
+
+func TestChatRepository_IsAdmin(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery(`SELECT EXISTS\(\s*SELECT 1\s+FROM chat_admins\s+WHERE chat_id = \$1 AND user_id = \$2\s*\)`).
+		WithArgs("chat", "user").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	ok, err := NewChatRepository(db).IsAdmin(context.Background(), "chat", "user")
+	if err != nil || !ok {
+		t.Fatalf("IsAdmin() = %v, %v, want true", ok, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func TestChatRepository_ListMembers(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`FROM user_chats uc[\s\S]+INNER JOIN users u[\s\S]+LEFT JOIN chat_admins ca[\s\S]+WHERE uc\.chat_id = \$1`).
+		WithArgs("chat").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "oidc_provider_id", "subject", "name", "created_at", "updated_at", "is_admin"}).
+			AddRow("u1", "p1", "s1", "Alice", now, now, true).
+			AddRow("u2", "p1", "s2", nil, now, now, false))
+
+	members, err := NewChatRepository(db).ListMembers(context.Background(), "chat")
+	if err != nil {
+		t.Fatalf("ListMembers() error = %v", err)
+	}
+	if len(members) != 2 || !members[0].IsAdmin || members[0].Name != "Alice" || members[1].IsAdmin || members[1].Name != "" {
+		t.Fatalf("members = %+v", members)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func expectRemoveMemberDeletes(mock sqlmock.Sqlmock, removed int64) {
+	mock.ExpectBegin()
+	mock.ExpectExec(`DELETE FROM user_chats`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, removed))
+}
+
+func TestChatRepository_RemoveMember(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	expectRemoveMemberDeletes(mock, 1)
+	mock.ExpectExec(`DELETE FROM unread_messages`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`DELETE FROM user_chat_key_wraps`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM chat_admins`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM chat_admins WHERE chat_id = \$1\)`).WithArgs("chat").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectCommit()
+
+	if err := NewChatRepository(db).RemoveMember(context.Background(), "chat", "user"); err != nil {
+		t.Fatalf("RemoveMember() error = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func TestChatRepository_RemoveMember_NotAMember(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	expectRemoveMemberDeletes(mock, 0)
+	mock.ExpectRollback()
+
+	err = NewChatRepository(db).RemoveMember(context.Background(), "chat", "user")
+	if !errors.Is(err, repository.ErrChatMemberNotFound) {
+		t.Fatalf("RemoveMember() error = %v, want ErrChatMemberNotFound", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func TestChatRepository_RemoveMember_LastAdminRollsBack(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	expectRemoveMemberDeletes(mock, 1)
+	mock.ExpectExec(`DELETE FROM unread_messages`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM user_chat_key_wraps`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`DELETE FROM chat_admins`).WithArgs("chat", "user").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT EXISTS`).WithArgs("chat").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectRollback()
+
+	err = NewChatRepository(db).RemoveMember(context.Background(), "chat", "user")
+	if !errors.Is(err, repository.ErrLastChatAdmin) {
+		t.Fatalf("RemoveMember() error = %v, want ErrLastChatAdmin", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
 	}
 }
