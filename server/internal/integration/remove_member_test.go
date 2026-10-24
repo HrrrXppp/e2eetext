@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 )
@@ -16,8 +17,16 @@ type apiChatMember struct {
 func listMembers(t *testing.T, h *harness, chatID string, actor *user) ([]apiChatMember, int) {
 	t.Helper()
 
+	var raw json.RawMessage
+	resp := h.do(http.MethodGet, "/api/v1/chat/"+chatID+"/members", nil, actor, &raw)
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode
+	}
+
 	var members []apiChatMember
-	resp := h.do(http.MethodGet, "/api/v1/chat/"+chatID+"/members", nil, actor, &members)
+	if err := json.Unmarshal(raw, &members); err != nil {
+		t.Fatalf("decode members %s: %v", raw, err)
+	}
 	return members, resp.StatusCode
 }
 
