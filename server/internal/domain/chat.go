@@ -12,3 +12,9 @@ type Chat struct {
 	UpdatedAt             time.Time `json:"updatedAt"`
 	UnreadMessageCount    int       `json:"unreadMessageCount"`
 }
+
+// ChatMember is a chat participant together with their admin flag.
+type ChatMember struct {
+	User
+	IsAdmin bool `json:"isAdmin"`
+}

@@ -185,6 +185,20 @@ func TestAllowedMethods_Chat(t *testing.T) {
 	assertMethodNotAllowed(t, handler, http.MethodDelete, "/api/v1/chat", http.MethodGet, http.MethodPost)
 }
 
+func TestAllowedMethods_ChatMembers(t *testing.T) {
+	handler := newTestHandler(t)
+	chatPath := "/api/v1/chat/99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111"
+	membersPath := chatPath + "/members"
+	memberPath := membersPath + "/99999999-9999-9999-9999-999999999999/22222222-2222-2222-2222-222222222222"
+
+	assertMethodAllowed(t, handler, http.MethodGet, membersPath)
+	assertMethodAllowed(t, handler, http.MethodDelete, memberPath)
+	assertMethodNotAllowed(t, handler, http.MethodPost, membersPath, http.MethodGet)
+	assertMethodNotAllowed(t, handler, http.MethodDelete, membersPath, http.MethodGet)
+	assertMethodNotAllowed(t, handler, http.MethodGet, memberPath, http.MethodDelete)
+	assertMethodNotAllowed(t, handler, http.MethodPost, memberPath, http.MethodDelete)
+}
+
 func TestAllowedMethods_Message(t *testing.T) {
 	handler := newTestHandler(t)
 	scopedPath := "/api/v1/message/99999999-9999-9999-9999-999999999999/11111111-1111-1111-1111-111111111111"

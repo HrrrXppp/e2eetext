@@ -556,3 +556,15 @@ func TestMessageHandler_Update_MissingUnreadField(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
+
+func (s *stubMessageChatRepo) IsAdmin(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
+
+func (s *stubMessageChatRepo) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
+	return nil, nil
+}
+
+func (s *stubMessageChatRepo) RemoveMember(_ context.Context, _, _ string) error {
+	return nil
+}

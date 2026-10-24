@@ -65,7 +65,10 @@ describe("useChatSocket", () => {
 
     const onChatUnread = vi.fn();
     const onChatAdded = vi.fn();
-    const { result } = renderHook(() => useChatSocket(true, onChatUnread, onChatAdded));
+    const onChatRemoved = vi.fn();
+    const { result } = renderHook(() =>
+      useChatSocket(true, onChatUnread, onChatAdded, onChatRemoved),
+    );
 
     await waitFor(() => {
       expect(result.current).toBe("open");
@@ -79,9 +82,11 @@ describe("useChatSocket", () => {
       }),
     );
     socket.emitMessage(JSON.stringify({ type: "chat.added", chatId: "node/chat-2" }));
+    socket.emitMessage(JSON.stringify({ type: "chat.removed", chatId: "node/chat-3" }));
 
     expect(onChatUnread).toHaveBeenCalled();
     expect(onChatAdded).toHaveBeenCalled();
+    expect(onChatRemoved).toHaveBeenCalledWith({ type: "chat.removed", chatId: "node/chat-3" });
   });
 
   it("does not open websocket with only an access token", async () => {

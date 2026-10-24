@@ -17,6 +17,11 @@ type apiUser struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
+type apiChatMember struct {
+	apiUser
+	IsAdmin bool `json:"isAdmin"`
+}
+
 type apiChat struct {
 	ID                    string    `json:"id"`
 	Name                  string    `json:"name,omitempty"`
@@ -144,4 +149,12 @@ func localIDs(n node.Registry, ids []string) ([]string, error) {
 		out = append(out, localID)
 	}
 	return out, nil
+}
+
+func toAPIChatMembers(n node.Registry, members []domain.ChatMember) []apiChatMember {
+	out := make([]apiChatMember, len(members))
+	for i, member := range members {
+		out[i] = apiChatMember{apiUser: toAPIUser(n, member.User), IsAdmin: member.IsAdmin}
+	}
+	return out
 }

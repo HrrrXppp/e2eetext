@@ -160,6 +160,78 @@ func (h *ChatHandler) Create(w http.ResponseWriter, r *http.Request) {
 	h.notifyChatAdded(userIDs, chat.ID)
 }
 
+func (h *ChatHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	tokenUser, ok := service.TokenUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return
+	}
+
+	chatID, err := h.node.LocalID(scopedIDFromPath(r))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	members, err := h.service.ListMembers(r.Context(), chatID, tokenUser)
+	if err != nil {
+		if errors.Is(err, service.ErrChatAccessDenied) {
+			writeError(w, http.StatusForbidden, err)
+			return
+		}
+		if strings.Contains(err.Error(), "is required") {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toAPIChatMembers(h.node, members))
+}
+
+func (h *ChatHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	tokenUser, ok := service.TokenUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return
+	}
+
+	chatID, err := h.node.LocalID(scopedIDFromPath(r))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	userID, err := h.node.LocalID(strings.TrimSpace(r.PathValue("userNodeId")) + "/" + strings.TrimSpace(r.PathValue("userLocalId")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := h.service.RemoveMember(r.Context(), chatID, userID, tokenUser); err != nil {
+		switch {
+		case errors.Is(err, service.ErrChatAccessDenied), errors.Is(err, service.ErrChatNotAdmin):
+			writeError(w, http.StatusForbidden, err)
+		case errors.Is(err, repository.ErrChatMemberNotFound):
+			writeError(w, http.StatusNotFound, err)
+		case errors.Is(err, service.ErrChatSelfRemoval), errors.Is(err, repository.ErrLastChatAdmin),
+			strings.Contains(err.Error(), "is required"):
+			writeError(w, http.StatusBadRequest, err)
+		default:
+			writeError(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	if h.hub != nil {
+		h.hub.NotifyChatRemoved(userID, ws.ChatRemovedEvent{
+			Type:   ws.EventTypeChatRemoved,
+			ChatID: h.node.ScopeID(chatID),
+		})
+	}
+}
+
 func (h *ChatHandler) notifyChatAdded(userIDs []string, chatID string) {
 	if h.hub == nil {
 		return
