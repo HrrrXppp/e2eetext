@@ -3,6 +3,7 @@ import { authHeaders } from "@/lib/auth";
 import { DEFAULT_DISAPPEAR_AFTER_MINUTES } from "@/lib/disappear";
 import type { ChatKeyWrap } from "@/lib/e2ee/types";
 import { scopeResourceIds } from "@/lib/scopedId";
+import type { User } from "@/lib/users";
 
 export type Chat = {
   id: string;
@@ -11,6 +12,11 @@ export type Chat = {
   createdAt: string;
   updatedAt: string;
   unreadMessageCount?: number;
+  isAdmin?: boolean;
+};
+
+export type ChatMember = User & {
+  isAdmin: boolean;
 };
 
 export function formatChatUpdatedAt(value: string): string {
@@ -77,4 +83,35 @@ export async function createChat(input: CreateChatInput): Promise<Chat> {
   }
 
   return response.json() as Promise<Chat>;
+}
+
+export async function getChatMembers(chatId: string): Promise<ChatMember[]> {
+  const response = await fetch(`${API_V1}/chat/${chatId}/members`, {
+    headers: authHeaders(),
+  });
+
+  if (response.status === 403) {
+    throw new Error("chat access denied");
+  }
+
+  if (!response.ok) {
+    throw new Error("failed to fetch chat members");
+  }
+
+  return response.json() as Promise<ChatMember[]>;
+}
+
+export async function removeMember(chatId: string, userId: string): Promise<void> {
+  const response = await fetch(`${API_V1}/chat/${chatId}/members/${userId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+
+  if (response.status === 403) {
+    throw new Error("chat admin required");
+  }
+
+  if (!response.ok) {
+    throw new Error("failed to remove chat member");
+  }
 }

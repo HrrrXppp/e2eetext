@@ -364,3 +364,15 @@ func TestMessageService_Create_EnrichesUserName(t *testing.T) {
 		t.Fatalf("UserName = %q, want Alice", message.UserName)
 	}
 }
+
+func (s *messageChatRepoStub) IsAdmin(_ context.Context, _, _ string) (bool, error) {
+	return false, nil
+}
+
+func (s *messageChatRepoStub) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
+	return nil, nil
+}
+
+func (s *messageChatRepoStub) RemoveMember(_ context.Context, _, _ string) error {
+	return nil
+}

@@ -112,6 +112,106 @@ func (r *ChatRepository) UserBelongsToChat(ctx context.Context, chatID, userID s
 	return belongs, nil
 }
 
+func (r *ChatRepository) IsAdmin(ctx context.Context, chatID, userID string) (bool, error) {
+	var isAdmin bool
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM chat_admins
+			WHERE chat_id = $1 AND user_id = $2
+		)`, chatID, userID).Scan(&isAdmin); err != nil {
+		return false, fmt.Errorf("check chat admin: %w", err)
+	}
+
+	return isAdmin, nil
+}
+
+func (r *ChatRepository) ListMembers(ctx context.Context, chatID string) ([]domain.ChatMember, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT u.id, u.oidc_provider_id, u.subject, u.name, u.created_at, u.updated_at,
+			(ca.user_id IS NOT NULL) AS is_admin
+		FROM user_chats uc
+		INNER JOIN users u ON u.id = uc.user_id
+		LEFT JOIN chat_admins ca ON ca.chat_id = uc.chat_id AND ca.user_id = uc.user_id
+		WHERE uc.chat_id = $1
+		ORDER BY u.name, u.id`, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("list chat members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []domain.ChatMember
+	for rows.Next() {
+		var member domain.ChatMember
+		var name sql.NullString
+		if err := rows.Scan(
+			&member.ID,
+			&member.OIDCProviderID,
+			&member.Subject,
+			&name,
+			&member.CreatedAt,
+			&member.UpdatedAt,
+			&member.IsAdmin,
+		); err != nil {
+			return nil, fmt.Errorf("scan chat member: %w", err)
+		}
+		member.Name = name.String
+		members = append(members, member)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chat members: %w", err)
+	}
+
+	return members, nil
+}
+
+func (r *ChatRepository) RemoveMember(ctx context.Context, chatID, userID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin remove member tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
+		DELETE FROM user_chats
+		WHERE chat_id = $1 AND user_id = $2`, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("delete user_chat: %w", err)
+	}
+	removed, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("user_chat rows affected: %w", err)
+	}
+	if removed == 0 {
+		return repository.ErrChatMemberNotFound
+	}
+
+	for _, stmt := range []struct{ name, query string }{
+		{"unread_messages", `DELETE FROM unread_messages WHERE chat_id = $1 AND user_id = $2`},
+		{"user_chat_key_wraps", `DELETE FROM user_chat_key_wraps WHERE chat_id = $1 AND user_id = $2`},
+		{"chat_admins", `DELETE FROM chat_admins WHERE chat_id = $1 AND user_id = $2`},
+	} {
+		if _, err := tx.ExecContext(ctx, stmt.query, chatID, userID); err != nil {
+			return fmt.Errorf("delete %s: %w", stmt.name, err)
+		}
+	}
+
+	var hasAdmin bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM chat_admins WHERE chat_id = $1)`, chatID).Scan(&hasAdmin); err != nil {
+		return fmt.Errorf("check remaining chat admins: %w", err)
+	}
+	if !hasAdmin {
+		return repository.ErrLastChatAdmin
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit remove member tx: %w", err)
+	}
+
+	return nil
+}
+
 func (r *ChatRepository) UnreadCountsForChat(ctx context.Context, chatID string) ([]repository.ChatUnreadCount, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT uc.user_id, COUNT(um.message_id)::int

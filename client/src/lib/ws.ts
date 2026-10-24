@@ -3,6 +3,7 @@ import { getWebSocketIdToken } from "@/lib/auth";
 
 export const CHAT_UNREAD_EVENT = "chat.unread";
 export const CHAT_ADDED_EVENT = "chat.added";
+export const CHAT_REMOVED_EVENT = "chat.removed";
 export const HEARTBEAT_EVENT = "heartbeat";
 export const HEARTBEAT_ACK_EVENT = "heartbeat.ack";
 
@@ -21,6 +22,11 @@ export type ChatUnreadEvent = {
 
 export type ChatAddedEvent = {
   type: typeof CHAT_ADDED_EVENT;
+  chatId: string;
+};
+
+export type ChatRemovedEvent = {
+  type: typeof CHAT_REMOVED_EVENT;
   chatId: string;
 };
 
@@ -142,6 +148,33 @@ export function parseChatAddedEvent(data: unknown): ChatAddedEvent | null {
 
   return {
     type: CHAT_ADDED_EVENT,
+    chatId: event.chatId,
+  };
+}
+
+export function parseChatRemovedEvent(data: unknown): ChatRemovedEvent | null {
+  if (typeof data !== "string") {
+    return null;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(data);
+  } catch {
+    return null;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const event = payload as Partial<ChatRemovedEvent>;
+  if (event.type !== CHAT_REMOVED_EVENT || typeof event.chatId !== "string") {
+    return null;
+  }
+
+  return {
+    type: CHAT_REMOVED_EVENT,
     chatId: event.chatId,
   };
 }

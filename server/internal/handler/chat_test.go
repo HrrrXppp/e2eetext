@@ -18,6 +18,26 @@ import (
 
 type stubChatRepo struct {
 	chatsByUserID map[string][]domain.Chat
+	admins        map[string]bool
+	members       []domain.ChatMember
+	removeErr     error
+	removedIDs    []string
+}
+
+func (s *stubChatRepo) IsAdmin(_ context.Context, _, userID string) (bool, error) {
+	return s.admins[userID], nil
+}
+
+func (s *stubChatRepo) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
+	return s.members, nil
+}
+
+func (s *stubChatRepo) RemoveMember(_ context.Context, _, userID string) error {
+	if s.removeErr != nil {
+		return s.removeErr
+	}
+	s.removedIDs = append(s.removedIDs, userID)
+	return nil
 }
 
 func (s *stubChatRepo) List(_ context.Context, filter repository.ChatFilter) ([]domain.Chat, error) {
@@ -404,5 +424,135 @@ func TestChatHandler_List_UnauthorizedWithoutTokenUser(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func membersTestHandler(repo *stubChatRepo) *ChatHandler {
+	const (
+		callerID   = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		providerID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	)
+	return newChatHandlerForTest(repo, &stubChatUserRepo{
+		users: []domain.User{{ID: callerID, OIDCProviderID: providerID, Subject: "google-subject-1"}},
+	}, &stubChatOIDCProviderRepo{providers: []domain.OIDCProvider{{ID: providerID, Name: "Google"}}})
+}
+
+func membersTestRequest(method, path string) *http.Request {
+	req := httptest.NewRequest(method, path, nil)
+	req.SetPathValue("nodeId", testNodeID)
+	req.SetPathValue("localId", "11111111-1111-1111-1111-111111111111")
+	req.SetPathValue("userNodeId", testNodeID)
+	req.SetPathValue("userLocalId", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	return requestWithTokenUser(req, service.TokenUser{Subject: "google-subject-1", Provider: "google"})
+}
+
+func memberChats(chatID, userID string) map[string][]domain.Chat {
+	return map[string][]domain.Chat{userID: {{ID: chatID}}}
+}
+
+func TestChatHandler_ListMembers(t *testing.T) {
+	const chatID = "11111111-1111-1111-1111-111111111111"
+	const callerID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	repo := &stubChatRepo{
+		chatsByUserID: memberChats(chatID, callerID),
+		members: []domain.ChatMember{
+			{User: domain.User{ID: callerID, Subject: "s1", Name: "Alice"}, IsAdmin: true},
+			{User: domain.User{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", Subject: "s2", Name: "Bob"}},
+		},
+	}
+	rec := httptest.NewRecorder()
+	membersTestHandler(repo).ListMembers(rec, membersTestRequest(http.MethodGet, "/api/v1/chat/x/y/members"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got []struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		IsAdmin bool   `json:"isAdmin"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != scopedID(callerID) || !got[0].IsAdmin || got[1].IsAdmin || got[1].Name != "Bob" {
+		t.Fatalf("members = %+v", got)
+	}
+}
+
+func TestChatHandler_ListMembers_ForbiddenForNonMember(t *testing.T) {
+	rec := httptest.NewRecorder()
+	membersTestHandler(&stubChatRepo{}).ListMembers(rec, membersTestRequest(http.MethodGet, "/api/v1/chat/x/y/members"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestChatHandler_RemoveMember(t *testing.T) {
+	const chatID = "11111111-1111-1111-1111-111111111111"
+	const callerID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	const targetID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
+	tests := []struct {
+		name       string
+		repo       *stubChatRepo
+		path       func(*http.Request)
+		wantStatus int
+		wantRemove int
+	}{
+		{
+			name:       "admin removes member",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}},
+			wantStatus: http.StatusNoContent,
+			wantRemove: 1,
+		},
+		{
+			name:       "non-admin forbidden",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID)},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "non-member forbidden",
+			repo:       &stubChatRepo{admins: map[string]bool{callerID: true}},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "self removal rejected",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}},
+			path:       func(r *http.Request) { r.SetPathValue("userLocalId", callerID) },
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "target not a member",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}, removeErr: repository.ErrChatMemberNotFound},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "last admin protected",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}, removeErr: repository.ErrLastChatAdmin},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "repository failure",
+			repo:       &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}, removeErr: errors.New("boom")},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := membersTestRequest(http.MethodDelete, "/api/v1/chat/x/y/members/a/b")
+			if tt.path != nil {
+				tt.path(req)
+			}
+			rec := httptest.NewRecorder()
+			membersTestHandler(tt.repo).RemoveMember(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if len(tt.repo.removedIDs) != tt.wantRemove {
+				t.Fatalf("removed = %v, want %d call(s)", tt.repo.removedIDs, tt.wantRemove)
+			}
+		})
 	}
 }

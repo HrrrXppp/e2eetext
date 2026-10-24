@@ -11,6 +11,7 @@ vi.mock("@/lib/chats", async (importOriginal) => {
   return {
     ...actual,
     fetchChats: vi.fn(),
+    getChatMembers: vi.fn(),
   };
 });
 
@@ -36,15 +37,17 @@ vi.mock("@/hooks/useChatSocket", () => ({
 
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
-import { fetchChats } from "@/lib/chats";
+import { fetchChats, getChatMembers } from "@/lib/chats";
 import { createMessage, fetchMessages } from "@/lib/messages";
 import { notifyNewMessage } from "@/lib/notifications";
-import type { ChatUnreadEvent } from "@/lib/ws";
+import type { ChatRemovedEvent, ChatUnreadEvent } from "@/lib/ws";
 
 let onChatUnread: ((event: ChatUnreadEvent) => void) | undefined;
+let onChatRemoved: ((event: ChatRemovedEvent) => void) | undefined;
 
-vi.mocked(useChatSocket).mockImplementation((_enabled, callback) => {
+vi.mocked(useChatSocket).mockImplementation((_enabled, callback, _onAdded, removedCallback) => {
   onChatUnread = callback;
+  onChatRemoved = removedCallback;
   return "open";
 });
 
@@ -75,6 +78,7 @@ const sampleMessage = {
 describe("ChatsPage", () => {
   beforeEach(() => {
     onChatUnread = undefined;
+    onChatRemoved = undefined;
     vi.mocked(notifyNewMessage).mockClear();
     vi.mocked(fetchMessages).mockReset();
     vi.mocked(fetchChats).mockReset();
@@ -107,6 +111,58 @@ describe("ChatsPage", () => {
     });
     expect(fetchMessages).toHaveBeenCalledWith(sampleChat.id);
     expect(screen.getByLabelText("Message")).toBeInTheDocument();
+  });
+
+  it("opens chat settings and lists members", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([{ ...sampleChat, isAdmin: true }]);
+    vi.mocked(fetchMessages).mockResolvedValue([]);
+    vi.mocked(getChatMembers).mockResolvedValue([]);
+
+    render(<ChatsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Chat settings" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(getChatMembers).toHaveBeenCalledWith(sampleChat.id);
+  });
+
+  it("drops the chat, clears the selection and closes settings on chat.removed", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: authUser,
+      providers: [],
+      loading: false,
+      signOut: vi.fn(),
+      setDisplayName: vi.fn(),
+      justCreatedIdentity: false,
+      acknowledgeIdentityBackup: vi.fn(),
+    });
+    vi.mocked(fetchChats).mockResolvedValue([sampleChat]);
+    vi.mocked(fetchMessages).mockResolvedValue([]);
+    vi.mocked(getChatMembers).mockResolvedValue([]);
+
+    render(<ChatsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Chat settings" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    act(() => {
+      onChatRemoved?.({ type: "chat.removed", chatId: sampleChat.id });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("option", { name: /General/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Select a chat to view messages.")).toBeInTheDocument();
   });
 
   it("sends a new message", async () => {

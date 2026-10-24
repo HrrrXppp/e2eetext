@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- Admins can remove a member from a chat. New `GET /api/v1/chat/{nodeId}/{localId}/members` (member-only) lists members with an `isAdmin` flag, and `DELETE /api/v1/chat/{nodeId}/{localId}/members/{userNodeId}/{userLocalId}` removes one (admin only; self-removal and removing the last admin are rejected). The removed user's membership, unread state, key wraps and admin row are deleted in one transaction and they receive a `chat.removed` WebSocket event. The client gets a Chat Settings window, opened from the chat header, that lists members and offers Remove to admins. No key rotation yet: a removed member keeps any chat key they already hold (#125) (#12)
+
 ## [0.3.11](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-24
 
 ### Fixed

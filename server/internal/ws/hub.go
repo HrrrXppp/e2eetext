@@ -68,6 +68,10 @@ func (h *Hub) NotifyChatAdded(userID string, event ChatAddedEvent) {
 	h.notify(userID, event)
 }
 
+func (h *Hub) NotifyChatRemoved(userID string, event ChatRemovedEvent) {
+	h.notify(userID, event)
+}
+
 func (h *Hub) notify(userID string, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {

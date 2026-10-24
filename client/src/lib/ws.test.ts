@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { chatWebSocketURL, buildHeartbeatMessage, isHeartbeatAckEvent, parseChatAddedEvent, parseChatUnreadEvent } from "@/lib/ws";
+import { chatWebSocketURL, buildHeartbeatMessage, isHeartbeatAckEvent, parseChatAddedEvent, parseChatRemovedEvent, parseChatUnreadEvent } from "@/lib/ws";
 
 afterEach(() => {
   localStorage.clear();
@@ -121,5 +121,22 @@ describe("parseChatAddedEvent", () => {
     expect(parseChatAddedEvent("not-json")).toBeNull();
     expect(parseChatAddedEvent(JSON.stringify({ type: "chat.unread" }))).toBeNull();
     expect(parseChatAddedEvent(JSON.stringify({ type: "chat.added" }))).toBeNull();
+  });
+});
+
+describe("parseChatRemovedEvent", () => {
+  it("parses chat removed websocket payload", () => {
+    expect(
+      parseChatRemovedEvent(JSON.stringify({ type: "chat.removed", chatId: "node/chat-1" })),
+    ).toEqual({
+      type: "chat.removed",
+      chatId: "node/chat-1",
+    });
+  });
+
+  it("returns null for invalid payloads", () => {
+    expect(parseChatRemovedEvent("not-json")).toBeNull();
+    expect(parseChatRemovedEvent(JSON.stringify({ type: "chat.added", chatId: "x" }))).toBeNull();
+    expect(parseChatRemovedEvent(JSON.stringify({ type: "chat.removed" }))).toBeNull();
   });
 });

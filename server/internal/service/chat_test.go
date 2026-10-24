@@ -10,7 +10,12 @@ import (
 	"github.com/ekhrunov/messenger/server/internal/repository"
 )
 
-type chatRepoStub struct{}
+type chatRepoStub struct {
+	members    map[string]bool
+	admins     map[string]bool
+	removeErr  error
+	removedIDs []string
+}
 
 func (s *chatRepoStub) List(_ context.Context, _ repository.ChatFilter) ([]domain.Chat, error) {
 	return nil, nil
@@ -20,8 +25,24 @@ func (s *chatRepoStub) Create(_ context.Context, _ string, _ []string, _ int, _ 
 	return domain.Chat{}, nil
 }
 
-func (s *chatRepoStub) UserBelongsToChat(_ context.Context, _, _ string) (bool, error) {
-	return false, nil
+func (s *chatRepoStub) UserBelongsToChat(_ context.Context, _, userID string) (bool, error) {
+	return s.members[userID], nil
+}
+
+func (s *chatRepoStub) IsAdmin(_ context.Context, _, userID string) (bool, error) {
+	return s.admins[userID], nil
+}
+
+func (s *chatRepoStub) ListMembers(_ context.Context, _ string) ([]domain.ChatMember, error) {
+	return []domain.ChatMember{{User: domain.User{ID: "m1"}, IsAdmin: true}}, nil
+}
+
+func (s *chatRepoStub) RemoveMember(_ context.Context, _, userID string) error {
+	if s.removeErr != nil {
+		return s.removeErr
+	}
+	s.removedIDs = append(s.removedIDs, userID)
+	return nil
 }
 
 func (s *chatRepoStub) UnreadCountsForChat(_ context.Context, _ string) ([]repository.ChatUnreadCount, error) {
@@ -171,5 +192,96 @@ func TestChatService_List_DeniesOtherUser(t *testing.T) {
 	})
 	if !errors.Is(err, ErrChatAccessDenied) {
 		t.Fatalf("List() error = %v, want %v", err, ErrChatAccessDenied)
+	}
+}
+
+const (
+	rmChatID    = "11111111-1111-1111-1111-111111111111"
+	rmAdminID   = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	rmMemberID  = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	rmOutsider  = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+	rmProvider  = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	rmSubjAdmin = "sub-admin"
+)
+
+func newRemoveMemberService(repo *chatRepoStub, callerID, subject string) (*ChatService, TokenUser) {
+	svc := NewChatService(repo, &chatUserRepoStub{users: []domain.User{
+		{ID: callerID, OIDCProviderID: rmProvider, Subject: subject},
+	}}, &chatOIDCProviderRepoStub{providers: []domain.OIDCProvider{{ID: rmProvider, Name: "Google"}}})
+	return svc, TokenUser{Subject: subject, Provider: "google"}
+}
+
+func TestChatService_RemoveMember(t *testing.T) {
+	tests := []struct {
+		name      string
+		repo      *chatRepoStub
+		callerID  string
+		targetID  string
+		wantErr   error
+		wantCalls int
+	}{
+		{
+			name:      "admin removes member",
+			repo:      &chatRepoStub{members: map[string]bool{rmAdminID: true, rmMemberID: true}, admins: map[string]bool{rmAdminID: true}},
+			callerID:  rmAdminID,
+			targetID:  rmMemberID,
+			wantCalls: 1,
+		},
+		{
+			name:     "non-admin member denied",
+			repo:     &chatRepoStub{members: map[string]bool{rmAdminID: true, rmMemberID: true}, admins: map[string]bool{}},
+			callerID: rmAdminID,
+			targetID: rmMemberID,
+			wantErr:  ErrChatNotAdmin,
+		},
+		{
+			name:     "non-member caller denied",
+			repo:     &chatRepoStub{members: map[string]bool{rmMemberID: true}, admins: map[string]bool{rmOutsider: true}},
+			callerID: rmOutsider,
+			targetID: rmMemberID,
+			wantErr:  ErrChatAccessDenied,
+		},
+		{
+			name:     "self removal rejected",
+			repo:     &chatRepoStub{members: map[string]bool{rmAdminID: true}, admins: map[string]bool{rmAdminID: true}},
+			callerID: rmAdminID,
+			targetID: rmAdminID,
+			wantErr:  ErrChatSelfRemoval,
+		},
+		{
+			name:     "target not a member",
+			repo:     &chatRepoStub{members: map[string]bool{rmAdminID: true}, admins: map[string]bool{rmAdminID: true}, removeErr: repository.ErrChatMemberNotFound},
+			callerID: rmAdminID,
+			targetID: rmOutsider,
+			wantErr:  repository.ErrChatMemberNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, tokenUser := newRemoveMemberService(tt.repo, tt.callerID, rmSubjAdmin)
+			err := svc.RemoveMember(context.Background(), rmChatID, tt.targetID, tokenUser)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("RemoveMember() error = %v, want %v", err, tt.wantErr)
+			}
+			if len(tt.repo.removedIDs) != tt.wantCalls {
+				t.Fatalf("RemoveMember repo calls = %d, want %d", len(tt.repo.removedIDs), tt.wantCalls)
+			}
+		})
+	}
+}
+
+func TestChatService_ListMembers(t *testing.T) {
+	repo := &chatRepoStub{members: map[string]bool{rmMemberID: true}}
+
+	svc, tokenUser := newRemoveMemberService(repo, rmMemberID, rmSubjAdmin)
+	members, err := svc.ListMembers(context.Background(), rmChatID, tokenUser)
+	if err != nil || len(members) != 1 {
+		t.Fatalf("ListMembers() = %v, %v", members, err)
+	}
+
+	svc, tokenUser = newRemoveMemberService(repo, rmOutsider, rmSubjAdmin)
+	if _, err := svc.ListMembers(context.Background(), rmChatID, tokenUser); !errors.Is(err, ErrChatAccessDenied) {
+		t.Fatalf("ListMembers() non-member error = %v, want %v", err, ErrChatAccessDenied)
 	}
 }
