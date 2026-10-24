@@ -475,7 +475,16 @@ The server reads `X-Forwarded-Host` and `X-Forwarded-Proto` from the ALB for OAu
 - Security group: allow **inbound TCP 5432** from the EC2 security group (or EC2 private IP)
 - Keep RDS in the same VPC as EC2; do not expose PostgreSQL to the public internet
 
-`terraform/modules/rds` ([Infrastructure as code (Terraform)](#infrastructure-as-code-terraform) below) can manage this instance's subnet group, security group, and `pg_cron` parameter group going forward, but is not yet imported against either environment — this manual walkthrough remains the documented path until that import is confirmed zero-diff. See [#20](https://github.com/HrrrXppp/e2eetext/issues/20) for the full `pg_cron`-on-RDS parameter-group/reboot procedure this step still requires today.
+`terraform/modules/rds` ([Infrastructure as code (Terraform)](#infrastructure-as-code-terraform) below) can manage this instance's subnet group, security group, and `pg_cron` parameter group going forward, but is not yet imported against either environment — this manual walkthrough remains the documented path until that import is confirmed zero-diff.
+
+**Enable `pg_cron` before the first deploy.** Migration `000006_disappear` runs `CREATE EXTENSION pg_cron` automatically when the server starts, so do all of the following **before** the first `bash maintenance/ec2/deploy.sh`:
+
+1. Check AWS's RDS PostgreSQL extension-version support matrix for the major/minor version and region you are provisioning, and confirm `pg_cron` is supported. Support is version- and region-specific, so re-confirm at provisioning time; this README cannot verify it for you.
+2. Create a **custom** DB parameter group for your engine family (the default `postgres*` groups cannot be edited) and set `shared_preload_libraries` to `pg_cron` and `cron.database_name` to `messenger`. Associate the group with the instance (or use `terraform/modules/rds` once imported).
+3. **Reboot the RDS instance.** `shared_preload_libraries` is a static parameter and only takes effect after a reboot.
+4. Connect as the master user and confirm: `SHOW shared_preload_libraries;` lists `pg_cron`.
+
+If you skip this, the server crash-loops on startup with a `pg_cron` / `shared_preload_libraries` error (see Troubleshooting below).
 
 Connection string example:
 
@@ -651,6 +660,15 @@ curl https://app.example.com/health
 ```
 
 Open `https://app.example.com` in the browser and sign in.
+
+Then confirm the disappearing-messages purge job on RDS (connect with `psql "$DATABASE_URL"`):
+
+```sql
+SELECT jobname, schedule, active FROM cron.job;
+SELECT status, return_message, start_time FROM cron.job_run_details ORDER BY start_time DESC LIMIT 5;
+```
+
+The first query should list `purge-expired-messages` as active. The second should show recent runs (about one per minute) with status `succeeded`; repeated `failed` rows mean the purge is erroring.
 
 ### Files
 
