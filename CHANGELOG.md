@@ -11,9 +11,17 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.3.11](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-24
+
 ### Fixed
 
 - `/sitemap.xml` and `/robots.txt` are generated for the host that requested them. The host list and page paths are `sitemap.hosts` and `sitemap.paths` in `config.json` (the first host is the fallback). When that object is omitted, the server uses `e2eetext.com`, `e2eetext.io`, `e2eetext.net`, `e2eetext.org`, and `dev.e2eetext.com` with `/`, `/privacy`, `/terms`, and `/roadmap`. A sitemap may only list URLs on the host that served it, and the static file was still `https://app.example.com`, so search consoles rejected every URL. Dev and prod listeners send those two paths to the server; `/ads.txt` stays on the client. The static `sitemap.xml` and `robots.txt` copies are removed from the client image.
+
+### Changed
+
+#### Tooling & deployment
+
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.3.11`
 
 ## [0.3.10](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-22
 
