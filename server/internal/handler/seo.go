@@ -7,12 +7,13 @@ import (
 	"strings"
 )
 
-// publicHosts are the names on the prod certificate that all serve this app.
-// A sitemap is only valid for the host that served it, so each of these gets
-// its own URL list. Anything else (localhost, the dig hostname, a spoofed
-// Host) falls back to the primary name instead of being copied into the file.
+// canonicalPublicHost is the primary name. A request on any other host uses
+// it, so localhost, the dig hostname, or a spoofed Host is not copied into the file.
 const canonicalPublicHost = "e2eetext.com"
 
+// publicHosts are the names on the prod certificate that all serve this app.
+// A sitemap is only valid for the host that served it, so each of these gets
+// its own URL list.
 var publicHosts = map[string]struct{}{
 	"e2eetext.com": {},
 	"e2eetext.io":  {},
