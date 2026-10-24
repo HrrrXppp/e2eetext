@@ -5,6 +5,7 @@ import "time"
 const (
 	EventTypeChatUnread   = "chat.unread"
 	EventTypeChatAdded    = "chat.added"
+	EventTypeChatRemoved  = "chat.removed"
 	EventTypeHeartbeat    = "heartbeat"
 	EventTypeHeartbeatAck = "heartbeat.ack"
 )
@@ -21,6 +22,11 @@ type ChatUnreadEvent struct {
 }
 
 type ChatAddedEvent struct {
+	Type   string `json:"type"`
+	ChatID string `json:"chatId"`
+}
+
+type ChatRemovedEvent struct {
 	Type   string `json:"type"`
 	ChatID string `json:"chatId"`
 }
