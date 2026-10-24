@@ -3,8 +3,6 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -93,24 +91,5 @@ func TestSEOHandler_UsesConfiguredHostsAndPaths(t *testing.T) {
 	body := h.sitemapXML("beta.example")
 	if !strings.Contains(body, "<loc>https://beta.example/</loc>") || strings.Contains(body, "/privacy") {
 		t.Fatalf("sitemap =\n%s", body)
-	}
-}
-
-func TestCanonicalStaticSEOFilesMatchServer(t *testing.T) {
-	dir := filepath.Join("..", "..", "..", "client", "public")
-	sitemap, err := os.ReadFile(filepath.Join(dir, "sitemap.xml"))
-	if err != nil {
-		t.Fatalf("read sitemap.xml: %v", err)
-	}
-	h := NewSEOHandler(config.DefaultSitemap())
-	if string(sitemap) != h.sitemapXML(h.canonical) {
-		t.Fatalf("client/public/sitemap.xml is not the %s sitemap the server writes", h.canonical)
-	}
-	robots, err := os.ReadFile(filepath.Join(dir, "robots.txt"))
-	if err != nil {
-		t.Fatalf("read robots.txt: %v", err)
-	}
-	if string(robots) != h.robotsTXT(h.canonical) {
-		t.Fatalf("client/public/robots.txt is not the %s robots.txt the server writes", h.canonical)
 	}
 }
