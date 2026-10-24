@@ -60,11 +60,11 @@ func (s SitemapConfig) CanonicalHost() string {
 }
 
 // DefaultSitemap is used when config.json omits the sitemap object, so an
-// existing file keeps serving the four public names. The same values are
+// existing file keeps serving the built-in public names. The same values are
 // written in server/config.example.json and maintenance/ec2/config/config.example.json.
 func DefaultSitemap() SitemapConfig {
 	return SitemapConfig{
-		Hosts: []string{"e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org"},
+		Hosts: []string{"e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org", "dev.e2eetext.com"},
 		Paths: []string{"/", "/privacy", "/terms", "/roadmap"},
 	}
 }

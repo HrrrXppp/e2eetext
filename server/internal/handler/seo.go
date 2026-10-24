@@ -35,6 +35,8 @@ func NewSEOHandler(sitemap config.SitemapConfig) *SEOHandler {
 func (h *SEOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	host := h.publicSitemapHost(r.Host)
 	w.Header().Set("Vary", "Host")
+	// Short cache so a stale edge copy, such as the SPA fallback, is not kept for a day.
+	w.Header().Set("Cache-Control", "public, max-age=300")
 	switch r.URL.Path {
 	case "/sitemap.xml":
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
