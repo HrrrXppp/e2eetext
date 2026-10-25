@@ -525,7 +525,7 @@ On your **local machine**:
 bash maintenance/ecr/build-and-push.sh
 ```
 
-This builds `server` and `client` Docker images and pushes them to ECR. Set `IMAGE_TAG` in `maintenance/ecr/.env` to version releases (default: `latest`). On Apple Silicon Macs, `DOCKER_PLATFORM=linux/amd64` is set by default for EC2.
+This builds the `server` Docker image and pushes it to ECR. The client is not an image any more: it is published as static files (see Publishing the client). Set `IMAGE_TAG` in `maintenance/ecr/.env` to version releases (default: `latest`). On Apple Silicon Macs, `DOCKER_PLATFORM=linux/amd64` is set by default for EC2.
 
 Requires IAM permissions: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`. The CI role additionally needs `ecr:DescribeImages` (used by `build-images.yml` to skip existing tags).
 
@@ -738,7 +738,7 @@ Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
 
 ### Publishing the client
 
-Run **Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) from the Actions tab and pick `dev` or `prod` (prod runs from `main` only). It builds `client/dist`, syncs hashed assets, then the remaining files, and writes `instance.json`, all into the `vX.Y.Z` (or short-commit) directory, then invalidates `/index.html` and `/instance.json`. The run summary prints the directory name to put in `static_site_client_version`. It assumes the existing `AWS_ROLE_ARN` role and needs four more repository secrets, taken from the Terraform outputs `static_site_bucket_name` and `static_site_distribution_id`:
+**Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) starts by itself when a version bump (`VERSION`) lands on `main`, like `build-images.yml`, and uploads to `dev`. To publish to `prod`, or to re-publish, run it from the Actions tab and pick `dev` or `prod` (prod runs from `main` only). It builds `client/dist`, syncs hashed assets, then the remaining files, and writes `instance.json`, all into the `vX.Y.Z` (or short-commit) directory, then invalidates `/index.html` and `/instance.json`. The run summary prints the directory name to put in `static_site_client_version`. It assumes the existing `AWS_ROLE_ARN` role and needs four more repository secrets, taken from the Terraform outputs `static_site_bucket_name` and `static_site_distribution_id`:
 
 `STATIC_SITE_BUCKET_DEV`, `STATIC_SITE_DISTRIBUTION_ID_DEV`, `STATIC_SITE_BUCKET_PROD`, `STATIC_SITE_DISTRIBUTION_ID_PROD`
 
@@ -749,7 +749,7 @@ The change is staged so nothing breaks while it is rolled out:
 1. Apply `envs/shared`, then `envs/dev` / `envs/prod`. The distribution is created next to the existing ALB client rules and EC2 client container, and DNS still points at the ALB.
 2. Run the publish workflow, set `static_site_client_version` to the directory it printed and apply, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. API and WebSocket paths through that name fail certificate validation at the ALB because the `Host` is the `cloudfront.net` name, so test them on the real hostname after step 3 (or `curl --resolve`).
 3. Switch each public hostname's DNS (CNAME / ALIAS) to `static_site_domain_name` at the DNS host. Check `/sitemap.xml` and `/robots.txt` on every hostname, a WebSocket connection, and the dev banner.
-4. A follow-up change removes the client target group, its ALB rules and attachment, the client service in `maintenance/ec2/docker-compose.yml`, `client/Dockerfile`, `maintenance/ec2/docker-compose.frontend.yml`, the client ECR repository and the client build step in `maintenance/ecr/build-and-push.sh`. `build-images.yml` already stops building the client image, so a release after this change has no matching client image for the EC2 client container; use the previous tag for a rollback to it. Until the follow-up lands, the other pieces stay in place for rollback (point DNS back at the ALB).
+4. A follow-up change removes the client target group, its ALB rules and attachment, the client service in `maintenance/ec2/docker-compose.yml`, `client/Dockerfile`, `maintenance/ec2/docker-compose.frontend.yml` and the client ECR repository. `build-images.yml` and `maintenance/ecr/build-and-push.sh` already stop building the client image, so a release after this change has no matching client image for the EC2 client container; use the previous tag for a rollback to it. Until the follow-up lands, the other pieces stay in place for rollback (point DNS back at the ALB).
 
 ## Infrastructure as code (Terraform)
 

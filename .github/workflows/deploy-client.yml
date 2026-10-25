@@ -2,11 +2,15 @@ name: Deploy client (S3 + CloudFront)
 
 # Builds client/dist and publishes it to the environment's private S3 bucket
 # behind CloudFront (terraform/modules/static-site, #28), into a directory
-# named after the client version (vX.Y.Z). Run it by hand from
-# the Actions tab: it never runs on push, so a release stays an explicit step
-# (like deploy.sh on the EC2 host).
+# named after the client version (vX.Y.Z). It starts by itself when a version
+# bump lands on main (the same trigger as build-images.yml) and uploads to dev;
+# run it by hand from the Actions tab to publish to prod or to re-publish.
+# Uploading never changes what visitors get; static_site_client_version does.
 
 on:
+  push:
+    branches: [main]
+    paths: [VERSION]
   workflow_dispatch:
     inputs:
       environment:
@@ -21,14 +25,14 @@ permissions:
 
 # Queue (never cancel) so two publishes to the same environment run in order.
 concurrency:
-  group: deploy-client-${{ inputs.environment }}
+  group: deploy-client-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      TARGET_ENV: ${{ inputs.environment }}
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
       BUCKET: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_BUCKET_PROD || secrets.STATIC_SITE_BUCKET_DEV }}
       DISTRIBUTION_ID: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_DISTRIBUTION_ID_PROD || secrets.STATIC_SITE_DISTRIBUTION_ID_DEV }}
     steps:
