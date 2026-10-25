@@ -106,12 +106,8 @@ func (r *E2EERepository) CreateChatWithKeys(
 		return domain.Chat{}, fmt.Errorf("insert chat key version: %w", err)
 	}
 
-	for userID, wrap := range wraps {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_chat_key_wraps (chat_id, key_id, user_id, wrap)
-			VALUES ($1, $2, $3, $4)`, chat.ID, keyID, userID, wrap); err != nil {
-			return domain.Chat{}, fmt.Errorf("insert chat key wrap: %w", err)
-		}
+	if err := insertKeyWraps(ctx, tx, chat.ID, keyID, wraps); err != nil {
+		return domain.Chat{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -164,16 +160,28 @@ func (r *E2EERepository) AddKeyVersion(ctx context.Context, chatID, keyID, creat
 		return fmt.Errorf("insert chat key version: %w", err)
 	}
 
-	for userID, wrap := range wraps {
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_chat_key_wraps (chat_id, key_id, user_id, wrap)
-			VALUES ($1, $2, $3, $4)`, chatID, keyID, userID, wrap); err != nil {
-			return fmt.Errorf("insert chat key wrap: %w", err)
-		}
+	if err := insertKeyWraps(ctx, tx, chatID, keyID, wraps); err != nil {
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit add key version tx: %w", err)
+	}
+	return nil
+}
+
+// insertKeyWraps stores every member's wrap of one chat key version with a
+// single statement; wraps maps user id to the wrap JSON.
+func insertKeyWraps(ctx context.Context, tx *sql.Tx, chatID, keyID string, wraps map[string]json.RawMessage) error {
+	payload, err := json.Marshal(wraps)
+	if err != nil {
+		return fmt.Errorf("encode chat key wraps: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO user_chat_key_wraps (chat_id, key_id, user_id, wrap)
+		SELECT $1::uuid, $2::uuid, w.key::uuid, w.value
+		FROM jsonb_each($3::jsonb) AS w`, chatID, keyID, string(payload)); err != nil {
+		return fmt.Errorf("insert chat key wraps: %w", err)
 	}
 	return nil
 }

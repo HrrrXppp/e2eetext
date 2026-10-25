@@ -17,6 +17,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Changed
 
+- Message expiry also removes unused chat keys: `purge_expired_messages()` (migration `000009_purge_key_versions`) now deletes chat key versions, and their wraps, that no remaining message uses, always keeping each chat's newest version. Adding a key version writes all member wraps with one query (#135)
 - `GET /api/v1/chat/{nodeId}/{localId}/key-wraps` returns every wrap the member holds, oldest first, instead of only the newest one. A message is decrypted with exactly the key version named in its envelope instead of falling back to the newest wrap. Failed sends and decrypts are now logged to the console (#135)
 
 ## [0.4.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-24
