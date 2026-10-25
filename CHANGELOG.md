@@ -11,6 +11,14 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+- Chat key rotation after a regenerated identity. New `POST /api/v1/chat/{nodeId}/{localId}/key-wraps` lets a chat member add a new chat key version with a wrap for every current member. When the identity on a device can no longer open a chat's newest key, the next send adds a new key version wrapped for each member's current public key, so the user can write and receive new messages in old chats. Other members keep their old wraps and read old messages as before. Messages from before the regeneration show "Message encrypted with a previous key" on that device (#135)
+
+### Changed
+
+- `GET /api/v1/chat/{nodeId}/{localId}/key-wraps` returns every wrap the member holds, oldest first, instead of only the newest one. A message is decrypted with exactly the key version named in its envelope instead of falling back to the newest wrap. Failed sends and decrypts are now logged to the console (#135)
+
 ## [0.4.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-24
 
 ### Added

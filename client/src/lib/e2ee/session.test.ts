@@ -7,17 +7,27 @@ const storage = vi.hoisted(() => ({
   getCachedChatKey: vi.fn(),
   loadStoredIdentity: vi.fn(),
   saveStoredIdentity: vi.fn(),
+  uploadChatKeyVersion: vi.fn(),
   uploadIdentityKey: vi.fn(),
 }));
-const crypto = vi.hoisted(() => ({ unwrapChatKey: vi.fn() }));
+const crypto = vi.hoisted(() => ({
+  unwrapChatKey: vi.fn(),
+  wrapChatKey: vi.fn(),
+  encryptMessage: vi.fn(),
+}));
+const chats = vi.hoisted(() => ({ getChatMembers: vi.fn() }));
+
+vi.mock("@/lib/chats", () => chats);
 
 vi.mock("@/lib/e2ee/storage", () => storage);
 vi.mock("@/lib/e2ee/crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/e2ee/crypto")>()),
   unwrapChatKey: crypto.unwrapChatKey,
+  wrapChatKey: crypto.wrapChatKey,
+  encryptMessage: crypto.encryptMessage,
 }));
 
-import { ensureChatKey } from "@/lib/e2ee/session";
+import { ChatKeyUnavailableError, encryptOutgoingMessage, ensureChatKey } from "@/lib/e2ee/session";
 
 const wrap = (keyId: string) => ({ keyId, wrap: { keyId } });
 
@@ -51,5 +61,91 @@ describe("ensureChatKey", () => {
     await expect(ensureChatKey("u", "c", "k1")).rejects.toThrow("boom");
     await expect(ensureChatKey("u", "c", "k1")).resolves.toMatchObject({ keyId: "k1" });
     expect(storage.fetchChatKeyWraps).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("key versions", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    storage.getCachedChatKey.mockResolvedValue(null);
+    storage.loadStoredIdentity.mockResolvedValue({ publicKey: "mine", secretKey: "secret" });
+    storage.cacheChatKey.mockResolvedValue(undefined);
+    storage.uploadChatKeyVersion.mockResolvedValue(undefined);
+    crypto.unwrapChatKey.mockResolvedValue(new Uint8Array([1]));
+    crypto.wrapChatKey.mockImplementation(async ({ keyId }: { keyId: string }) => ({ keyId, wrapped: true }));
+    crypto.encryptMessage.mockImplementation(async ({ keyId }: { keyId: string }) => ({
+      v: 1,
+      alg: "aes256gcm-chat-key",
+      keyId,
+      nonce: "n",
+      ciphertext: "c",
+    }));
+  });
+
+  it("decrypts with exactly the version named by the message", async () => {
+    storage.fetchChatKeyWraps.mockResolvedValue([wrap("old"), wrap("new")]);
+    await expect(ensureChatKey("u", "c", "old")).resolves.toMatchObject({ keyId: "old" });
+    expect(crypto.unwrapChatKey).toHaveBeenCalledWith(expect.objectContaining({ wrap: { keyId: "old" } }));
+  });
+
+  it("refetches wraps for an unknown key id and finds the new version", async () => {
+    storage.fetchChatKeyWraps
+      .mockResolvedValueOnce([wrap("old")])
+      .mockResolvedValueOnce([wrap("old"), wrap("new")]);
+    await expect(ensureChatKey("u", "c", "new")).resolves.toMatchObject({ keyId: "new" });
+    expect(storage.fetchChatKeyWraps).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not fall back to another version when the message version is missing", async () => {
+    storage.fetchChatKeyWraps.mockResolvedValue([wrap("old")]);
+    await expect(ensureChatKey("u", "c", "missing")).rejects.toBeInstanceOf(ChatKeyUnavailableError);
+    expect(crypto.unwrapChatKey).not.toHaveBeenCalled();
+  });
+
+  it("reports a wrap that the identity cannot open as unavailable", async () => {
+    storage.fetchChatKeyWraps.mockResolvedValue([wrap("old")]);
+    crypto.unwrapChatKey.mockRejectedValue(new Error("bad tag"));
+    await expect(ensureChatKey("u", "c", "old")).rejects.toBeInstanceOf(ChatKeyUnavailableError);
+  });
+
+  it("keeps non-key errors distinct", async () => {
+    storage.fetchChatKeyWraps.mockRejectedValue(new Error("network"));
+    const error = await ensureChatKey("u", "c").catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(ChatKeyUnavailableError);
+  });
+
+  it("adds a new key version for every member and sends with it when the newest wrap cannot be opened", async () => {
+    storage.fetchChatKeyWraps.mockResolvedValue([wrap("old")]);
+    crypto.unwrapChatKey.mockRejectedValue(new Error("bad tag"));
+    chats.getChatMembers.mockResolvedValue([{ id: "u" }, { id: "bob" }]);
+    storage.fetchIdentityPublicKey.mockResolvedValue({ publicKey: "bobs" });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const serialized = await encryptOutgoingMessage({ plaintext: "hi", chatId: "c", senderUserId: "u" });
+
+    expect(storage.fetchIdentityPublicKey).toHaveBeenCalledTimes(1);
+    expect(storage.fetchIdentityPublicKey).toHaveBeenCalledWith("bob");
+    expect(storage.uploadChatKeyVersion).toHaveBeenCalledTimes(1);
+    const [chatId, keyId, wraps] = storage.uploadChatKeyVersion.mock.calls[0];
+    expect(chatId).toBe("c");
+    expect(wraps.map((item: { userId: string }) => item.userId)).toEqual(["u", "bob"]);
+    expect(keyId).not.toBe("old");
+    expect(storage.cacheChatKey).toHaveBeenCalledWith("u", "c", keyId, expect.any(Uint8Array));
+    expect(JSON.parse(serialized).keyId).toBe(keyId);
+  });
+
+  it("does not add a key version when the newest wrap opens", async () => {
+    storage.fetchChatKeyWraps.mockResolvedValue([wrap("old"), wrap("new")]);
+    const serialized = await encryptOutgoingMessage({ plaintext: "hi", chatId: "c", senderUserId: "u" });
+    expect(storage.uploadChatKeyVersion).not.toHaveBeenCalled();
+    expect(JSON.parse(serialized).keyId).toBe("new");
+  });
+
+  it("does not add a key version after a network failure", async () => {
+    storage.fetchChatKeyWraps.mockRejectedValue(new Error("network"));
+    await expect(
+      encryptOutgoingMessage({ plaintext: "hi", chatId: "c", senderUserId: "u" }),
+    ).rejects.toThrow("network");
+    expect(storage.uploadChatKeyVersion).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,7 @@ import {
 import { base64UrlToBytes, bytesToBase64Url } from "@/lib/e2ee/encoding";
 import { API_V1 } from "@/lib/api";
 import { authHeaders } from "@/lib/auth";
-import type { ChatKeyWrapResponse, IdentityPublicKey } from "@/lib/e2ee/types";
+import type { ChatKeyWrap, ChatKeyWrapResponse, IdentityPublicKey } from "@/lib/e2ee/types";
 
 const IDENTITY_STORAGE_PREFIX = "e2ee_identity_v1";
 
@@ -119,6 +119,28 @@ export async function fetchChatKeyWraps(chatId: string): Promise<ChatKeyWrapResp
 
   const data = (await response.json()) as { wraps?: ChatKeyWrapResponse[] };
   return data.wraps ?? [];
+}
+
+export async function uploadChatKeyVersion(
+  chatId: string,
+  keyId: string,
+  wraps: { userId: string; wrap: ChatKeyWrap }[],
+): Promise<void> {
+  const response = await fetch(`${API_V1}/chat/${chatId}/key-wraps`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      key_id: keyId,
+      wraps: wraps.map((item) => ({ user_id: item.userId, wrap: item.wrap })),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("failed to upload chat key version");
+  }
 }
 
 const chatKeyCache = new Map<string, string>();

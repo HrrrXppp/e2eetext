@@ -87,6 +87,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB
 	mux.Handle("PUT /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.PutIdentityKey))))
 	mux.Handle("GET /api/v1/user/{nodeId}/{localId}/identity-key", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.GetIdentityKey))))
 	mux.Handle("GET /api/v1/chat/{nodeId}/{localId}/key-wraps", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.ListKeyWraps))))
+	mux.Handle("POST /api/v1/chat/{nodeId}/{localId}/key-wraps", requireAuth(defaultLimit(http.HandlerFunc(e2eeHandler.AddKeyVersion))))
 
 	messageHandler := handler.NewMessageHandler(messageService, chatRepo, hub, nodeRegistry)
 	mux.Handle("GET /api/v1/message", requireAuth(messageLimit(http.HandlerFunc(messageHandler.List))))

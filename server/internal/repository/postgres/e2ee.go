@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ekhrunov/messenger/server/internal/domain"
 	"github.com/ekhrunov/messenger/server/internal/repository"
@@ -123,8 +126,7 @@ func (r *E2EERepository) ListKeyWrapsForUser(ctx context.Context, chatID, userID
 		SELECT chat_id, key_id, user_id, wrap, created_at
 		FROM user_chat_key_wraps
 		WHERE chat_id = $1 AND user_id = $2
-		ORDER BY created_at DESC
-		LIMIT 1`, chatID, userID)
+		ORDER BY created_at ASC, key_id ASC`, chatID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list key wraps: %w", err)
 	}
@@ -143,4 +145,35 @@ func (r *E2EERepository) ListKeyWrapsForUser(ctx context.Context, chatID, userID
 	}
 
 	return wraps, nil
+}
+
+func (r *E2EERepository) AddKeyVersion(ctx context.Context, chatID, keyID, createdBy string, wraps map[string]json.RawMessage) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin add key version tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chat_key_versions (id, chat_id, created_by)
+		VALUES ($1, $2, $3)`, keyID, chatID, createdBy); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return repository.ErrKeyVersionExists
+		}
+		return fmt.Errorf("insert chat key version: %w", err)
+	}
+
+	for userID, wrap := range wraps {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO user_chat_key_wraps (chat_id, key_id, user_id, wrap)
+			VALUES ($1, $2, $3, $4)`, chatID, keyID, userID, wrap); err != nil {
+			return fmt.Errorf("insert chat key wrap: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit add key version tx: %w", err)
+	}
+	return nil
 }

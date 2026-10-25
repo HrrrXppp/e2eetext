@@ -10,6 +10,7 @@ import {
   unwrapChatKey,
   wrapChatKey,
 } from "@/lib/e2ee/crypto";
+import { getChatMembers } from "@/lib/chats";
 import {
   cacheChatKey,
   fetchChatKeyWraps,
@@ -17,6 +18,7 @@ import {
   getCachedChatKey,
   loadStoredIdentity,
   saveStoredIdentity,
+  uploadChatKeyVersion,
   uploadIdentityKey,
 } from "@/lib/e2ee/storage";
 import type { ChatKeyWrap, StoredIdentity } from "@/lib/e2ee/types";
@@ -65,15 +67,23 @@ export async function prepareE2EEChatCreation(input: {
     });
   }
 
+  return createWrappedChatKey(input.memberUserIds, input.currentUserId, identity);
+}
+
+async function createWrappedChatKey(
+  memberUserIds: string[],
+  currentUserId: string,
+  identity: StoredIdentity,
+): Promise<{ keyId: string; chatKey: Uint8Array; wraps: { userId: string; wrap: ChatKeyWrap }[] }> {
   const keyId = newKeyId();
   const chatKey = generateChatKey();
   const wraps: { userId: string; wrap: ChatKeyWrap }[] = [];
 
-  for (const userId of input.memberUserIds) {
+  for (const userId of memberUserIds) {
+    // Always the member's current public key (fetched now), never a cached one:
+    // a member who regenerated their identity must get a wrap they can open.
     const publicKey =
-      userId === input.currentUserId
-        ? toIdentityPublicKey(identity)
-        : await fetchIdentityPublicKey(userId);
+      userId === currentUserId ? toIdentityPublicKey(identity) : await fetchIdentityPublicKey(userId);
     const wrap = await wrapChatKey({
       chatKey,
       keyId,
@@ -84,6 +94,19 @@ export async function prepareE2EEChatCreation(input: {
 
   return { keyId, chatKey, wraps };
 }
+
+/**
+ * The chat key (or the key version a message was encrypted with) cannot be opened with the identity on this
+ * device, for example because the identity was regenerated after the key was wrapped.
+ */
+export class ChatKeyUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "ChatKeyUnavailableError";
+  }
+}
+
+export const PREVIOUS_KEY_PLACEHOLDER = "Message encrypted with a previous key";
 
 // In-flight de-duplication. Opening a chat decrypts every message in parallel
 // before any of them has populated the key cache, so without this each message
@@ -131,20 +154,56 @@ async function resolveChatKey(
     throw new Error("missing identity keys");
   }
 
-  const wraps = await dedupe(inflightWraps, `${userId}:${chatId}`, () => fetchChatKeyWraps(chatId));
+  let wraps = await dedupe(inflightWraps, `${userId}:${chatId}`, () => fetchChatKeyWraps(chatId));
+  if (preferredKeyId && !wraps.some((item) => item.keyId === preferredKeyId)) {
+    // A key version added after the first fetch (another member rotated the key). The shared in-flight result may
+    // predate it, so look again with a separate request before giving up.
+    wraps = await dedupe(inflightWraps, `${userId}:${chatId}:refresh`, () => fetchChatKeyWraps(chatId));
+  }
   if (wraps.length === 0) {
     throw new Error("chat key wraps not found");
   }
 
+  // A message names its key version, so decrypting uses exactly that version; only sending (no keyId) falls back
+  // to the newest one (the list is ordered oldest first).
   const selected = preferredKeyId
-    ? wraps.find((item) => item.keyId === preferredKeyId) ?? wraps[wraps.length - 1]
+    ? wraps.find((item) => item.keyId === preferredKeyId)
     : wraps[wraps.length - 1];
-  const chatKey = await unwrapChatKey({
-    wrap: selected.wrap,
-    identity,
-  });
+  if (!selected) {
+    throw new ChatKeyUnavailableError(`chat key version ${preferredKeyId} is not available`);
+  }
+
+  let chatKey: Uint8Array;
+  try {
+    chatKey = await unwrapChatKey({ wrap: selected.wrap, identity });
+  } catch (error) {
+    throw new ChatKeyUnavailableError("chat key cannot be opened with the identity on this device", {
+      cause: error,
+    });
+  }
   await cacheChatKey(userId, chatId, selected.keyId, chatKey);
   return { keyId: selected.keyId, chatKey };
+}
+
+/**
+ * Adds a new chat key version wrapped for every current member's current public key and uploads it. Older
+ * versions and wraps are untouched, so members whose keys did not change keep reading older messages.
+ */
+async function rotateChatKey(userId: string, chatId: string): Promise<{ keyId: string; chatKey: Uint8Array }> {
+  const identity = await loadStoredIdentity(userId);
+  if (!identity) {
+    throw new Error("missing identity keys");
+  }
+
+  const members = await getChatMembers(chatId);
+  const created = await createWrappedChatKey(
+    members.map((member) => member.id),
+    userId,
+    identity,
+  );
+  await uploadChatKeyVersion(chatId, created.keyId, created.wraps);
+  await cacheChatKey(userId, chatId, created.keyId, created.chatKey);
+  return { keyId: created.keyId, chatKey: created.chatKey };
 }
 
 export async function encryptOutgoingMessage(input: {
@@ -153,7 +212,17 @@ export async function encryptOutgoingMessage(input: {
   senderUserId: string;
   keyId?: string;
 }): Promise<string> {
-  const { keyId, chatKey } = await ensureChatKey(input.senderUserId, input.chatId, input.keyId);
+  let resolved: { keyId: string; chatKey: Uint8Array };
+  try {
+    resolved = await ensureChatKey(input.senderUserId, input.chatId, input.keyId);
+  } catch (error) {
+    if (input.keyId || !(error instanceof ChatKeyUnavailableError)) {
+      throw error;
+    }
+    console.error("chat key unavailable on this device, adding a new key version", error);
+    resolved = await rotateChatKey(input.senderUserId, input.chatId);
+  }
+  const { keyId, chatKey } = resolved;
   const envelope = await encryptMessage({
     plaintext: input.plaintext,
     keyId,

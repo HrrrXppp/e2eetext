@@ -16,6 +16,9 @@ import (
 var ErrIdentityKeyNotFound = errors.New("identity key not found")
 var ErrE2EEAccessDenied = errors.New("e2ee access denied")
 
+// ErrKeyVersionExists is returned when a new chat key version reuses an existing key id.
+var ErrKeyVersionExists = repository.ErrKeyVersionExists
+
 type E2EEService struct {
 	repo             repository.E2EERepository
 	chatRepo         repository.ChatRepository
@@ -184,4 +187,61 @@ func (s *E2EEService) ListKeyWraps(ctx context.Context, chatID string, tokenUser
 	}
 
 	return s.repo.ListKeyWrapsForUser(ctx, chatID, currentUserID)
+}
+
+// AddKeyVersion adds a new chat key version with one wrap per current chat member. Existing versions and wraps are
+// kept, so members holding older wraps keep reading older messages. The caller must be a chat member.
+func (s *E2EEService) AddKeyVersion(ctx context.Context, chatID, keyID string, wraps []ChatKeyWrapInput, tokenUser TokenUser) error {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return fmt.Errorf("chat_id is required")
+	}
+	keyID = strings.TrimSpace(keyID)
+	if keyID == "" {
+		return fmt.Errorf("key_id is required")
+	}
+
+	currentUserID, err := ResolveCurrentUserID(ctx, tokenUser, s.userRepo, s.oidcProviderRepo)
+	if err != nil {
+		return err
+	}
+	if err := requireUserBelongsToChat(ctx, s.chatRepo, chatID, currentUserID, ErrE2EEAccessDenied); err != nil {
+		return err
+	}
+
+	members, err := s.chatRepo.ListMembers(ctx, chatID)
+	if err != nil {
+		return err
+	}
+	memberIDs := make([]string, 0, len(members))
+	for _, member := range members {
+		memberIDs = append(memberIDs, member.ID)
+	}
+
+	if len(wraps) != len(memberIDs) {
+		return fmt.Errorf("wraps must include every chat member")
+	}
+
+	wrapsByUser := make(map[string]json.RawMessage, len(wraps))
+	for _, item := range wraps {
+		userID := strings.TrimSpace(item.UserID)
+		if userID == "" {
+			return fmt.Errorf("wrap user_id is required")
+		}
+		if !slices.Contains(memberIDs, userID) {
+			return fmt.Errorf("wrap user is not a chat member")
+		}
+		if len(item.Wrap) == 0 {
+			return fmt.Errorf("wrap is required")
+		}
+		if len(item.Wrap) > e2ee.MaxWrapJSONLen {
+			return fmt.Errorf("wrap is too large")
+		}
+		if _, exists := wrapsByUser[userID]; exists {
+			return fmt.Errorf("duplicate wrap for user")
+		}
+		wrapsByUser[userID] = item.Wrap
+	}
+
+	return s.repo.AddKeyVersion(ctx, chatID, keyID, currentUserID, wrapsByUser)
 }
