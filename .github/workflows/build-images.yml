@@ -71,29 +71,20 @@ jobs:
         id: exists
         if: steps.version.outputs.build == 'true' && github.ref_name == 'main' && inputs.force != true
         run: |
-          missing=0
-          for repo in e2eetext-server; do
-            if out="$(aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$IMAGE_TAG" 2>&1)"; then
-              echo "$repo:$IMAGE_TAG already exists in ECR."
-            elif echo "$out" | grep -q ImageNotFoundException; then
-              echo "$repo:$IMAGE_TAG not found in ECR."
-              missing=1
-            else
-              echo "$out"
-              exit 1
-            fi
-          done
-          if [ "$missing" = "0" ]; then
-            echo "The server image already exists; not overwriting a released tag."
+          if out="$(aws ecr describe-images --repository-name e2eetext-server --image-ids imageTag="$IMAGE_TAG" 2>&1)"; then
+            echo "e2eetext-server:$IMAGE_TAG already exists in ECR; not overwriting a released tag."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q ImageNotFoundException; then
+            echo "e2eetext-server:$IMAGE_TAG not found in ECR."
+          else
+            echo "$out"
+            exit 1
           fi
 
       - name: Build and push
         if: steps.version.outputs.build == 'true' && steps.exists.outputs.skip != 'true'
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          # The client is published as static files by deploy-client.yml.
-          BUILD_CLIENT: "false"
         run: |
           AWS_ACCOUNT_ID="$(echo "${{ secrets.AWS_ROLE_ARN }}" | cut -d: -f5)"
           export AWS_ACCOUNT_ID

@@ -14,11 +14,11 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 ### Added
 
 - The client can be served as static files from a private S3 bucket behind CloudFront instead of a container on the EC2 instance (#28). The new `terraform/modules/static-site` module creates the bucket, an origin access control, a CloudFront distribution with a us-east-1 ACM certificate for the public hostnames, and a CloudFront Function that sends extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `index.html`. The same distribution forwards `/api/*` (including the WebSocket), `/health`, `/sitemap.xml` and `/robots.txt` to the existing ALB with caching off, so the browser still talks to one host. `terraform/envs/dev` and `terraform/envs/prod` instantiate it. The staged cutover leaves the ALB client rules and the EC2 client container in place until DNS is switched; a follow-up removes them.
-- `.github/workflows/deploy-client.yml` (manual) builds `client/dist`, uploads it with long-lived caching for hashed assets and `no-cache` for `index.html`, writes the dev or prod `instance.json`, and invalidates `/index.html` and `/instance.json`. Files go to a directory named after the client version (`vX.Y.Z` from `main`, the short commit otherwise), and CloudFront serves that directory through the S3 origin path, set by `static_site_client_version` in `terraform/envs/dev` and `terraform/envs/prod`. A new release is switched on by changing that variable and applying. Old directories are deleted by hand.
+- `.github/workflows/deploy-client.yml` builds `client/dist`, uploads it with long-lived caching for hashed assets and `no-cache` for `index.html`, writes the dev or prod `instance.json`, and invalidates `/index.html` and `/instance.json`. It starts by itself when a version bump lands on `main` (uploading to dev) and can be run by hand for dev or prod. Files go to a directory named after the client version (`vX.Y.Z` from `main`, the short commit otherwise), and CloudFront serves that directory through the S3 origin path, set by `static_site_client_version` in `terraform/envs/dev` and `terraform/envs/prod`. A new release is switched on by changing that variable and applying. Old directories are deleted by hand.
 
 ### Changed
 
-- `build-images.yml` no longer builds or pushes the `e2eetext-client` image, and its "already exists" check looks at `e2eetext-server` only. `maintenance/ecr/build-and-push.sh` still builds both for local runs unless `BUILD_CLIENT=false` is set.
+- `build-images.yml` no longer builds or pushes the `e2eetext-client` image, and its "already exists" check looks at `e2eetext-server` only. `maintenance/ecr/build-and-push.sh` builds and pushes the server image only.
 
 #### Tooling & deployment
 
