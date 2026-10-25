@@ -206,6 +206,7 @@ resource "aws_cloudfront_distribution" "this" {
   origin {
     origin_id                = local.s3_origin_id
     domain_name              = aws_s3_bucket.this.bucket_regional_domain_name
+    origin_path              = var.client_version == "" ? null : "/${var.client_version}"
     origin_access_control_id = aws_cloudfront_origin_access_control.this.id
   }
 

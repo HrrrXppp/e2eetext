@@ -40,6 +40,12 @@ variable "alb_path_patterns" {
   type        = list(string)
 }
 
+variable "client_version" {
+  description = "Directory in the bucket that CloudFront serves the client from (the image-style tag, for example \"v0.4.1\"), set as the S3 origin path. deploy-client.yml uploads each release to its own directory; change this to the new tag and apply to switch releases. Empty serves the bucket root."
+  type        = string
+  default     = ""
+}
+
 variable "price_class" {
   description = "CloudFront price class."
   type        = string
