@@ -8,7 +8,12 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { fetchChats, type Chat } from "@/lib/chats";
-import { decryptIncomingMessage, encryptOutgoingMessage } from "@/lib/e2ee/session";
+import {
+  ChatKeyUnavailableError,
+  decryptIncomingMessage,
+  encryptOutgoingMessage,
+  PREVIOUS_KEY_PLACEHOLDER,
+} from "@/lib/e2ee/session";
 import { createMessage, fetchMessages, markMessageRead, type Message } from "@/lib/messages";
 import { filterActiveMessages } from "@/lib/disappear";
 import { NOTIFICATION_CHAT_SELECT_EVENT, notifyNewMessage } from "@/lib/notifications";
@@ -73,7 +78,11 @@ export function ChatsPage() {
                 ...message,
                 data: await decryptIncomingMessage(message, viewerUserId),
               };
-            } catch {
+            } catch (error) {
+              if (error instanceof ChatKeyUnavailableError) {
+                return { ...message, data: PREVIOUS_KEY_PLACEHOLDER };
+              }
+              console.error("decrypt message failed", error);
               return { ...message, data: "Error decrypt message" };
             }
           }),
@@ -265,7 +274,8 @@ export function ChatsPage() {
               new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
           ),
       );
-    } catch {
+    } catch (error) {
+      console.error("send message failed", error);
       setSendError("Could not send message. Try again.");
     } finally {
       setSending(false);

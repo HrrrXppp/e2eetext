@@ -154,6 +154,10 @@ func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, user
 	return s.chatRepo.Create(ctx, name, userIDs, disappearAfterMinutes, createdBy)
 }
 
+func (s *stubE2EERepo) AddKeyVersion(context.Context, string, string, string, map[string]json.RawMessage) error {
+	return nil
+}
+
 func (s *stubE2EERepo) ListKeyWrapsForUser(context.Context, string, string) ([]domain.UserChatKeyWrap, error) {
 	return nil, nil
 }

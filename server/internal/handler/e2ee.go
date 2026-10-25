@@ -130,3 +130,59 @@ func (h *E2EEHandler) ListKeyWraps(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"wraps": items})
 }
+
+type addKeyVersionRequest struct {
+	KeyID string              `json:"key_id"`
+	Wraps []createChatKeyWrap `json:"wraps"`
+}
+
+// AddKeyVersion lets a chat member add a new chat key version with a wrap for every member.
+func (h *E2EEHandler) AddKeyVersion(w http.ResponseWriter, r *http.Request) {
+	tokenUser, ok := service.TokenUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return
+	}
+
+	chatID, err := h.node.LocalID(scopedIDFromPath(r))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req addKeyVersionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	wraps := make([]service.ChatKeyWrapInput, 0, len(req.Wraps))
+	for _, item := range req.Wraps {
+		userID, wrapErr := h.node.LocalID(strings.TrimSpace(item.UserID))
+		if wrapErr != nil {
+			writeError(w, http.StatusBadRequest, wrapErr)
+			return
+		}
+		wraps = append(wraps, service.ChatKeyWrapInput{UserID: userID, Wrap: item.Wrap})
+	}
+
+	if err := h.service.AddKeyVersion(r.Context(), chatID, req.KeyID, wraps, tokenUser); err != nil {
+		switch {
+		case errors.Is(err, service.ErrE2EEAccessDenied):
+			writeError(w, http.StatusForbidden, err)
+		case errors.Is(err, service.ErrKeyVersionExists):
+			writeError(w, http.StatusConflict, err)
+		case strings.Contains(err.Error(), "is required"),
+			strings.Contains(err.Error(), "wraps must include"),
+			strings.Contains(err.Error(), "not a chat member"),
+			strings.Contains(err.Error(), "too large"),
+			strings.Contains(err.Error(), "duplicate"):
+			writeError(w, http.StatusBadRequest, err)
+		default:
+			writeError(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
