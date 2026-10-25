@@ -297,7 +297,7 @@ Chat-level TTL only. Column `chats.disappear_after_minutes` (API `disappearAfter
 There is no per-message `expires_at`. Changing a chat’s TTL retargets existing messages.
 
 - **List / unread** — unchanged queries; expired rows are removed by purge.
-- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose and RDS Terraform both set `cron.database_name` to the app DB; on RDS enable `shared_preload_libraries=pg_cron` via a custom parameter group and reboot the instance after apply before migrating.
+- **Purge** — migration `000006_disappear` creates `purge_expired_messages()` and schedules it with **`pg_cron`** every minute. Local Compose and RDS Terraform both set `cron.database_name` to the app DB; on RDS enable `shared_preload_libraries=pg_cron` via a custom parameter group and reboot the instance after apply before migrating. Migration `000009_purge_key_versions` extends it: after deleting expired messages it also deletes every chat key version (and, by cascade, its wraps) that no remaining message names in its envelope `keyId`, except each chat's newest version, so members can still send into a chat whose messages have all expired.
 - **Client** — default 60-day TTL on create; countdown from `createdAt` + chat TTL; local drop on a timer.
 
 ## Browser notifications
