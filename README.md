@@ -174,7 +174,7 @@ The release version lives in the repo-root `VERSION` file (currently semver, e.g
 
 Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Record user-facing release notes in [`CHANGELOG.md`](./CHANGELOG.md). On feature branches, use a **`NEXT RELEASE`** section until the change is merged to `main` and versioned.
 
-**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes `e2eetext-server` and `e2eetext-client` tagged `vX.Y.Z`. It fails if `client/package.json` doesn't match `VERSION` (the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if both images already exist in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
+**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes the `e2eetext-server` image tagged `vX.Y.Z` (the client is no longer built as an image there: it is published as static files, see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). It fails if `client/package.json` doesn't match `VERSION` (the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if the server image already exists in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
 
 ## API
 
@@ -722,22 +722,23 @@ The client is plain static files, so it does not need a running container. [#28]
 
 ```
 Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
-              ├─ /assets/*                    → S3 (hashed files, cached one year)
+              ├─ /assets/*                    → S3 <version>/assets/ (hashed files, cached one year)
               ├─ /api/*, /health, /sitemap.xml,
               │  /robots.txt                  → ALB → EC2:8081 → server (no cache, Host header and all cookies/query strings forwarded)
-              └─ everything else              → S3 (index.html, ads.txt, instance.json)
+              └─ everything else              → S3 <version>/ (index.html, ads.txt, instance.json)
 ```
 
 - **SPA routes.** A CloudFront Function rewrites extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `/index.html`. Paths with a file extension are not rewritten, and the ALB paths never run the function, so an unknown API path still returns the server's own 404.
 - **One host.** The browser keeps talking to one hostname, so there are no CORS or cookie changes. WebSocket upgrades on `/api/v1/ws` work through CloudFront. The viewer `Host` is forwarded to the ALB, so the server still builds the sitemap for the requested host and the ALB certificate must cover the public hostnames (it already does).
-- **Caching.** `/assets/*` is uploaded with `max-age=31536000, immutable`. `index.html`, `ads.txt` and `instance.json` are uploaded with `no-cache`, so a deploy only needs to invalidate `/index.html`.
+- **Versioned directories.** Each release is uploaded to its own directory in the bucket, named like the client image tag it replaces: `vX.Y.Z` when published from `main`, the short commit otherwise. CloudFront serves one of them through the S3 origin path, set by `static_site_client_version` in `terraform/envs/dev` and `terraform/envs/prod`. Publishing a release does not change what visitors get: set the variable to the new directory and `terraform apply` to switch (and to roll back). Old directories are not deleted automatically; remove them from the bucket by hand once they are no longer needed.
+- **Caching.** `/assets/*` is uploaded with `max-age=31536000, immutable`. `index.html`, `ads.txt` and `instance.json` are uploaded with `no-cache`, so the files that keep their name are always revalidated.
 - **`instance.json`** (the dev banner) is an S3 object written at publish time from `maintenance/ec2/config/instance.development.example.json` (dev) or `instance.production.example.json` (prod). No bind mount is involved.
 - **Certificate.** CloudFront only accepts certificates from `us-east-1`. Leave `static_site_certificate_arn` empty and `terraform apply` requests one for `static_site_aliases` (dev: `dev.e2eetext.com`; prod: `e2eetext.com`, `.org`, `.net`, `.io`). This account has no Route 53 zones, so while apply waits (up to 45 minutes) add the CNAMEs from output `static_site_certificate_dns_validation` at the DNS host.
 - **Buckets.** Defaults are `e2eetext-dev-static-site` and `e2eetext-prod-static-site` (`static_site_bucket_name` in each env). Bucket names are global, so change them if taken, and keep `static_site_bucket_names` in `terraform/envs/shared` identical so the GitHub Actions role can upload to them. Apply `envs/shared` first; it also grants `cloudfront:CreateInvalidation` and gives the plan role read access.
 
 ### Publishing the client
 
-Run **Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) from the Actions tab and pick `dev` or `prod` (prod runs from `main` only). It builds `client/dist`, syncs hashed assets, then the remaining files, writes `instance.json`, and invalidates `/index.html`. It assumes the existing `AWS_ROLE_ARN` role and needs four more repository secrets, taken from the Terraform outputs `static_site_bucket_name` and `static_site_distribution_id`:
+Run **Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) from the Actions tab and pick `dev` or `prod` (prod runs from `main` only). It builds `client/dist`, syncs hashed assets, then the remaining files, and writes `instance.json`, all into the `vX.Y.Z` (or short-commit) directory, then invalidates `/index.html` and `/instance.json`. The run summary prints the directory name to put in `static_site_client_version`. It assumes the existing `AWS_ROLE_ARN` role and needs four more repository secrets, taken from the Terraform outputs `static_site_bucket_name` and `static_site_distribution_id`:
 
 `STATIC_SITE_BUCKET_DEV`, `STATIC_SITE_DISTRIBUTION_ID_DEV`, `STATIC_SITE_BUCKET_PROD`, `STATIC_SITE_DISTRIBUTION_ID_PROD`
 
@@ -746,9 +747,9 @@ Run **Deploy client (S3 + CloudFront)** (`.github/workflows/deploy-client.yml`) 
 The change is staged so nothing breaks while it is rolled out:
 
 1. Apply `envs/shared`, then `envs/dev` / `envs/prod`. The distribution is created next to the existing ALB client rules and EC2 client container, and DNS still points at the ALB.
-2. Run the publish workflow, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. API and WebSocket paths through that name fail certificate validation at the ALB because the `Host` is the `cloudfront.net` name, so test them on the real hostname after step 3 (or `curl --resolve`).
+2. Run the publish workflow, set `static_site_client_version` to the directory it printed and apply, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. API and WebSocket paths through that name fail certificate validation at the ALB because the `Host` is the `cloudfront.net` name, so test them on the real hostname after step 3 (or `curl --resolve`).
 3. Switch each public hostname's DNS (CNAME / ALIAS) to `static_site_domain_name` at the DNS host. Check `/sitemap.xml` and `/robots.txt` on every hostname, a WebSocket connection, and the dev banner.
-4. A follow-up change removes the client target group, its ALB rules and attachment, the client service in `maintenance/ec2/docker-compose.yml`, `client/Dockerfile`, `maintenance/ec2/docker-compose.frontend.yml`, the client ECR repository and the client image build. Until then those stay in place for rollback (point DNS back at the ALB).
+4. A follow-up change removes the client target group, its ALB rules and attachment, the client service in `maintenance/ec2/docker-compose.yml`, `client/Dockerfile`, `maintenance/ec2/docker-compose.frontend.yml`, the client ECR repository and the client build step in `maintenance/ecr/build-and-push.sh`. `build-images.yml` already stops building the client image, so a release after this change has no matching client image for the EC2 client container; use the previous tag for a rollback to it. Until the follow-up lands, the other pieces stay in place for rollback (point DNS back at the ALB).
 
 ## Infrastructure as code (Terraform)
 

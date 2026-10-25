@@ -1,7 +1,8 @@
 name: Deploy client (S3 + CloudFront)
 
 # Builds client/dist and publishes it to the environment's private S3 bucket
-# behind CloudFront (terraform/modules/static-site, #28). Run it by hand from
+# behind CloudFront (terraform/modules/static-site, #28), into a directory
+# named after the client version (vX.Y.Z). Run it by hand from
 # the Actions tab: it never runs on push, so a release stays an explicit step
 # (like deploy.sh on the EC2 host).
 
@@ -44,6 +45,17 @@ jobs:
 
       - uses: actions/checkout@v7
 
+      # Same tag the client image used to get: vX.Y.Z on main, the short
+      # commit otherwise. Each release lives in its own directory, so an old
+      # release stays in place until it is deleted by hand.
+      - name: Compute client version directory
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "CLIENT_TAG=v$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+          else
+            echo "CLIENT_TAG=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -63,19 +75,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Hashed bundle files first, so the new index.html never points at a
-      # file that is not uploaded yet. Vite's file names carry a content
-      # hash, so they can be cached for a year.
+      # Hashed bundle files first, so index.html never points at a file that
+      # is not uploaded yet. Vite's file names carry a content hash, so they
+      # can be cached for a year.
       - name: Upload hashed assets
         run: |
-          aws s3 sync client/dist/assets/ "s3://$BUCKET/assets/" --delete \
+          aws s3 sync client/dist/assets/ "s3://$BUCKET/$CLIENT_TAG/assets/" --delete \
             --cache-control "public,max-age=31536000,immutable"
 
       # Everything else (index.html, ads.txt, icons) has a stable name, so
       # CloudFront must revalidate it. instance.json is written below.
       - name: Upload index.html and other root files
         run: |
-          aws s3 sync client/dist/ "s3://$BUCKET/" --delete \
+          aws s3 sync client/dist/ "s3://$BUCKET/$CLIENT_TAG/" --delete \
             --exclude "assets/*" --exclude "instance.json" \
             --cache-control "no-cache"
 
@@ -88,10 +100,21 @@ jobs:
           else
             src=maintenance/ec2/config/instance.development.example.json
           fi
-          aws s3 cp "$src" "s3://$BUCKET/instance.json" \
+          aws s3 cp "$src" "s3://$BUCKET/$CLIENT_TAG/instance.json" \
             --cache-control "no-cache" --content-type "application/json"
 
-      - name: Invalidate index.html
+      # CloudFront serves the directory named by the distribution's origin
+      # path (Terraform variable static_site_client_version), so uploading
+      # does not change what visitors get. Invalidating the stable-name files
+      # covers re-publishing the version that is already live.
+      - name: Invalidate index.html and instance.json
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "$DISTRIBUTION_ID" --paths "/index.html"
+            --distribution-id "$DISTRIBUTION_ID" --paths "/index.html" "/instance.json"
+
+      - name: Next step
+        run: |
+          echo "Uploaded to s3://$BUCKET/$CLIENT_TAG/."
+          echo "To serve it, set static_site_client_version = \"$CLIENT_TAG\" in terraform/envs/$TARGET_ENV and apply."
+          echo "### Client uploaded" >> "$GITHUB_STEP_SUMMARY"
+          echo "Directory: \`$CLIENT_TAG\`. Set \`static_site_client_version = \"$CLIENT_TAG\"\` in terraform/envs/$TARGET_ENV and apply to serve it." >> "$GITHUB_STEP_SUMMARY"
