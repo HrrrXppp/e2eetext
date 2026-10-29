@@ -1,2 +1,1 @@
-# Placeholder. After AdSense approval replace with the publisher line, e.g.
-# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+google.com, pub-8559868695202171, DIRECT, f08c47fec0942fa0
