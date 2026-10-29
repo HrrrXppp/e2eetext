@@ -1,10 +1,9 @@
 import path from "node:path";
 import { readFileSync } from "node:fs";
-import type { Plugin, ProxyOptions } from "vite";
+import type { ProxyOptions } from "vite";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const ADSENSE_CLIENT = "ca-pub-8559868695202171";
 const API_TARGET = "http://localhost:8080";
 const appVersion = readFileSync(path.resolve(__dirname, "../VERSION"), "utf8").trim();
 
@@ -32,29 +31,13 @@ function apiProxyEntry(extra?: ProxyOptions): ProxyOptions {
   };
 }
 
-function adsensePlugin(enabled: boolean): Plugin {
-  return {
-    name: "adsense-production",
-    transformIndexHtml(html) {
-      if (!enabled) {
-        return html;
-      }
-
-      return html.replace(
-        "</head>",
-        `    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}" crossorigin="anonymous"></script>\n  </head>`,
-      );
-    },
-  };
-}
-
 const apiProxy = {
   "/api": apiProxyEntry({ secure: false, ws: true }),
   "/health": apiProxyEntry(),
 };
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), adsensePlugin(mode === "production")],
+export default defineConfig({
+  plugins: [react()],
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
   },
@@ -77,4 +60,4 @@ export default defineConfig(({ mode }) => ({
     // e2e/ holds Playwright specs (run via `npm run test:e2e`), not Vitest ones.
     exclude: ["**/node_modules/**", "e2e/**"],
   },
-}));
+});
