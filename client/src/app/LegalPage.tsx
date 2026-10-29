@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdSenseScript } from "@/components/ads/AdSenseScript";
 import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
@@ -13,6 +14,7 @@ export function LegalPage({
 }) {
   return (
     <>
+      <AdSenseScript />
       <SiteHeader />
       <main className="legal">
         <h1 className="legal__title">{title}</h1>

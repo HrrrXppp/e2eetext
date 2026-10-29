@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdSenseScript } from "@/components/ads/AdSenseScript";
 import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
@@ -44,7 +45,7 @@ const news = [
     dateTime: "2026-05-31",
     title: "E2EE Text project started",
     body:
-      "We have officially kicked off E2EE Text — End-To-End Encryption Text. The landing page is live while we build a web-based messenger with end-to-end encryption and post-quantum cryptography. Stay tuned for updates as development progresses.",
+      "E2EE Text — End-To-End Encryption Text — started as a web-based messenger. Messages are encrypted on the sender's device, and the server stores only ciphertext.",
   },
 ] as const;
 
@@ -87,6 +88,7 @@ function FeatureIcon({ name }: { name: (typeof features)[number]["icon"] }) {
 export function LandingPage() {
   return (
     <>
+      <AdSenseScript />
       <SiteHeader />
       <div className="landing">
         <div className="landing__backdrop" aria-hidden="true">
@@ -98,7 +100,7 @@ export function LandingPage() {
         <div className="landing__hero">
           <p className="landing__eyebrow">
             <span className="landing__eyebrow-dot" />
-            Coming soon
+            Available now
           </p>
           <h1 className="landing__title">
             <span className="landing__title-accent">E2EE</span> Text
@@ -118,6 +120,12 @@ export function LandingPage() {
             post-quantum cryptographic methods. Your conversations stay between
             you and your contacts—private by design, resilient against
             tomorrow&apos;s threats.
+          </p>
+          <p className="landing__description">
+            Sign in from this page. A message is encrypted in your browser
+            before it is sent, and the server stores only ciphertext, so it
+            cannot read the conversation. Each chat disappears its messages
+            after 60 days unless you choose a different time.
           </p>
           <ul className="landing__highlights">
             <li className="landing__highlight">
