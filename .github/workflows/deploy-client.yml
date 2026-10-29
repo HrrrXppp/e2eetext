@@ -111,10 +111,10 @@ jobs:
       # path (Terraform variable static_site_client_version), so uploading
       # does not change what visitors get. Invalidating the stable-name files
       # covers re-publishing the version that is already live.
-      - name: Invalidate index.html and instance.json
+      - name: Invalidate index.html, ads.txt, and instance.json
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "$DISTRIBUTION_ID" --paths "/index.html" "/instance.json"
+            --distribution-id "$DISTRIBUTION_ID" --paths "/index.html" "/ads.txt" "/instance.json"
 
       - name: Next step
         run: |
