@@ -157,7 +157,7 @@ test("an admin adds two users at once; they read new messages but not earlier on
     // Add both new members in one confirmation.
     await alicePage.getByRole("button", { name: `Chat settings for ${chatName}` }).click();
     for (const name of [carolName, daveName]) {
-      await alicePage.getByRole("button", { name: "Add members" }).click();
+      await alicePage.getByRole("button", { name: "Add members", exact: true }).click();
       await alicePage.getByPlaceholder("Name or user ID").fill(name);
       await alicePage.getByRole("button", { name: "Search", exact: true }).click();
       await alicePage.getByRole("button", { name: "Add", exact: true }).click();
