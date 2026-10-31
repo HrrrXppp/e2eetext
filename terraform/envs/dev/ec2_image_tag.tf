@@ -1,7 +1,22 @@
-# Git-pinned ECR IMAGE_TAG for the dig EC2 boot-deploy unit.
-# Edit this value and commit when dig should pull a different tag on boot.
-# Prod has its own pin: terraform/envs/prod/ec2_image_tag.tf
+# Image tags the dig EC2 boot-deploy association pulls.
+# Change a default and run terraform apply in this directory.
+# Apply updates the association, which logs into ECR and recreates the
+# container for that tag. Prod has its own pins: terraform/envs/prod/ec2_image_tag.tf
+#
+# ec2_boot_deploy_image_tag is the server container (e2eetext-server).
+# ec2_boot_deploy_client_image_tag is the client container still running
+# on the instance (e2eetext-client). New releases do not publish that
+# image; v0.4.1 is the newest tag in the registry. The CloudFront client
+# is static_site_client_version, not this tag.
 
-locals {
-  ec2_boot_deploy_image_tag = "v0.5.1"
+variable "ec2_boot_deploy_image_tag" {
+  description = "ECR tag for the dig e2eetext-server container. Apply pulls this tag onto the instance."
+  type        = string
+  default     = "v0.5.1"
+}
+
+variable "ec2_boot_deploy_client_image_tag" {
+  description = "ECR tag for the dig e2eetext-client container. Apply pulls this tag. Empty leaves the running client container unchanged. New releases do not publish this image; v0.4.1 is the newest tag."
+  type        = string
+  default     = "v0.4.1"
 }

@@ -1,0 +1,88 @@
+#!/bin/bash
+# Installed by the boot-deploy SSM document. Pulls the server tag and, when
+# set, the client tag from /etc/e2eetext/deploy.env. Those tags are association
+# parameters, so this file does not change when the tags change.
+set -euo pipefail
+
+REPO_ROOT='${repo_root}'
+ENV_FILE="$REPO_ROOT/maintenance/ec2/.env"
+DEPLOY_ENV=/etc/e2eetext/deploy.env
+COMPOSE="$REPO_ROOT/maintenance/ec2/docker-compose.yml"
+CLIENT_OVERRIDE=/etc/e2eetext/client-image.compose.yml
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Missing $ENV_FILE" >&2
+  exit 1
+fi
+if [ ! -f "$DEPLOY_ENV" ]; then
+  echo "Missing $DEPLOY_ENV" >&2
+  exit 1
+fi
+
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+# shellcheck disable=SC1090
+. "$DEPLOY_ENV"
+set +a
+
+: "$${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
+: "$${AWS_REGION:?AWS_REGION is required}"
+: "$${IMAGE_TAG:?IMAGE_TAG is required}"
+
+bash "$REPO_ROOT/maintenance/ec2/ecr-login.sh"
+
+compose_server() {
+  env -u IMAGE_TAG -u CLIENT_IMAGE_TAG docker compose \
+    --env-file "$ENV_FILE" \
+    --env-file "$DEPLOY_ENV" \
+    -f "$COMPOSE" \
+    "$@"
+}
+
+echo "Pulling e2eetext-server:$${IMAGE_TAG}"
+compose_server pull server
+compose_server up -d --no-deps server
+
+if [ -n "$${CLIENT_IMAGE_TAG:-}" ] && [ "$${CLIENT_IMAGE_TAG}" != "none" ]; then
+  printf 'services:\n  client:\n    image: %s.dkr.ecr.%s.amazonaws.com/e2eetext-client:%s\n' \
+    "$AWS_ACCOUNT_ID" "$AWS_REGION" "$CLIENT_IMAGE_TAG" >"$CLIENT_OVERRIDE"
+  echo "Pulling e2eetext-client:$${CLIENT_IMAGE_TAG}"
+  env -u IMAGE_TAG -u CLIENT_IMAGE_TAG docker compose \
+    --env-file "$ENV_FILE" \
+    --env-file "$DEPLOY_ENV" \
+    -f "$COMPOSE" \
+    -f "$CLIENT_OVERRIDE" \
+    pull client
+  env -u IMAGE_TAG -u CLIENT_IMAGE_TAG docker compose \
+    --env-file "$ENV_FILE" \
+    --env-file "$DEPLOY_ENV" \
+    -f "$COMPOSE" \
+    -f "$CLIENT_OVERRIDE" \
+    up -d --no-deps client
+fi
+
+attempts=60
+i=1
+while [ "$i" -le "$attempts" ]; do
+  id="$(compose_server ps -q server || true)"
+  if [ -n "$id" ]; then
+    status="$(docker inspect --format '{{.State.Status}}' "$id")"
+    health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id")"
+    if [ "$status" = "running" ] && [ "$health" = "healthy" ]; then
+      echo "Server is healthy."
+      exit 0
+    fi
+    if [ "$status" != "running" ] || [ "$health" = "unhealthy" ]; then
+      echo "Server status=$status health=$health" >&2
+      compose_server logs --no-color --tail=80 server || true
+      exit 1
+    fi
+  fi
+  i=$((i + 1))
+  sleep 5
+done
+
+echo "Server did not become healthy within $((attempts * 5)) seconds." >&2
+compose_server logs --no-color --tail=80 server || true
+exit 1

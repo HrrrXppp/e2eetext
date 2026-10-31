@@ -47,7 +47,13 @@ require_env() {
     exit 1
   fi
 
+  if [[ -z "${CLIENT_IMAGE_TAG:-}" ]]; then
+    CLIENT_IMAGE_TAG="$IMAGE_TAG"
+    export CLIENT_IMAGE_TAG
+  fi
+
   echo "Using IMAGE_TAG=$IMAGE_TAG"
+  echo "Using CLIENT_IMAGE_TAG=$CLIENT_IMAGE_TAG"
 }
 
 preflight() {

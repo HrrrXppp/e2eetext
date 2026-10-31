@@ -174,7 +174,7 @@ The release version lives in the repo-root `VERSION` file (currently semver, e.g
 
 Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Record user-facing release notes in [`CHANGELOG.md`](./CHANGELOG.md). On feature branches, use a **`NEXT RELEASE`** section until the change is merged to `main` and versioned.
 
-**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes the `e2eetext-server` image tagged `vX.Y.Z` (the client is no longer built as an image there: it is published as static files, see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). It fails if `client/package.json` doesn't match `VERSION` (the `terraform/envs/{dev,prod}/ec2_image_tag.tf` pins are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if the server image already exists in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
+**Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes the `e2eetext-server` image tagged `vX.Y.Z` (the client is no longer built as an image there: it is published as static files, see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). It fails if `client/package.json` doesn't match `VERSION` (the `ec2_boot_deploy_image_tag` variables in `terraform/envs/{dev,prod}/ec2_image_tag.tf` are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if the server image already exists in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
 
 ## API
 
@@ -626,22 +626,22 @@ IMAGE_TAG=latest bash maintenance/ec2/deploy.sh
 `terraform/envs/dev` and `terraform/envs/prod` manage boot deploy by default:
 
 - IAM instance profile with **AmazonEC2ContainerRegistryReadOnly** + **AmazonSSMManagedInstanceCore**
-- SSM Association installs `e2eetext.service` (ECR login → `compose pull` → `up` on every boot)
-- **`IMAGE_TAG` is git-pinned per environment** (dig and prod may differ):
+- SSM Association installs `e2eetext.service` (ECR login, then pull and recreate the server container, and the client container when its tag is set)
+- **Image tags are Terraform variables** in `terraform/envs/dev/ec2_image_tag.tf` and `terraform/envs/prod/ec2_image_tag.tf` (dig and prod may differ):
 
 ```hcl
-# dig — terraform/envs/dev/ec2_image_tag.tf
-locals {
-  ec2_boot_deploy_image_tag = "v0.5.1"
+variable "ec2_boot_deploy_image_tag" {
+  default = "v0.5.1" # e2eetext-server
 }
 
-# prod — terraform/envs/prod/ec2_image_tag.tf
-locals {
-  ec2_boot_deploy_image_tag = "v0.5.1"  # may differ from dig
+variable "ec2_boot_deploy_client_image_tag" {
+  default = "v0.4.1" # e2eetext-client; empty leaves that container unchanged
 }
 ```
 
-Edit the relevant `ec2_image_tag.tf`, commit, and `terraform apply` that env. Apply writes `/etc/e2eetext/deploy.env`, which overrides `maintenance/ec2/.env` for `IMAGE_TAG` only.
+`ec2_boot_deploy_image_tag` is the server container. `ec2_boot_deploy_client_image_tag` is the client container that is still on the instance. New releases publish the server image only, so the client container stays on the last tag that exists (`v0.4.1`) until that container is removed. The CloudFront copy of the client is `static_site_client_version`, a different variable.
+
+Change the default (or pass `-var`) and `terraform apply` that env. Apply updates the SSM association parameters. That update runs on the instance: it writes `/etc/e2eetext/deploy.env` and pulls those tags. The association waits up to 15 minutes for the server health check.
 
 On first launch (and on the SSM association, which runs the same script), the instance installs Docker, git, and the AWS CLI when those commands are missing, and `git clone`s `https://github.com/HrrrXppp/e2eetext.git` branch `main` into `/home/ec2-user/e2eetext` when that path is not already a checkout. An existing checkout is left as-is. `maintenance/ec2/.env`, `config/config.json`, and `config/instance.json` are gitignored, so they are still placed on the box by hand — without them `deploy.sh` exits and `start_now` fails until they exist. After the first apply attaches IAM, wait until the instance is SSM-managed before expecting the association to succeed. `user_data` stays `ignore_changes` for brownfield — dig is not replaced.
 
