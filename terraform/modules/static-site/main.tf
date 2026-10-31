@@ -11,7 +11,7 @@ locals {
   certificate_arn = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate_validation.this[0].certificate_arn
 
   # AWS managed policies (stable IDs).
-  cache_policy_disabled     = "4135ea2d-6df8-4a3f-a5cb-ea48d4aa5ae9" # Managed-CachingDisabled
+  cache_policy_disabled     = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
   origin_request_policy_all = "216adef6-5c7f-47e4-b989-5492eafa07d3" # Managed-AllViewer (forwards Host)
 
   alb_methods = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
