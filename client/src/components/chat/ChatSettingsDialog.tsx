@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { getChatMembers, removeMember, type Chat, type ChatMember } from "@/lib/chats";
-import { userLabel } from "@/lib/users";
+import { NewChatMemberSearch } from "@/components/chat/NewChatMemberSearch";
+import { addMembers, getChatMembers, removeMember, type Chat, type ChatMember } from "@/lib/chats";
+import { prepareAddMembers } from "@/lib/e2ee/session";
+import { userLabel, type User } from "@/lib/users";
 
 type ChatSettingsDialogProps = {
   chat: Chat;
@@ -15,13 +17,21 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [view, setView] = useState<"members" | "search">("members");
+  const [pending, setPending] = useState<User[]>([]);
+  const [adding, setAdding] = useState(false);
   const isAdmin = Boolean(chat.isAdmin);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
+      if (event.key !== "Escape") {
+        return;
       }
+      if (view === "search") {
+        setView("members");
+        return;
+      }
+      onClose();
     }
 
     document.addEventListener("keydown", handleKeyDown);
@@ -30,7 +40,7 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, view]);
 
   useEffect(() => {
     let active = true;
@@ -80,6 +90,27 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
     [chat.id],
   );
 
+  const handleSelect = useCallback((user: User) => {
+    setPending((current) => (current.some((item) => item.id === user.id) ? current : [...current, user]));
+    setView("members");
+  }, []);
+
+  const handleConfirmAdd = useCallback(async () => {
+    setAdding(true);
+    setError(null);
+    try {
+      const userIds = pending.map((user) => user.id);
+      const prepared = await prepareAddMembers(currentUserId, chat.id, userIds);
+      await addMembers(chat.id, userIds, prepared.keyId, prepared.wraps);
+      setPending([]);
+      setMembers(await getChatMembers(chat.id));
+    } catch (err) {
+      setError(addMembersErrorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  }, [chat.id, currentUserId, pending]);
+
   return (
     <div className="sign-in-dialog__backdrop" onClick={onClose}>
       <div
@@ -107,13 +138,22 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
           {isAdmin ? "Members of this chat. You can remove other members." : "Members of this chat."}
         </p>
 
-        {error ? (
+        {view === "search" ? (
+          <NewChatMemberSearch
+            currentUserId={currentUserId}
+            members={[...members, ...pending]}
+            onAddMember={handleSelect}
+            onBack={() => setView("members")}
+          />
+        ) : null}
+
+        {view === "search" ? null : error ? (
           <p className="new-chat-dialog__error" role="alert">
             {error}
           </p>
         ) : null}
 
-        {loading ? (
+        {view === "search" ? null : loading ? (
           <p className="new-chat-dialog__status">Loading members...</p>
         ) : (
           <ul className="chat-settings__members" aria-label="Chat members">
@@ -144,7 +184,61 @@ export function ChatSettingsDialog({ chat, currentUserId, onClose }: ChatSetting
             })}
           </ul>
         )}
+
+        {view === "members" && isAdmin && !loading ? (
+          <div className="chat-settings__add">
+            {pending.length > 0 ? (
+              <ul className="new-chat-dialog__member-list" aria-label="Members to add">
+                {pending.map((user) => (
+                  <li key={user.id} className="new-chat-dialog__member">
+                    <span>{userLabel(user.name, user.id)}</span>
+                    <button
+                      type="button"
+                      className="new-chat-dialog__remove"
+                      aria-label={`Do not add ${userLabel(user.name, user.id)}`}
+                      onClick={() => setPending((current) => current.filter((item) => item.id !== user.id))}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <button
+              type="button"
+              className="new-chat-dialog__submit"
+              disabled={adding}
+              onClick={() => setView("search")}
+            >
+              Add members
+            </button>
+            {pending.length > 0 ? (
+              <button
+                type="button"
+                className="new-chat-dialog__submit"
+                disabled={adding}
+                onClick={() => void handleConfirmAdd()}
+              >
+                {adding ? "Adding..." : `Add ${pending.length} ${pending.length === 1 ? "member" : "members"}`}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function addMembersErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  if (message === "chat admin required") {
+    return "Only chat admins can add members.";
+  }
+  if (message.startsWith("already a member")) {
+    return `Could not add members: ${message}.`;
+  }
+  if (message.startsWith("identity key not found for ")) {
+    return `Could not add members: ${message}. They need to sign in once first.`;
+  }
+  return "Could not add members. Try again.";
 }
