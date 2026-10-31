@@ -33,8 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
-      BUCKET: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_BUCKET_PROD || secrets.STATIC_SITE_BUCKET_DEV }}
-      DISTRIBUTION_ID: ${{ inputs.environment == 'prod' && secrets.STATIC_SITE_DISTRIBUTION_ID_PROD || secrets.STATIC_SITE_DISTRIBUTION_ID_DEV }}
+      # Each secret must be assigned on its own. GitHub Actions turns a
+      # secret into an empty string when it is combined with && or ||, so
+      # the publish failed even after the secrets were set.
+      BUCKET_DEV: ${{ secrets.STATIC_SITE_BUCKET_DEV }}
+      BUCKET_PROD: ${{ secrets.STATIC_SITE_BUCKET_PROD }}
+      DISTRIBUTION_ID_DEV: ${{ secrets.STATIC_SITE_DISTRIBUTION_ID_DEV }}
+      DISTRIBUTION_ID_PROD: ${{ secrets.STATIC_SITE_DISTRIBUTION_ID_PROD }}
     steps:
       - name: Check configuration
         run: |
@@ -42,10 +47,19 @@ jobs:
             echo "::error::Production is published from main only (selected ref: ${{ github.ref_name }})."
             exit 1
           fi
-          if [ -z "$BUCKET" ] || [ -z "$DISTRIBUTION_ID" ]; then
+          if [ "$TARGET_ENV" = "prod" ]; then
+            bucket="$BUCKET_PROD"
+            distribution_id="$DISTRIBUTION_ID_PROD"
+          else
+            bucket="$BUCKET_DEV"
+            distribution_id="$DISTRIBUTION_ID_DEV"
+          fi
+          if [ -z "$bucket" ] || [ -z "$distribution_id" ]; then
             echo "::error::STATIC_SITE_BUCKET_* and STATIC_SITE_DISTRIBUTION_ID_* secrets for '$TARGET_ENV' are not configured (see README, Static client on S3 + CloudFront)."
             exit 1
           fi
+          echo "BUCKET=$bucket" >> "$GITHUB_ENV"
+          echo "DISTRIBUTION_ID=$distribution_id" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v7
 
