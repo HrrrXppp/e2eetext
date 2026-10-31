@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.5.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
+
 ### Added
 
 - The client can be served as static files from a private S3 bucket behind CloudFront instead of a container on the EC2 instance (#28). The new `terraform/modules/static-site` module creates the bucket, an origin access control, a CloudFront distribution with a us-east-1 ACM certificate for the public hostnames, and a CloudFront Function that sends extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `index.html`. The same distribution forwards `/api/*` (including the WebSocket), `/health`, `/sitemap.xml` and `/robots.txt` to the existing ALB with caching off, so the browser still talks to one host. `terraform/envs/dev` and `terraform/envs/prod` instantiate it. The staged cutover leaves the ALB client rules and the EC2 client container in place until DNS is switched; a follow-up removes them.
@@ -23,6 +25,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 #### Tooling & deployment
 
 - The GitHub Actions role can upload to the static-site buckets and create CloudFront invalidations, and the Terraform plan role can read them (`static_site_bucket_names` in `terraform/envs/shared`).
+- The static-site module uses the real Managed-CachingDisabled cache policy ID. The previous ID does not exist, so creating the CloudFront distribution failed with `NoSuchCachePolicy`.
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.5.0`
 
 ## [0.4.1](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-25
 
