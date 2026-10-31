@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createChat, fetchChats, formatChatUpdatedAt, getChatMembers, removeMember } from "@/lib/chats";
+import { addMembers, createChat, fetchChats, formatChatUpdatedAt, getChatMembers, removeMember } from "@/lib/chats";
 
 const testNodeId = "99999999-9999-9999-9999-999999999999";
 const scopedUserId = `${testNodeId}/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
@@ -281,5 +281,67 @@ describe("removeMember", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await expect(removeMember(sampleChat.id, scopedUserId)).rejects.toThrow("failed to remove chat member");
+  });
+});
+
+describe("addMembers", () => {
+  it("posts the new users, key id and wraps in one request", async () => {
+    localStorage.setItem("messenger_id_token", "token");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      addMembers(sampleChat.id, [scopedUserId], "key-2", [{ userId: scopedUserId, wrap: sampleWrap }]),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/v1/chat/${sampleChat.id}/members`, {
+      method: "POST",
+      headers: { Authorization: "Bearer token", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_ids: [scopedUserId],
+        key_id: "key-2",
+        wraps: [{ user_id: scopedUserId, wrap: sampleWrap }],
+      }),
+    });
+  });
+
+  it("throws when the caller is not an admin", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    await expect(addMembers(sampleChat.id, [scopedUserId], "k", [])).rejects.toThrow("chat admin required");
+  });
+
+  it("includes the server-provided names when a user is already a member", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: `${scopedUserId} is already a member` }),
+      }),
+    );
+    await expect(addMembers(sampleChat.id, [scopedUserId], "k", [])).rejects.toThrow(
+      `already a member: ${scopedUserId} is already a member`,
+    );
+  });
+
+  it("still reports a conflict without a readable body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => {
+          throw new Error("no body");
+        },
+      }),
+    );
+    await expect(addMembers(sampleChat.id, [scopedUserId], "k", [])).rejects.toThrow("already a member");
+  });
+
+  it("throws on other failures", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(addMembers(sampleChat.id, [scopedUserId], "k", [])).rejects.toThrow(
+      "failed to add chat members",
+    );
   });
 });

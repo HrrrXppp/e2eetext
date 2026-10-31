@@ -27,7 +27,7 @@ vi.mock("@/lib/e2ee/crypto", async (importOriginal) => ({
   encryptMessage: crypto.encryptMessage,
 }));
 
-import { ChatKeyUnavailableError, encryptOutgoingMessage, ensureChatKey } from "@/lib/e2ee/session";
+import { ChatKeyUnavailableError, encryptOutgoingMessage, ensureChatKey, prepareAddMembers } from "@/lib/e2ee/session";
 
 const wrap = (keyId: string) => ({ keyId, wrap: { keyId } });
 
@@ -147,5 +147,45 @@ describe("key versions", () => {
       encryptOutgoingMessage({ plaintext: "hi", chatId: "c", senderUserId: "u" }),
     ).rejects.toThrow("network");
     expect(storage.uploadChatKeyVersion).not.toHaveBeenCalled();
+  });
+});
+
+describe("prepareAddMembers", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    storage.loadStoredIdentity.mockResolvedValue({ publicKey: "mine", secretKey: "secret" });
+    storage.cacheChatKey.mockResolvedValue(undefined);
+    chats.getChatMembers.mockResolvedValue([{ id: "u" }, { id: "bob" }]);
+    storage.fetchIdentityPublicKey.mockImplementation(async (id: string) => ({ publicKey: `pk-${id}` }));
+    crypto.wrapChatKey.mockImplementation(async ({ keyId }: { keyId: string }) => ({ keyId, wrapped: true }));
+  });
+
+  it("wraps one fresh key for every current member and every new user without opening old versions", async () => {
+    const result = await prepareAddMembers("u", "c", ["carol", "dave"]);
+
+    expect(result.wraps.map((item) => item.userId)).toEqual(["u", "bob", "carol", "dave"]);
+    expect(crypto.wrapChatKey).toHaveBeenCalledTimes(4);
+    const keys = new Set(crypto.wrapChatKey.mock.calls.map(([arg]) => arg.chatKey));
+    expect(keys.size).toBe(1);
+    expect(crypto.wrapChatKey.mock.calls.every(([arg]) => arg.keyId === result.keyId)).toBe(true);
+    expect(storage.fetchIdentityPublicKey.mock.calls.map(([id]) => id)).toEqual(["bob", "carol", "dave"]);
+    expect(storage.cacheChatKey).toHaveBeenCalledWith("u", "c", result.keyId, expect.any(Uint8Array));
+    expect(crypto.unwrapChatKey).not.toHaveBeenCalled();
+    expect(storage.fetchChatKeyWraps).not.toHaveBeenCalled();
+    expect(storage.uploadChatKeyVersion).not.toHaveBeenCalled();
+  });
+
+  it("fails naming the user when one of several identity keys is missing, caching nothing", async () => {
+    storage.fetchIdentityPublicKey.mockImplementation(async (id: string) => {
+      if (id === "carol") {
+        throw new Error("identity key not found");
+      }
+      return { publicKey: `pk-${id}` };
+    });
+
+    await expect(prepareAddMembers("u", "c", ["carol", "dave"])).rejects.toThrow(
+      "identity key not found for carol",
+    );
+    expect(storage.cacheChatKey).not.toHaveBeenCalled();
   });
 });

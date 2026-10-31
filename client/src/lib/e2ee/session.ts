@@ -21,7 +21,7 @@ import {
   uploadChatKeyVersion,
   uploadIdentityKey,
 } from "@/lib/e2ee/storage";
-import type { ChatKeyWrap, StoredIdentity } from "@/lib/e2ee/types";
+import type { ChatKeyWrap, IdentityPublicKey, StoredIdentity } from "@/lib/e2ee/types";
 import type { Message } from "@/lib/messages";
 
 export type EnsureIdentityKeysResult = {
@@ -82,8 +82,16 @@ async function createWrappedChatKey(
   for (const userId of memberUserIds) {
     // Always the member's current public key (fetched now), never a cached one:
     // a member who regenerated their identity must get a wrap they can open.
-    const publicKey =
-      userId === currentUserId ? toIdentityPublicKey(identity) : await fetchIdentityPublicKey(userId);
+    let publicKey: IdentityPublicKey;
+    if (userId === currentUserId) {
+      publicKey = toIdentityPublicKey(identity);
+    } else {
+      try {
+        publicKey = await fetchIdentityPublicKey(userId);
+      } catch (error) {
+        throw new Error(`identity key not found for ${userId}`, { cause: error });
+      }
+    }
     const wrap = await wrapChatKey({
       chatKey,
       keyId,
@@ -204,6 +212,28 @@ async function rotateChatKey(userId: string, chatId: string): Promise<{ keyId: s
   await uploadChatKeyVersion(chatId, created.keyId, created.wraps);
   await cacheChatKey(userId, chatId, created.keyId, created.chatKey);
   return { keyId: created.keyId, chatKey: created.chatKey };
+}
+
+/**
+ * Prepares adding members: one fresh chat key version wrapped for every current member and every new user. No
+ * older version is opened, so new members cannot read earlier messages. Nothing is sent here; the caller posts
+ * the result. Fails naming the user when any identity key is missing.
+ */
+export async function prepareAddMembers(
+  userId: string,
+  chatId: string,
+  newMemberIds: string[],
+): Promise<{ keyId: string; wraps: { userId: string; wrap: ChatKeyWrap }[] }> {
+  const identity = await loadStoredIdentity(userId);
+  if (!identity) {
+    throw new Error("missing identity keys");
+  }
+
+  const members = await getChatMembers(chatId);
+  const recipients = [...new Set([...members.map((member) => member.id), userId, ...newMemberIds])];
+  const created = await createWrappedChatKey(recipients, userId, identity);
+  await cacheChatKey(userId, chatId, created.keyId, created.chatKey);
+  return { keyId: created.keyId, wraps: created.wraps };
 }
 
 export async function encryptOutgoingMessage(input: {

@@ -115,3 +115,54 @@ export async function removeMember(chatId: string, userId: string): Promise<void
     throw new Error("failed to remove chat member");
   }
 }
+
+async function serverErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as { error?: unknown };
+    return typeof data.error === "string" ? data.error : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Adds users to a chat with one freshly generated key version. The wraps must cover every current member and
+ * every new user, because the server only accepts a complete set.
+ */
+export async function addMembers(
+  chatId: string,
+  userIds: string[],
+  keyId: string,
+  wraps: { userId: string; wrap: ChatKeyWrap }[],
+): Promise<void> {
+  const scoped = scopeResourceIds([...userIds, ...wraps.map((item) => item.userId)]);
+
+  const response = await fetch(`${API_V1}/chat/${chatId}/members`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_ids: scoped.slice(0, userIds.length),
+      key_id: keyId,
+      wraps: wraps.map((item, index) => ({
+        user_id: scoped[userIds.length + index],
+        wrap: item.wrap,
+      })),
+    }),
+  });
+
+  if (response.status === 403) {
+    throw new Error("chat admin required");
+  }
+
+  if (response.status === 409) {
+    const detail = await serverErrorMessage(response);
+    throw new Error(detail ? `already a member: ${detail}` : "already a member");
+  }
+
+  if (!response.ok) {
+    throw new Error("failed to add chat members");
+  }
+}
