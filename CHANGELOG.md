@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- `deploy-client.yml` reads each static-site secret on its own. GitHub Actions passes an empty value when a secret is combined with `&&` or `||`, so the publish reported the dev bucket and distribution secrets as missing after they had been set.
+
 ## [0.5.0](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 
 ### Added
