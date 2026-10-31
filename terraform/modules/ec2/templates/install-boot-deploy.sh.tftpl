@@ -10,8 +10,12 @@ REPO_BRANCH='${repo_branch}'
 UNIT_DST=/etc/systemd/system/e2eetext.service
 DEPLOY_ENV_DIR=/etc/e2eetext
 DEPLOY_ENV_FILE="$DEPLOY_ENV_DIR/deploy.env"
-IMAGE_TAG='${image_tag}'
+# Association parameters. SSM substitutes these before the shell runs.
+# "none" means do not pull or recreate the client container.
+IMAGE_TAG='{{ ImageTag }}'
+CLIENT_IMAGE_TAG='{{ ClientImageTag }}'
 START_NOW='${start_now}'
+START_SCRIPT_B64='${start_script_b64}'
 
 install_host_packages() {
   if [ -f /etc/os-release ]; then
@@ -74,6 +78,10 @@ if [ ! -d "$REPO_ROOT/maintenance/ec2" ]; then
   exit 1
 fi
 
+mkdir -p /usr/local/lib/e2eetext
+printf '%s' "$START_SCRIPT_B64" | base64 -d >/usr/local/lib/e2eetext/start-containers.sh
+chmod 0755 /usr/local/lib/e2eetext/start-containers.sh
+
 cat >"$UNIT_DST" <<EOF
 [Unit]
 Description=e2eetext: ECR login, pull images if needed, start compose
@@ -87,7 +95,7 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=$REPO_ROOT
 EnvironmentFile=-/etc/e2eetext/deploy.env
-ExecStart=/bin/bash $REPO_ROOT/maintenance/ec2/deploy.sh
+ExecStart=/bin/bash /usr/local/lib/e2eetext/start-containers.sh
 TimeoutStartSec=600
 
 [Install]
@@ -96,19 +104,13 @@ EOF
 
 mkdir -p "$DEPLOY_ENV_DIR"
 if [ -n "$IMAGE_TAG" ]; then
-  printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >"$DEPLOY_ENV_FILE"
-  chmod 0644 "$DEPLOY_ENV_FILE"
-
-  # Also pin maintenance/ec2/.env so older deploy.sh (shell IMAGE_TAG from
-  # source .env beats --env-file) still pulls the IaC tag after reboot.
-  ENV_DOT="$REPO_ROOT/maintenance/ec2/.env"
-  if [ -f "$ENV_DOT" ]; then
-    if grep -q '^IMAGE_TAG=' "$ENV_DOT"; then
-      sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$IMAGE_TAG|" "$ENV_DOT"
-    else
-      printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG" >>"$ENV_DOT"
+  {
+    printf 'IMAGE_TAG=%s\n' "$IMAGE_TAG"
+    if [ -n "$CLIENT_IMAGE_TAG" ] && [ "$CLIENT_IMAGE_TAG" != "none" ]; then
+      printf 'CLIENT_IMAGE_TAG=%s\n' "$CLIENT_IMAGE_TAG"
     fi
-  fi
+  } >"$DEPLOY_ENV_FILE"
+  chmod 0644 "$DEPLOY_ENV_FILE"
 fi
 
 systemctl daemon-reload

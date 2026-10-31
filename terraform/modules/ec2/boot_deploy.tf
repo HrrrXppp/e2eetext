@@ -7,12 +7,18 @@
 locals {
   boot_deploy_enabled = var.manage_boot_deploy
   boot_deploy_name    = var.name != "" ? "${var.name}-boot-deploy" : "e2eetext-boot-deploy"
+  # Image tags are SSM association parameters, not baked into this
+  # script. A parameter change updates the association, and that update
+  # runs it. Baking the tag into the document does not: the association
+  # resource stays unchanged, so the instance keeps the previous images.
   boot_deploy_script = local.boot_deploy_enabled ? templatefile("${path.module}/templates/install-boot-deploy.sh.tftpl", {
     repo_root   = var.boot_deploy_repo_root
     repo_url    = var.boot_deploy_repo_url
     repo_branch = var.boot_deploy_repo_branch
-    image_tag   = var.boot_deploy_image_tag
     start_now   = var.boot_deploy_start_now ? "true" : "false"
+    start_script_b64 = base64encode(templatefile("${path.module}/templates/start-containers.sh.tftpl", {
+      repo_root = var.boot_deploy_repo_root
+    }))
   }) : ""
   # Separate template + base64 avoids nested-heredoc collisions with the
   # install script body (and keeps the ternary parseable).
@@ -38,7 +44,21 @@ check "boot_deploy_repo_root_absolute" {
 check "boot_deploy_image_tag_set" {
   assert {
     condition     = !var.manage_boot_deploy || var.boot_deploy_image_tag != ""
-    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (pin it in envs/*/ec2_image_tag.tf)."
+    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (set ec2_boot_deploy_image_tag)."
+  }
+}
+
+check "boot_deploy_image_tag_safe" {
+  assert {
+    condition     = !var.manage_boot_deploy || can(regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", var.boot_deploy_image_tag))
+    error_message = "boot_deploy_image_tag must be an ECR tag (letters, digits, dot, underscore, hyphen)."
+  }
+}
+
+check "boot_deploy_client_image_tag_safe" {
+  assert {
+    condition     = !var.manage_boot_deploy || var.boot_deploy_client_image_tag == "" || can(regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", var.boot_deploy_client_image_tag))
+    error_message = "boot_deploy_client_image_tag must be an ECR tag or empty."
   }
 }
 
@@ -66,6 +86,18 @@ resource "aws_ssm_document" "boot_deploy" {
   content = jsonencode({
     schemaVersion = "2.2"
     description   = "Install Docker/git if needed, clone the repo if missing, install the e2eetext systemd boot unit (ECR pull + compose up)"
+    parameters = {
+      ImageTag = {
+        type           = "String"
+        description    = "ECR tag for the e2eetext-server container"
+        allowedPattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+      }
+      ClientImageTag = {
+        type           = "String"
+        description    = "ECR tag for the e2eetext-client container, or none to leave that container unchanged"
+        allowedPattern = "^(none|[A-Za-z0-9][A-Za-z0-9._-]{0,127})$"
+      }
+    }
     mainSteps = [
       {
         action = "aws:runShellScript"
@@ -86,13 +118,23 @@ resource "aws_ssm_association" "boot_deploy" {
 
   name             = aws_ssm_document.boot_deploy[0].name
   association_name = local.boot_deploy_name
+  # Pin the version this apply just published. Without it, an association
+  # created against an older document keeps running that older document.
+  document_version = tostring(aws_ssm_document.boot_deploy[0].latest_version)
+
+  parameters = {
+    ImageTag       = var.boot_deploy_image_tag
+    ClientImageTag = var.boot_deploy_client_image_tag == "" ? "none" : var.boot_deploy_client_image_tag
+  }
 
   targets {
     key    = "InstanceIds"
     values = [aws_instance.this.id]
   }
 
-  # Re-apply when the document changes (e.g. IMAGE_TAG pin) without waiting
-  # for a cron window.
-  apply_only_at_cron_interval = false
+  # An association update runs immediately. Changing ImageTag or
+  # ClientImageTag is an association update, so apply pulls those tags
+  # instead of waiting for the next boot.
+  apply_only_at_cron_interval      = false
+  wait_for_success_timeout_seconds = 900
 }

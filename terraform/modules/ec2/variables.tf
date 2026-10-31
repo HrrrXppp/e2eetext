@@ -136,9 +136,21 @@ variable "boot_deploy_repo_branch" {
 
 variable "boot_deploy_image_tag" {
   description = <<-EOT
-    ECR IMAGE_TAG written to /etc/e2eetext/deploy.env (overrides
-    maintenance/ec2/.env for that key). Required when manage_boot_deploy
-    is true. Dig/prod pin this in envs/*/ec2_image_tag.tf (committed).
+    ECR tag for the e2eetext-server container. Passed as the ImageTag
+    association parameter and written to /etc/e2eetext/deploy.env.
+    Changing it updates the association, which pulls the tag.
+    Required when manage_boot_deploy is true.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "boot_deploy_client_image_tag" {
+  description = <<-EOT
+    ECR tag for the e2eetext-client container. Passed as the ClientImageTag
+    association parameter. Changing it updates the association, which pulls
+    the tag. Empty leaves the running client container unchanged (sent to
+    SSM as "none"). Releases no longer publish this image.
   EOT
   type        = string
   default     = ""
