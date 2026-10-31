@@ -116,3 +116,90 @@ test("two real browsers sign in, create a chat, and exchange an E2EE message", a
     await bobContext.close();
   }
 });
+
+test("an admin adds two users at once; they read new messages but not earlier ones", async ({ browser }) => {
+  const runID = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const aliceName = `Alice AM ${runID}`;
+  const bobName = `Bob AM ${runID}`;
+  const carolName = `Carol AM ${runID}`;
+  const daveName = `Dave AM ${runID}`;
+  const chatName = `E2E add members ${runID}`;
+  const before = `before the new members, run ${runID}`;
+  const after = `after the new members, run ${runID}`;
+  const previousKey = "Message encrypted with a previous key";
+
+  const contexts = await Promise.all([1, 2, 3, 4].map(() => browser.newContext()));
+
+  try {
+    const [alicePage, bobPage, carolPage, davePage] = await Promise.all(
+      contexts.map((context) => context.newPage()),
+    );
+    await signIn(alicePage, aliceName);
+    await signIn(bobPage, bobName);
+    await signIn(carolPage, carolName);
+    await signIn(davePage, daveName);
+
+    await alicePage.getByRole("button", { name: "New chat" }).click();
+    await alicePage.getByLabel("Chat name").fill(chatName);
+    await alicePage.getByRole("button", { name: "Search users" }).click();
+    await alicePage.getByPlaceholder("Name or user ID").fill(bobName);
+    await alicePage.getByRole("button", { name: "Search", exact: true }).click();
+    await alicePage.getByRole("button", { name: "Add", exact: true }).click();
+    await alicePage.getByRole("button", { name: "Create chat" }).click();
+    await expect(alicePage.getByRole("option", { name: new RegExp(chatName) })).toBeVisible();
+
+    await alicePage.getByLabel("Message", { exact: true }).fill(before);
+    await alicePage.getByRole("button", { name: "Send" }).click();
+    await expect(
+      alicePage.locator(".chats-page__message-text").filter({ hasText: before }),
+    ).toBeVisible();
+
+    // Add both new members in one confirmation.
+    await alicePage.getByRole("button", { name: `Chat settings for ${chatName}` }).click();
+    for (const name of [carolName, daveName]) {
+      await alicePage.getByRole("button", { name: "Add members" }).click();
+      await alicePage.getByPlaceholder("Name or user ID").fill(name);
+      await alicePage.getByRole("button", { name: "Search", exact: true }).click();
+      await alicePage.getByRole("button", { name: "Add", exact: true }).click();
+    }
+    await alicePage.getByRole("button", { name: "Add 2 members" }).click();
+    const memberList = alicePage.getByRole("list", { name: "Chat members" });
+    await expect(memberList).toContainText(carolName);
+    await expect(memberList).toContainText(daveName);
+    await alicePage.getByRole("button", { name: "Close chat settings dialog" }).click();
+
+    await alicePage.getByLabel("Message", { exact: true }).fill(after);
+    await alicePage.getByRole("button", { name: "Send" }).click();
+    await expect(
+      alicePage.locator(".chats-page__message-text").filter({ hasText: after }),
+    ).toBeVisible();
+
+    for (const page of [carolPage, davePage]) {
+      const option = page.getByRole("option", { name: new RegExp(chatName) });
+      await expect(option).toBeVisible({ timeout: 15_000 });
+      await option.click();
+      await expect(
+        page.locator(".chats-page__message-text").filter({ hasText: after }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.locator(".chats-page__message-text").filter({ hasText: previousKey }),
+      ).toBeVisible();
+      await expect(
+        page.locator(".chats-page__message-text").filter({ hasText: before }),
+      ).toHaveCount(0);
+    }
+
+    // An original member keeps reading both messages.
+    const bobOption = bobPage.getByRole("option", { name: new RegExp(chatName) });
+    await expect(bobOption).toBeVisible({ timeout: 15_000 });
+    await bobOption.click();
+    await expect(
+      bobPage.locator(".chats-page__message-text").filter({ hasText: before }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      bobPage.locator(".chats-page__message-text").filter({ hasText: after }),
+    ).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});

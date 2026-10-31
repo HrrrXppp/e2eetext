@@ -193,8 +193,9 @@ func TestAllowedMethods_ChatMembers(t *testing.T) {
 
 	assertMethodAllowed(t, handler, http.MethodGet, membersPath)
 	assertMethodAllowed(t, handler, http.MethodDelete, memberPath)
-	assertMethodNotAllowed(t, handler, http.MethodPost, membersPath, http.MethodGet)
-	assertMethodNotAllowed(t, handler, http.MethodDelete, membersPath, http.MethodGet)
+	assertMethodAllowed(t, handler, http.MethodPost, membersPath)
+	assertMethodNotAllowed(t, handler, http.MethodPut, membersPath, http.MethodGet, http.MethodPost)
+	assertMethodNotAllowed(t, handler, http.MethodDelete, membersPath, http.MethodGet, http.MethodPost)
 	assertMethodNotAllowed(t, handler, http.MethodGet, memberPath, http.MethodDelete)
 	assertMethodNotAllowed(t, handler, http.MethodPost, memberPath, http.MethodDelete)
 }
