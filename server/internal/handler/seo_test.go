@@ -57,7 +57,7 @@ func TestSEOHandler_SitemapUsesRequestHost(t *testing.T) {
 	if strings.Contains(body, "e2eetext.com") || strings.Contains(body, "app.example.com") {
 		t.Fatalf("sitemap leaked another host:\n%s", body)
 	}
-	for _, path := range []string{"/privacy", "/terms", "/roadmap"} {
+	for _, path := range []string{"/privacy", "/terms", "/roadmap", "/encryption"} {
 		loc := "<loc>https://e2eetext.org" + path + "</loc>"
 		if !strings.Contains(body, loc) {
 			t.Fatalf("sitemap missing %s:\n%s", loc, body)

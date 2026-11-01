@@ -219,7 +219,7 @@ variable "additional_https_rules" {
     { priority = 12, path_patterns = ["/oauth/*"], target = "client" },
     { priority = 13, path_patterns = ["/chats"], target = "client" },
     { priority = 14, path_patterns = ["/instance.json"], target = "client" },
-    { priority = 15, path_patterns = ["/privacy", "/terms", "/roadmap"], target = "client" },
+    { priority = 15, path_patterns = ["/privacy", "/terms", "/roadmap", "/encryption"], target = "client" },
     { priority = 16, path_patterns = ["/ads.txt"], target = "client" },
     { priority = 17, path_patterns = ["/robots.txt", "/sitemap.xml"], target = "server" },
   ]

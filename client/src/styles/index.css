@@ -1655,6 +1655,43 @@ body.has-dev-instance-banner .site-head {
   color: var(--accent-bright);
 }
 
+.encryption__flow {
+  list-style: none;
+  margin: 1.25rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.encryption__step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+  border-radius: 0.5rem;
+}
+
+.encryption__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.encryption__caption {
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: 0.5rem;
+}
+
+.encryption__table th,
+.encryption__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+}
+
 .roadmap__list {
   list-style: none;
   margin: 0;

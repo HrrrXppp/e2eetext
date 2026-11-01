@@ -14,6 +14,6 @@
   },
   "sitemap": {
     "hosts": ["e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org", "dev.e2eetext.com"],
-    "paths": ["/", "/privacy", "/terms", "/roadmap"]
+    "paths": ["/", "/privacy", "/terms", "/roadmap", "/encryption"]
   }
 }
