@@ -76,11 +76,15 @@ if [ ! -d "$REPO_ROOT/maintenance/ec2" ]; then
 fi
 
 # A checkout that has not been updated still lists a client service.
-# That image is no longer published, so drop the service before deploy.sh
-# pulls. A later checkout of this repo has no client service.
+# That image is no longer published. Remove the container, then drop the
+# service, before deploy.sh pulls. A later checkout has no client service.
 COMPOSE="$REPO_ROOT/maintenance/ec2/docker-compose.yml"
-if [ -f "$COMPOSE" ] && grep -q '^  client:' "$COMPOSE"; then
-  awk 'BEGIN{skip=0} /^  client:/{skip=1} skip{next} {print}' "$COMPOSE" >"$COMPOSE.tmp"
+ENV_DOT="$REPO_ROOT/maintenance/ec2/.env"
+if [ -f "$COMPOSE" ] && [ -f "$ENV_DOT" ] && grep -q '^[[:space:]]*client:' "$COMPOSE"; then
+  docker compose --env-file "$ENV_DOT" -f "$COMPOSE" rm -sf client || true
+fi
+if [ -f "$COMPOSE" ] && grep -q '^[[:space:]]*client:' "$COMPOSE"; then
+  awk 'BEGIN{skip=0} /^[[:space:]]*client:/{skip=1} skip{next} {print}' "$COMPOSE" >"$COMPOSE.tmp"
   mv "$COMPOSE.tmp" "$COMPOSE"
 fi
 

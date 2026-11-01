@@ -641,7 +641,7 @@ locals {
 }
 ```
 
-Edit the relevant `ec2_image_tag.tf` and `terraform apply` that env. The tag is an SSM association parameter, so apply updates the association and that run writes `/etc/e2eetext/deploy.env` and pulls the server image. It also removes a client container left over from the old compose file. The association waits up to 15 minutes for the server health check. CloudFront's copy of the client is `static_site_client_version`, a different setting.
+Edit the relevant `ec2_image_tag.tf` and `terraform apply` that env. Apply replaces the SSM association and waits up to 15 minutes for the server health check. That run writes `/etc/e2eetext/deploy.env`, pulls the server image, and removes a client container left over from the old compose file. A failed rollout fails the apply. CloudFront's copy of the client is `static_site_client_version`, a different setting.
 
 On first launch (and on the SSM association, which runs the same script), the instance installs Docker, git, and the AWS CLI when those commands are missing, and `git clone`s `https://github.com/HrrrXppp/e2eetext.git` branch `main` into `/home/ec2-user/e2eetext` when that path is not already a checkout. An existing checkout is left as-is. `maintenance/ec2/.env`, `config/config.json`, and `config/instance.json` are gitignored, so they are still placed on the box by hand — without them `deploy.sh` exits and `start_now` fails until they exist. After the first apply attaches IAM, wait until the instance is SSM-managed before expecting the association to succeed. `user_data` stays `ignore_changes` for brownfield — dig is not replaced.
 
