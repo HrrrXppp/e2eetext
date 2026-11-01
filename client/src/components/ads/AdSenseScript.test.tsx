@@ -26,4 +26,16 @@ describe("AdSenseScript", () => {
     );
     expect(scripts[0]).toHaveAttribute("crossorigin", "anonymous");
   });
+
+  it("removes the publisher script when the last page unmounts", () => {
+    const first = render(<AdSenseScript />);
+    const second = render(<AdSenseScript />);
+    expect(document.querySelectorAll(SCRIPT_SELECTOR)).toHaveLength(1);
+
+    first.unmount();
+    expect(document.querySelector(SCRIPT_SELECTOR)).not.toBeNull();
+
+    second.unmount();
+    expect(document.querySelector(SCRIPT_SELECTOR)).toBeNull();
+  });
 });
