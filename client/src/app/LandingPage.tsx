@@ -45,7 +45,7 @@ const news = [
     dateTime: "2026-05-31",
     title: "E2EE Text project started",
     body:
-      "E2EE Text — End-To-End Encryption Text — started as a web-based messenger. Messages are encrypted on the sender's device, and the server stores only ciphertext.",
+      "We have officially kicked off E2EE Text — End-To-End Encryption Text. The landing page is live while we build a web-based messenger with end-to-end encryption and post-quantum cryptography. Stay tuned for updates as development progresses.",
   },
 ] as const;
 
@@ -100,7 +100,7 @@ export function LandingPage() {
         <div className="landing__hero">
           <p className="landing__eyebrow">
             <span className="landing__eyebrow-dot" />
-            Available now
+            Coming soon
           </p>
           <h1 className="landing__title">
             <span className="landing__title-accent">E2EE</span> Text
@@ -121,12 +121,6 @@ export function LandingPage() {
             you and your contacts—private by design, resilient against
             tomorrow&apos;s threats.
           </p>
-          <p className="landing__description">
-            Sign in from this page. A message is encrypted in your browser
-            before it is sent, and the server stores only ciphertext, so it
-            cannot read the conversation. Each chat disappears its messages
-            after 60 days unless you choose a different time.
-          </p>
           <ul className="landing__highlights">
             <li className="landing__highlight">
               <span className="landing__highlight-icon" aria-hidden="true">✓</span>
@@ -137,6 +131,12 @@ export function LandingPage() {
               Disappearing messages by design
             </li>
           </ul>
+          <p className="landing__description">
+            Sign in from this page. A message is encrypted in your browser
+            before it is sent, and the server stores only ciphertext, so it
+            cannot read the conversation. Each chat disappears its messages
+            after 60 days unless you choose a different time.
+          </p>
         </section>
 
         <section className="landing__panel landing__news" aria-labelledby="news-heading">

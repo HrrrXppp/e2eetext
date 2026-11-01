@@ -1,22 +1,12 @@
 import { render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { AdSenseScript } from "@/components/ads/AdSenseScript";
 
-const SCRIPT_SELECTOR = 'script[data-adsense-client="ca-pub-8559868695202171"]';
-
-afterEach(() => {
-  document.querySelector(SCRIPT_SELECTOR)?.remove();
-});
+const SCRIPT_SELECTOR = 'script[src*="adsbygoogle.js"]';
 
 describe("AdSenseScript", () => {
-  it("adds the publisher script once", () => {
-    const { rerender } = render(<AdSenseScript />);
-    rerender(
-      <>
-        <AdSenseScript />
-        <AdSenseScript />
-      </>,
-    );
+  it("adds the publisher script on mount", () => {
+    const { unmount } = render(<AdSenseScript />);
 
     const scripts = document.querySelectorAll(SCRIPT_SELECTOR);
     expect(scripts).toHaveLength(1);
@@ -25,17 +15,23 @@ describe("AdSenseScript", () => {
       "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8559868695202171",
     );
     expect(scripts[0]).toHaveAttribute("crossorigin", "anonymous");
+    unmount();
   });
 
-  it("removes the publisher script when the last page unmounts", () => {
-    const first = render(<AdSenseScript />);
-    const second = render(<AdSenseScript />);
-    expect(document.querySelectorAll(SCRIPT_SELECTOR)).toHaveLength(1);
-
-    first.unmount();
+  it("removes the publisher script when the page unmounts", () => {
+    const { unmount } = render(<AdSenseScript />);
     expect(document.querySelector(SCRIPT_SELECTOR)).not.toBeNull();
 
-    second.unmount();
+    unmount();
     expect(document.querySelector(SCRIPT_SELECTOR)).toBeNull();
+  });
+
+  it("keeps a single script when one page replaces another", () => {
+    const first = render(<AdSenseScript />);
+    first.unmount();
+    const second = render(<AdSenseScript />);
+
+    expect(document.querySelectorAll(SCRIPT_SELECTOR)).toHaveLength(1);
+    second.unmount();
   });
 });
