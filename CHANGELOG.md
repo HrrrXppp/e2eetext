@@ -13,7 +13,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ### Changed
 
-- `ads.txt` authorizes the AdSense publisher (`pub-8559868695202171`) instead of a comment-only file. The AdSense script is added when the home, privacy, or terms page mounts and removed when it unmounts, so the chat app and the roadmap do not carry it. The landing page explains how messages are encrypted and when they expire. Client deploys invalidate `/ads.txt`.
+- `ads.txt` authorizes the AdSense publisher (`pub-8559868695202171`) instead of a comment-only file. The AdSense script is added when the home, privacy, or terms page mounts and removed when it unmounts, so the chat app and the roadmap do not carry it. The landing page explains how messages are encrypted and when they expire, and the Coming soon eyebrow is removed. Client deploys invalidate `/ads.txt`.
 
 ## [0.5.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 

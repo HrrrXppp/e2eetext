@@ -12,6 +12,8 @@ vi.mock("@/components/layout/Footer", () => ({
 describe("LandingPage news", () => {
   it("announces the roadmap in a keyboard-focusable scrollable list", () => {
     render(<LandingPage />);
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available now")).not.toBeInTheDocument();
     expect(screen.getByText("October 18, 2026")).toHaveAttribute("datetime", "2026-10-18");
     expect(screen.getByText(/encrypted in your browser/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Roadmap published" })).toBeInTheDocument();
