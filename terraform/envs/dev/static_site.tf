@@ -33,7 +33,7 @@ module "static_site" {
   bucket_name = var.static_site_bucket_name
   aliases     = var.static_site_aliases
 
-  client_version    = var.static_site_client_version
+  client_version    = local.deployed_version # pinned in version.tf
   certificate_arn   = var.static_site_certificate_arn
   alb_dns_name      = module.alb.alb_dns_name
   alb_path_patterns = local.static_site_alb_path_patterns

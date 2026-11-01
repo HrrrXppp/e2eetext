@@ -64,7 +64,7 @@ module "ec2" {
 
   manage_boot_deploy    = var.ec2_manage_boot_deploy
   boot_deploy_repo_root = var.ec2_boot_deploy_repo_root
-  boot_deploy_image_tag = local.ec2_boot_deploy_image_tag # pinned in ec2_image_tag.tf
+  boot_deploy_image_tag = local.deployed_version # pinned in version.tf
   boot_deploy_start_now = var.ec2_boot_deploy_start_now
 
   # #37: lets the server publish WebSocketConnections to CloudWatch.

@@ -139,7 +139,8 @@ variable "boot_deploy_image_tag" {
     ECR tag for the server container. Passed as the ImageTag association
     parameter and written to /etc/e2eetext/deploy.env. Changing it updates
     the association, which pulls the tag. Required when manage_boot_deploy
-    is true. Dig/prod pin this in envs/*/ec2_image_tag.tf (committed).
+    is true. Dig/prod pin this in envs/*/version.tf (committed), the same
+    string CloudFront uses for the client directory.
   EOT
   type        = string
   default     = ""

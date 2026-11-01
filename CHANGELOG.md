@@ -19,6 +19,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - `ads.txt` authorizes the AdSense publisher (`pub-8559868695202171`) instead of a comment-only file. The AdSense script is added when the home, privacy, or terms page mounts and removed when it unmounts, so the chat app and the roadmap do not carry it. The landing page explains how messages are encrypted and when they expire, and the Coming soon eyebrow is removed. Client deploys invalidate `/ads.txt`.
 
+#### Tooling & deployment
+
+- Dig and prod each pin one deployed version in `terraform/envs/{dev,prod}/version.tf`. That string is both the server image tag and the CloudFront client directory. Prod's client directory was the bucket root; it is now the same `v0.5.2` pin as the server.
+
 ## [0.5.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 
 ### Changed
