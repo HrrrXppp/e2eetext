@@ -619,9 +619,3 @@ variable "static_site_certificate_arn" {
   type        = string
   default     = ""
 }
-
-variable "static_site_client_version" {
-  description = "Bucket directory CloudFront serves the dev client from, named after the client release (for example \"v0.4.1\"; deploy-client.yml prints it). Change it and apply after publishing a new release, then delete old directories by hand. Empty serves the bucket root."
-  type        = string
-  default     = "v0.5.2"
-}

@@ -28,8 +28,9 @@
 # create_health_rule       = false
 # ec2_security_group_names = ["launch-wizard-2", "ec2-rds-1"]
 
-# Boot deploy is on by default (IAM instance profile + SSM unit). IMAGE_TAG
-# is git-pinned per env in ec2_image_tag.tf (not here — *.tfvars is gitignored).
+# Boot deploy is on by default (IAM instance profile + SSM unit). The
+# deployed version is git-pinned per env in version.tf (not here — *.tfvars
+# is gitignored). That one string is the server image and the client directory.
 # ec2_boot_deploy_repo_root = "/home/ubuntu/e2eetext"
 # create_ec2_iam_instance_profile = false  # only to temporarily skip IAM/boot
 

@@ -41,7 +41,7 @@ check "boot_deploy_repo_root_absolute" {
 check "boot_deploy_image_tag_set" {
   assert {
     condition     = !var.manage_boot_deploy || var.boot_deploy_image_tag != ""
-    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (pin it in envs/*/ec2_image_tag.tf)."
+    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (pin it in envs/*/version.tf)."
   }
 }
 

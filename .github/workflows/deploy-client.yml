@@ -5,7 +5,7 @@ name: Deploy client (S3 + CloudFront)
 # named after the client version (vX.Y.Z). It starts by itself when a version
 # bump lands on main (the same trigger as build-images.yml) and uploads to dev;
 # run it by hand from the Actions tab to publish to prod or to re-publish.
-# Uploading never changes what visitors get; static_site_client_version does.
+# Uploading never changes what visitors get; deployed_version in version.tf does.
 
 on:
   push:
@@ -122,9 +122,9 @@ jobs:
             --cache-control "no-cache" --content-type "application/json"
 
       # CloudFront serves the directory named by the distribution's origin
-      # path (Terraform variable static_site_client_version), so uploading
-      # does not change what visitors get. Invalidating the stable-name files
-      # covers re-publishing the version that is already live.
+      # path (deployed_version in terraform/envs/{dev,prod}/version.tf), so
+      # uploading does not change what visitors get. Invalidating the
+      # stable-name files covers re-publishing the version that is already live.
       - name: Invalidate index.html, ads.txt, and instance.json
         run: |
           aws cloudfront create-invalidation \
@@ -133,6 +133,6 @@ jobs:
       - name: Next step
         run: |
           echo "Uploaded to s3://$BUCKET/$CLIENT_TAG/."
-          echo "To serve it, set static_site_client_version = \"$CLIENT_TAG\" in terraform/envs/$TARGET_ENV and apply."
+          echo "To serve it, set deployed_version = \"$CLIENT_TAG\" in terraform/envs/$TARGET_ENV/version.tf and apply."
           echo "### Client uploaded" >> "$GITHUB_STEP_SUMMARY"
-          echo "Directory: \`$CLIENT_TAG\`. Set \`static_site_client_version = \"$CLIENT_TAG\"\` in terraform/envs/$TARGET_ENV and apply to serve it." >> "$GITHUB_STEP_SUMMARY"
+          echo "Directory: \`$CLIENT_TAG\`. Set \`deployed_version = \"$CLIENT_TAG\"\` in terraform/envs/$TARGET_ENV/version.tf and apply. That also selects the server image." >> "$GITHUB_STEP_SUMMARY"
