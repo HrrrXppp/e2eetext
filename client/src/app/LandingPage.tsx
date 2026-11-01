@@ -98,10 +98,6 @@ export function LandingPage() {
         </div>
 
         <div className="landing__hero">
-          <p className="landing__eyebrow">
-            <span className="landing__eyebrow-dot" />
-            Coming soon
-          </p>
           <h1 className="landing__title">
             <span className="landing__title-accent">E2EE</span> Text
           </h1>
