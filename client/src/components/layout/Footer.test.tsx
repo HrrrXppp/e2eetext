@@ -24,6 +24,7 @@ describe("Footer", () => {
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
     expect(screen.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
+    expect(screen.getByRole("link", { name: "Encryption" })).toHaveAttribute("href", "/encryption");
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
       "href",
       "https://github.com/HrrrXppp/e2eetext/issues",
