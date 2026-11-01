@@ -1,10 +1,9 @@
-# Single EC2: server + client. Path routing and TLS are handled by AWS ALB.
+# Single EC2: server only. The client is static files on S3 and CloudFront.
+# Path routing and TLS are handled by AWS ALB and CloudFront.
 # PostgreSQL runs outside EC2 (e.g. AWS RDS).
 # Images are pulled from AWS ECR (build locally with maintenance/ecr/build-and-push.sh).
 #
-# Expose two host ports for ALB target groups:
-#   - 8080 → client (default listener rule)
-#   - 8081 → server (API / WebSocket paths)
+# Host port 8081 is the server (API / WebSocket paths) for the ALB target group.
 #
 # From repo root:
 #   cp maintenance/ec2/.env.example maintenance/ec2/.env
@@ -35,14 +34,3 @@ services:
       timeout: 5s
       retries: 20
       start_period: 120s
-
-  client:
-    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/e2eetext-client:${CLIENT_IMAGE_TAG:-${IMAGE_TAG}}
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./config/instance.json:/public/instance.json:ro
-    depends_on:
-      server:
-        condition: service_started
