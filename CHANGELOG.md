@@ -11,11 +11,14 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.5.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
+
 ### Changed
 
 #### Tooling & deployment
 
-- The EC2 boot-deploy unit runs the server container only. `maintenance/ec2/docker-compose.yml` no longer has a client service, and `maintenance/ec2/docker-compose.frontend.yml` is removed. Apply of the `ec2_boot_deploy_image_tag` pin replaces the SSM association, waits until the server container is healthy, and removes a leftover client container. The image tag is also the document parameter default, so a run that starts before the association parameters are saved still receives the tag. Dig and prod pins are `v0.5.1`. Dig CloudFront `static_site_client_version` is `v0.5.1`.
+- The EC2 boot-deploy unit runs the server container only. `maintenance/ec2/docker-compose.yml` no longer has a client service, and `maintenance/ec2/docker-compose.frontend.yml` is removed. Apply of the `ec2_boot_deploy_image_tag` pin replaces the SSM association, waits until the server container is healthy, and removes a leftover client container. The image tag is also the document parameter default, so a run that starts before the association parameters are saved still receives the tag. Dig CloudFront `static_site_client_version` is `v0.5.2`.
+- Dig and prod EC2 boot-deploy `IMAGE_TAG` pins are `v0.5.2`
 
 ## [0.5.1](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 
