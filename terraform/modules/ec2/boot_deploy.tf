@@ -16,9 +16,6 @@ locals {
     repo_url    = var.boot_deploy_repo_url
     repo_branch = var.boot_deploy_repo_branch
     start_now   = var.boot_deploy_start_now ? "true" : "false"
-    start_script_b64 = base64encode(templatefile("${path.module}/templates/start-containers.sh.tftpl", {
-      repo_root = var.boot_deploy_repo_root
-    }))
   }) : ""
   # Separate template + base64 avoids nested-heredoc collisions with the
   # install script body (and keeps the ternary parseable).
@@ -44,7 +41,7 @@ check "boot_deploy_repo_root_absolute" {
 check "boot_deploy_image_tag_set" {
   assert {
     condition     = !var.manage_boot_deploy || var.boot_deploy_image_tag != ""
-    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (set ec2_boot_deploy_image_tag)."
+    error_message = "manage_boot_deploy=true requires boot_deploy_image_tag (pin it in envs/*/ec2_image_tag.tf)."
   }
 }
 
@@ -52,13 +49,6 @@ check "boot_deploy_image_tag_safe" {
   assert {
     condition     = !var.manage_boot_deploy || can(regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", var.boot_deploy_image_tag))
     error_message = "boot_deploy_image_tag must be an ECR tag (letters, digits, dot, underscore, hyphen)."
-  }
-}
-
-check "boot_deploy_client_image_tag_safe" {
-  assert {
-    condition     = !var.manage_boot_deploy || var.boot_deploy_client_image_tag == "" || can(regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", var.boot_deploy_client_image_tag))
-    error_message = "boot_deploy_client_image_tag must be an ECR tag or empty."
   }
 }
 
@@ -92,11 +82,6 @@ resource "aws_ssm_document" "boot_deploy" {
         description    = "ECR tag for the e2eetext-server container"
         allowedPattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
       }
-      ClientImageTag = {
-        type           = "String"
-        description    = "ECR tag for the e2eetext-client container, or none to leave that container unchanged"
-        allowedPattern = "^(none|[A-Za-z0-9][A-Za-z0-9._-]{0,127})$"
-      }
     }
     mainSteps = [
       {
@@ -123,8 +108,7 @@ resource "aws_ssm_association" "boot_deploy" {
   document_version = tostring(aws_ssm_document.boot_deploy[0].latest_version)
 
   parameters = {
-    ImageTag       = var.boot_deploy_image_tag
-    ClientImageTag = var.boot_deploy_client_image_tag == "" ? "none" : var.boot_deploy_client_image_tag
+    ImageTag = var.boot_deploy_image_tag
   }
 
   targets {
@@ -132,9 +116,9 @@ resource "aws_ssm_association" "boot_deploy" {
     values = [aws_instance.this.id]
   }
 
-  # An association update runs immediately. Changing ImageTag or
-  # ClientImageTag is an association update, so apply pulls those tags
-  # instead of waiting for the next boot.
+  # An association update runs immediately. Changing ImageTag is an
+  # association update, so apply pulls that tag instead of waiting for
+  # the next boot.
   apply_only_at_cron_interval      = false
   wait_for_success_timeout_seconds = 900
 }

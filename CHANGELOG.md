@@ -15,7 +15,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 #### Tooling & deployment
 
-- Dig and prod EC2 image tags are Terraform variables in `terraform/envs/{dev,prod}/ec2_image_tag.tf`: `ec2_boot_deploy_image_tag` for the server container and `ec2_boot_deploy_client_image_tag` for the client container. Apply updates the SSM association, and that update pulls the tags onto the instance. The server tag is `v0.5.1`. The client container tag is `v0.4.1`, the last published `e2eetext-client` image. Dig CloudFront `static_site_client_version` is `v0.5.1`.
+- The EC2 boot-deploy unit runs the server container only. `maintenance/ec2/docker-compose.yml` no longer has a client service, and `maintenance/ec2/docker-compose.frontend.yml` is removed. Apply of the `ec2_boot_deploy_image_tag` pin updates the SSM association, which pulls that server tag and removes a leftover client container. Dig and prod pins are `v0.5.1`. Dig CloudFront `static_site_client_version` is `v0.5.1`.
 
 ## [0.5.1](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 

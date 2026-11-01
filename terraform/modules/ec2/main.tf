@@ -1,7 +1,6 @@
-# Phase 2 of #27: the EC2 instance running docker-compose.yml (server +
-# client together — deploy.sh only ever references docker-compose.yml, not
-# the split-topology docker-compose.frontend.yml/docker-compose.backend.yml,
-# so this module provisions a single combined instance, not two).
+# Phase 2 of #27: the EC2 instance running docker-compose.yml (the server
+# container). deploy.sh references that file. The client is served from
+# S3 and CloudFront, so this module provisions one instance, not two.
 #
 # A dev instance already exists (confirmed by the repo owner on #27) — this
 # module's job is to describe it precisely enough for `terraform import`,
