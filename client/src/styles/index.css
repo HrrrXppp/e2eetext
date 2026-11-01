@@ -1382,6 +1382,10 @@ body.has-dev-instance-banner .site-head {
   list-style: none;
 }
 
+.landing__highlights + .landing__description {
+  margin-top: 1.5rem;
+}
+
 .landing__highlight {
   display: flex;
   align-items: center;
