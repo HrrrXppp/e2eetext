@@ -11,6 +11,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Changed
+
+- `ads.txt` authorizes the AdSense publisher (`pub-8559868695202171`) instead of a comment-only file. The AdSense script loads only on the home, privacy, and terms pages, and the tag is removed when the last of those pages unmounts, so a client-side move into the chat app or the roadmap does not leave it in the document. The landing page no longer says the product is coming soon. Client deploys invalidate `/ads.txt`.
+
 ## [0.5.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 
 ### Changed
@@ -34,11 +38,10 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 ### Added
 
 - The client can be served as static files from a private S3 bucket behind CloudFront instead of a container on the EC2 instance (#28). The new `terraform/modules/static-site` module creates the bucket, an origin access control, a CloudFront distribution with a us-east-1 ACM certificate for the public hostnames, and a CloudFront Function that sends extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `index.html`. The same distribution forwards `/api/*` (including the WebSocket), `/health`, `/sitemap.xml` and `/robots.txt` to the existing ALB with caching off, so the browser still talks to one host. `terraform/envs/dev` and `terraform/envs/prod` instantiate it. The staged cutover leaves the ALB client rules and the EC2 client container in place until DNS is switched; a follow-up removes them.
-- `.github/workflows/deploy-client.yml` builds `client/dist`, uploads it with long-lived caching for hashed assets and `no-cache` for `index.html`, writes the dev or prod `instance.json`, and invalidates `/index.html`, `/ads.txt`, and `/instance.json`. It starts by itself when a version bump lands on `main` (uploading to dev) and can be run by hand for dev or prod. Files go to a directory named after the client version (`vX.Y.Z` from `main`, the short commit otherwise), and CloudFront serves that directory through the S3 origin path, set by `static_site_client_version` in `terraform/envs/dev` and `terraform/envs/prod`. A new release is switched on by changing that variable and applying. Old directories are deleted by hand.
+- `.github/workflows/deploy-client.yml` builds `client/dist`, uploads it with long-lived caching for hashed assets and `no-cache` for `index.html`, writes the dev or prod `instance.json`, and invalidates `/index.html` and `/instance.json`. It starts by itself when a version bump lands on `main` (uploading to dev) and can be run by hand for dev or prod. Files go to a directory named after the client version (`vX.Y.Z` from `main`, the short commit otherwise), and CloudFront serves that directory through the S3 origin path, set by `static_site_client_version` in `terraform/envs/dev` and `terraform/envs/prod`. A new release is switched on by changing that variable and applying. Old directories are deleted by hand.
 
 ### Changed
 
-- `ads.txt` authorizes the AdSense publisher (`pub-8559868695202171`) instead of a comment-only file, which the review reported as missing. The AdSense script loads only on the home, privacy, and terms pages, not in the chat app or on the roadmap. The landing page no longer says the product is coming soon, and client deploys invalidate `/ads.txt`.
 - `build-images.yml` no longer builds or pushes the `e2eetext-client` image, and its "already exists" check looks at `e2eetext-server` only. `maintenance/ecr/build-and-push.sh` builds and pushes the server image only.
 
 #### Tooling & deployment
