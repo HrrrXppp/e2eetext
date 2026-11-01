@@ -66,6 +66,21 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Replacing the association (instead of updating it) is what makes apply
+# wait for the rollout. An in-place update starts a run from the previous
+# association version, which has no parameters, against the new document,
+# which requires ImageTag. That run fails immediately and leaves the
+# containers untouched. The parameter default covers that race; the
+# replacement is the run apply waits for.
+resource "terraform_data" "boot_deploy_rollout" {
+  count = local.boot_deploy_enabled ? 1 : 0
+
+  input = {
+    image_tag  = var.boot_deploy_image_tag
+    script_sha = sha256(local.boot_deploy_script)
+  }
+}
+
 resource "aws_ssm_document" "boot_deploy" {
   count = local.boot_deploy_enabled ? 1 : 0
 
@@ -80,6 +95,7 @@ resource "aws_ssm_document" "boot_deploy" {
       ImageTag = {
         type           = "String"
         description    = "ECR tag for the e2eetext-server container"
+        default        = var.boot_deploy_image_tag
         allowedPattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
       }
     }
@@ -118,7 +134,12 @@ resource "aws_ssm_association" "boot_deploy" {
 
   # An association update runs immediately. Changing ImageTag is an
   # association update, so apply pulls that tag instead of waiting for
-  # the next boot.
+  # the next boot. replace_triggered_by makes a tag or script change a
+  # new association, and Create is what honors the wait below.
   apply_only_at_cron_interval      = false
   wait_for_success_timeout_seconds = 900
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.boot_deploy_rollout[0]]
+  }
 }
