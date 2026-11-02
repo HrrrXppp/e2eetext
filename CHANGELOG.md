@@ -11,11 +11,14 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.5.4](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-01
+
 ### Fixed
 
 #### Tooling & deployment
 
 - A version bump on `main` publishes the client to the dev and prod static-site buckets. The automatic run uploaded to dev only, so the prod bucket did not get the new directory.
+- Dig and prod deployed version pins are `v0.5.4`
 
 ## [0.5.3](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-01
 
