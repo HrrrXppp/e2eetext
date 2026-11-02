@@ -3,5 +3,5 @@
 # Edit this value and terraform apply.
 
 locals {
-  deployed_version = "v0.5.2"
+  deployed_version = "v0.5.3"
 }

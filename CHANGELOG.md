@@ -11,6 +11,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.5.3](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-01
+
 ### Added
 
 - Public `/encryption` page explaining how messages are protected (identity keys, chat keys, key versions, identity backup, honest limits) with a technical appendix of algorithms and parameters, an Encryption footer link, and a sitemap and ALB priority 15 entry (#147). The page does not load the AdSense script.
@@ -21,7 +23,8 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 #### Tooling & deployment
 
-- Dig and prod each pin one deployed version in `terraform/envs/{dev,prod}/version.tf`. That string is both the server image tag and the CloudFront client directory. Prod's client directory was the bucket root; it is now the same `v0.5.2` pin as the server.
+- Dig and prod each pin one deployed version in `terraform/envs/{dev,prod}/version.tf`. That string is both the server image tag and the CloudFront client directory. Prod's client directory was the bucket root; it is now the same `v0.5.3` pin as the server.
+- Dig and prod deployed version pins are `v0.5.3`
 
 ## [0.5.2](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-10-31
 
