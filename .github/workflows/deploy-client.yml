@@ -29,12 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # A version bump publishes both buckets. A manual run publishes only the
+      # chosen one. The matrix context is not available in a job-level if, and
+      # the inputs context does not exist on push, so the list is chosen here.
       matrix:
-        environment: [dev, prod]
-    # A version bump publishes both buckets. A manual run publishes only the
-    # chosen one. github.event.inputs is empty on push, so this must not use
-    # the inputs context (that context exists only for workflow_dispatch).
-    if: github.event_name == 'push' || matrix.environment == github.event.inputs.environment
+        environment: ${{ github.event_name == 'push' && fromJSON('["dev", "prod"]') || fromJSON(format('["{0}"]', github.event.inputs.environment)) }}
     # Queue (never cancel) so two publishes to the same environment run in order.
     concurrency:
       group: deploy-client-${{ matrix.environment }}
