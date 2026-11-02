@@ -2,9 +2,9 @@ name: Deploy client (S3 + CloudFront)
 
 # Builds client/dist and publishes it to the environment's private S3 bucket
 # behind CloudFront (terraform/modules/static-site, #28), into a directory
-# named after the client version (vX.Y.Z). It starts by itself when a version
-# bump lands on main (the same trigger as build-images.yml) and uploads to dev;
-# run it by hand from the Actions tab to publish to prod or to re-publish.
+# named after the client version (vX.Y.Z). A version bump on main publishes
+# to dev and prod. Run it by hand from the Actions tab to re-publish one
+# environment (prod runs from main only).
 # Uploading never changes what visitors get; deployed_version in version.tf does.
 
 on:
@@ -23,16 +23,24 @@ permissions:
   id-token: write
   contents: read
 
-# Queue (never cancel) so two publishes to the same environment run in order.
-concurrency:
-  group: deploy-client-${{ inputs.environment || 'dev' }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
+    name: deploy (${{ matrix.environment }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+    # A version bump publishes both buckets. A manual run publishes only the
+    # chosen one. github.event.inputs is empty on push, so this must not use
+    # the inputs context (that context exists only for workflow_dispatch).
+    if: github.event_name == 'push' || matrix.environment == github.event.inputs.environment
+    # Queue (never cancel) so two publishes to the same environment run in order.
+    concurrency:
+      group: deploy-client-${{ matrix.environment }}
+      cancel-in-progress: false
     env:
-      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+      TARGET_ENV: ${{ matrix.environment }}
       # Each secret must be assigned on its own. GitHub Actions turns a
       # secret into an empty string when it is combined with && or ||, so
       # the publish failed even after the secrets were set.
