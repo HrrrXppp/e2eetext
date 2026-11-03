@@ -350,7 +350,7 @@ func TestLoadReadsSitemap(t *testing.T) {
   },
   "sitemap": {
     "hosts": ["Example.COM.", "example.io"],
-    "paths": ["/", "/privacy"]
+    "paths": ["/", "/privacy", "/terms", "/roadmap"]
   }
 }`)
 	if !sameStrings(cfg.Sitemap.Hosts, []string{"example.com", "example.io"}) {
@@ -359,7 +359,7 @@ func TestLoadReadsSitemap(t *testing.T) {
 	if cfg.Sitemap.CanonicalHost() != "example.com" {
 		t.Fatalf("CanonicalHost = %q", cfg.Sitemap.CanonicalHost())
 	}
-	if !sameStrings(cfg.Sitemap.Paths, []string{"/", "/privacy"}) {
+	if !sameStrings(cfg.Sitemap.Paths, []string{"/", "/privacy", "/terms", "/roadmap", "/encryption"}) {
 		t.Fatalf("Paths = %#v", cfg.Sitemap.Paths)
 	}
 }

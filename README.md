@@ -107,7 +107,7 @@ Edit `.env` — set `DATABASE_URL` (and keep `CONFIG_PATH=server/config.json` fr
 }
 ```
 
-The same file's `sitemap` object (`sitemap.hosts`, `sitemap.paths`) is what `/sitemap.xml` and `/robots.txt` list. The first host is the fallback for any other request host. `server/config.example.json` has the public names, including `dev.e2eetext.com`. Omitting `sitemap` uses that built-in list.
+The same file's `sitemap` object (`sitemap.hosts`, `sitemap.paths`) is what `/sitemap.xml` lists. `/robots.txt` allows the site and points at that sitemap; it does not list pages. The first host is the fallback for any other request host. `server/config.example.json` has the public names, including `dev.e2eetext.com`. Omitting `sitemap` uses that built-in list. A `sitemap.paths` copied from an older example keeps its pages and gains any built-in page it does not already name.
 
 Get Google credentials from [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials. Create an **OAuth 2.0 Client ID** (Web application).
 
@@ -603,7 +603,7 @@ Edit `maintenance/ec2/.env`:
 | `METRICS_CLOUDWATCH_NAMESPACE` | optional, e.g. `E2EEText/Messenger` — enables [CloudWatch metrics](#metrics) |
 | `METRICS_ENVIRONMENT` | optional, `dev` or `prod` |
 
-Edit `maintenance/ec2/config/config.json` with Google OAuth `client_id` and `client_secret`. `sitemap.hosts` and `sitemap.paths` in that file are the public names and pages written into `/sitemap.xml`; copy them from `config.example.json` when the file was created before that object existed. Omitting `sitemap` keeps the built-in list (`e2eetext.com`, `.io`, `.net`, `.org`, `dev.e2eetext.com`, and `/`, `/privacy`, `/terms`, `/roadmap`).
+Edit `maintenance/ec2/config/config.json` with Google OAuth `client_id` and `client_secret`. `sitemap.hosts` and `sitemap.paths` in that file are the public names and pages written into `/sitemap.xml`; copy them from `config.example.json` when the file was created before that object existed. Omitting `sitemap` keeps the built-in list (`e2eetext.com`, `.io`, `.net`, `.org`, `dev.e2eetext.com`, and `/`, `/privacy`, `/terms`, `/roadmap`, `/encryption`). An older `sitemap.paths` that stops at `/roadmap` still gains `/encryption`. `/robots.txt` allows the whole site and names that sitemap.
 
 Pull images from ECR and start:
 
