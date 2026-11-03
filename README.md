@@ -20,6 +20,10 @@ messenger/
 ├── client/          # React SPA
 ├── lambdas/
 │   └── metrics/     # scheduled Lambda: Messages/Chats/Users counts to CloudWatch
+├── news/            # Go news service (Lambda behind ALB; own module + database)
+│   ├── cmd/news/          # local server + `migrate` command
+│   ├── cmd/news-lambda/   # AWS Lambda (ALB target) entrypoint
+│   └── internal/          # news (handler, cursor, repository), database, lambdaadapter
 ├── server/          # Go API
 │   ├── cmd/messenger/
 │   └── internal/
@@ -370,11 +374,31 @@ cd server && go build ./...
 cd client && npm run build
 ```
 
+### News service
+
+`news/` is a separate Go module with its own database (`NEWS_DATABASE_URL`, a logical database on the same Postgres/RDS instance with a dedicated user) and its own embedded migrations (the first one seeds the May 31 2026 launch item). Content is managed through migrations/SQL only; there is no admin API.
+
+```bash
+cd news
+NEWS_DATABASE_URL=postgres://user:pass@localhost:5432/news?sslmode=disable go run ./cmd/news migrate
+NEWS_DATABASE_URL=... go run ./cmd/news        # serves on NEWS_ADDR (default :8081)
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/news` | Public news list, newest first. Query: `limit` (default 10, max 50), `before` (opaque cursor from `next_cursor`). Returns `{ "items": [...], "next_cursor": string or null }`; sends `Cache-Control: public, max-age=3600, s-maxage=3600` |
+| `GET` | `/health` | Health check |
+
+In AWS the same code runs as a Lambda (`cmd/news-lambda`, container image from `news/Dockerfile`, build context = repo root) behind an ALB Lambda target group, cached by CloudFront. The Terraform/ALB/CloudFront wiring and the client switch to this API land in follow-up PRs (#97); until then the landing page still uses its built-in list.
+
 ### Test
 
 ```bash
 # Server
 cd server && go test ./...
+
+# News service (add INTEGRATION_DATABASE_URL and -tags=integration for the Postgres test)
+cd news && go test ./...
 
 # Client
 cd client && npm test
