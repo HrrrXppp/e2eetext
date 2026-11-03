@@ -170,6 +170,49 @@ func (r *E2EERepository) AddKeyVersion(ctx context.Context, chatID, keyID, creat
 	return nil
 }
 
+func (r *E2EERepository) AddMembersWithKeyVersion(ctx context.Context, chatID string, userIDs []string, keyID, createdBy string, wraps map[string]json.RawMessage) error {
+	payload, err := json.Marshal(userIDs)
+	if err != nil {
+		return fmt.Errorf("encode new members: %w", err)
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin add members tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO user_chats (chat_id, user_id, name)
+		SELECT $1::uuid, m::uuid, (SELECT name FROM user_chats WHERE chat_id = $1::uuid LIMIT 1)
+		FROM jsonb_array_elements_text($2::jsonb) AS m`, chatID, string(payload)); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return repository.ErrAlreadyMember
+		}
+		return fmt.Errorf("insert user_chats: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chat_key_versions (id, chat_id, created_by)
+		VALUES ($1, $2, $3)`, keyID, chatID, createdBy); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return repository.ErrKeyVersionExists
+		}
+		return fmt.Errorf("insert chat key version: %w", err)
+	}
+
+	if err := insertKeyWraps(ctx, tx, chatID, keyID, wraps); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit add members tx: %w", err)
+	}
+	return nil
+}
+
 // insertKeyWraps stores every member's wrap of one chat key version with a
 // single statement; wraps maps user id to the wrap JSON.
 func insertKeyWraps(ctx context.Context, tx *sql.Tx, chatID, keyID string, wraps map[string]json.RawMessage) error {

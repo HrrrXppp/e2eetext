@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -139,14 +141,19 @@ func (s *stubChatOIDCProviderRepo) GetByName(_ context.Context, name string) (do
 }
 
 type stubE2EERepo struct {
-	chatRepo *stubChatRepo
+	chatRepo     *stubChatRepo
+	identityKeys map[string]bool
+	addedUserIDs []string
 }
 
 func (s *stubE2EERepo) UpsertIdentityKey(context.Context, string, string, json.RawMessage) error {
 	return nil
 }
 
-func (s *stubE2EERepo) GetIdentityKey(context.Context, string) (domain.UserIdentityKey, error) {
+func (s *stubE2EERepo) GetIdentityKey(_ context.Context, userID string) (domain.UserIdentityKey, error) {
+	if s.identityKeys[userID] {
+		return domain.UserIdentityKey{UserID: userID}, nil
+	}
 	return domain.UserIdentityKey{}, errors.New("identity key not found")
 }
 
@@ -155,6 +162,11 @@ func (s *stubE2EERepo) CreateChatWithKeys(ctx context.Context, name string, user
 }
 
 func (s *stubE2EERepo) AddKeyVersion(context.Context, string, string, string, map[string]json.RawMessage) error {
+	return nil
+}
+
+func (s *stubE2EERepo) AddMembersWithKeyVersion(_ context.Context, _ string, userIDs []string, _, _ string, _ map[string]json.RawMessage) error {
+	s.addedUserIDs = append(s.addedUserIDs, userIDs...)
 	return nil
 }
 
@@ -580,6 +592,86 @@ func TestChatHandler_RemoveMember(t *testing.T) {
 			}
 			if len(tt.repo.removedIDs) != tt.wantRemove {
 				t.Fatalf("removed = %v, want %d call(s)", tt.repo.removedIDs, tt.wantRemove)
+			}
+		})
+	}
+}
+
+func TestChatHandler_AddMembers(t *testing.T) {
+	const chatID = "11111111-1111-1111-1111-111111111111"
+	const callerID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	const bobID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	const carolID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+	const daveID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	wrap := func(ids ...string) []map[string]any {
+		out := make([]map[string]any, len(ids))
+		for i, id := range ids {
+			out[i] = map[string]any{"user_id": scopedID(id), "wrap": map[string]any{"v": 1}}
+		}
+		return out
+	}
+	members := []domain.ChatMember{
+		{User: domain.User{ID: callerID}, IsAdmin: true},
+		{User: domain.User{ID: bobID}},
+	}
+	adminRepo := func() *stubChatRepo {
+		return &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), admins: map[string]bool{callerID: true}, members: members}
+	}
+
+	tests := []struct {
+		name        string
+		repo        *stubChatRepo
+		userIDs     []string
+		wraps       []map[string]any
+		wantStatus  int
+		wantAdded   int
+		wantUserIDs []string
+	}{
+		{name: "admin adds two users", repo: adminRepo(), userIDs: []string{carolID, daveID}, wraps: wrap(callerID, bobID, carolID, daveID), wantStatus: http.StatusNoContent, wantAdded: 2},
+		{name: "non-admin forbidden", repo: &stubChatRepo{chatsByUserID: memberChats(chatID, callerID), members: members}, userIDs: []string{carolID}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusForbidden},
+		{name: "non-member forbidden", repo: &stubChatRepo{admins: map[string]bool{callerID: true}, members: members}, userIDs: []string{carolID}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusForbidden},
+		{name: "empty user list", repo: adminRepo(), wraps: wrap(callerID, bobID), wantStatus: http.StatusBadRequest},
+		{name: "duplicate user", repo: adminRepo(), userIDs: []string{carolID, carolID}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusBadRequest},
+		{name: "existing member among several", repo: adminRepo(), userIDs: []string{carolID, bobID}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusConflict, wantUserIDs: []string{scopedID(bobID)}},
+		{name: "missing identity key", repo: adminRepo(), userIDs: []string{carolID, "ffffffff-ffff-ffff-ffff-ffffffffffff"}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusBadRequest, wantUserIDs: []string{scopedID("ffffffff-ffff-ffff-ffff-ffffffffffff")}},
+		{name: "wrap missing for new user", repo: adminRepo(), userIDs: []string{carolID, daveID}, wraps: wrap(callerID, bobID, carolID), wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const providerID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+			userRepo := &stubChatUserRepo{users: []domain.User{{ID: callerID, OIDCProviderID: providerID, Subject: "google-subject-1"}}}
+			oidcRepo := &stubChatOIDCProviderRepo{providers: []domain.OIDCProvider{{ID: providerID, Name: "Google"}}}
+			e2eeRepo := &stubE2EERepo{chatRepo: tt.repo, identityKeys: map[string]bool{carolID: true, daveID: true, bobID: true}}
+			h := NewChatHandler(service.NewChatService(tt.repo, userRepo, oidcRepo), service.NewE2EEService(e2eeRepo, tt.repo, userRepo, oidcRepo), nil, testNode())
+
+			scoped := make([]string, len(tt.userIDs))
+			for i, id := range tt.userIDs {
+				scoped[i] = scopedID(id)
+			}
+			payload, err := json.Marshal(map[string]any{"user_ids": scoped, "key_id": "22222222-2222-2222-2222-222222222222", "wraps": tt.wraps})
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			req := membersTestRequest(http.MethodPost, "/api/v1/chat/x/y/members")
+			req.Body = io.NopCloser(bytes.NewReader(payload))
+			rec := httptest.NewRecorder()
+			h.AddMembers(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if len(e2eeRepo.addedUserIDs) != tt.wantAdded {
+				t.Fatalf("added = %v, want %d user(s)", e2eeRepo.addedUserIDs, tt.wantAdded)
+			}
+			if tt.wantUserIDs != nil {
+				var body struct {
+					UserIDs []string `json:"user_ids"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || !slices.Equal(body.UserIDs, tt.wantUserIDs) {
+					t.Fatalf("user_ids = %v (err %v), want %v", body.UserIDs, err, tt.wantUserIDs)
+				}
 			}
 		})
 	}

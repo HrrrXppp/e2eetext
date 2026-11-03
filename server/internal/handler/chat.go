@@ -190,6 +190,101 @@ func (h *ChatHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAPIChatMembers(h.node, members))
 }
 
+type addMembersRequest struct {
+	UserIDs []string            `json:"user_ids"`
+	KeyID   string              `json:"key_id"`
+	Wraps   []createChatKeyWrap `json:"wraps"`
+}
+
+// AddMembers adds one or more users to an existing chat together with a new chat key version wrapped for every
+// current and new member. Only chat admins may call it.
+func (h *ChatHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
+	tokenUser, ok := service.TokenUserFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return
+	}
+	if h.e2eeService == nil {
+		writeError(w, http.StatusBadRequest, errors.New("e2ee is not configured"))
+		return
+	}
+
+	chatID, err := h.node.LocalID(scopedIDFromPath(r))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req addMembersRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	userIDs, err := localIDs(h.node, req.UserIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	wraps := make([]service.ChatKeyWrapInput, 0, len(req.Wraps))
+	for _, item := range req.Wraps {
+		userID, wrapErr := h.node.LocalID(strings.TrimSpace(item.UserID))
+		if wrapErr != nil {
+			writeError(w, http.StatusBadRequest, wrapErr)
+			return
+		}
+		wraps = append(wraps, service.ChatKeyWrapInput{UserID: userID, Wrap: item.Wrap})
+	}
+
+	err = h.e2eeService.AddMembers(r.Context(), chatID, userIDs, req.KeyID, wraps, tokenUser)
+	if err != nil {
+		var already *service.AlreadyMembersError
+		var missing *service.MissingIdentityKeysError
+		switch {
+		case errors.Is(err, service.ErrE2EEAccessDenied), errors.Is(err, service.ErrChatNotAdmin):
+			writeError(w, http.StatusForbidden, err)
+		case errors.As(err, &already):
+			h.writeUserListError(w, http.StatusConflict, err, already.UserIDs)
+		case errors.Is(err, service.ErrAlreadyMember):
+			writeError(w, http.StatusConflict, err)
+		case errors.Is(err, service.ErrKeyVersionExists):
+			writeError(w, http.StatusConflict, err)
+		case errors.As(err, &missing):
+			h.writeUserListError(w, http.StatusBadRequest, err, missing.UserIDs)
+		case isAddMembersValidationError(err):
+			writeError(w, http.StatusBadRequest, err)
+		default:
+			writeError(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	h.notifyChatAdded(userIDs, chatID)
+}
+
+// writeUserListError replies with the error text followed by the offending scoped user ids, also returned as user_ids.
+func (h *ChatHandler) writeUserListError(w http.ResponseWriter, status int, err error, localUserIDs []string) {
+	scoped := make([]string, len(localUserIDs))
+	for i, id := range localUserIDs {
+		scoped[i] = h.node.ScopeID(id)
+	}
+	writeJSON(w, status, map[string]any{
+		"error":    err.Error() + ": " + strings.Join(scoped, ", "),
+		"user_ids": scoped,
+	})
+}
+
+func isAddMembersValidationError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "is required") ||
+		strings.Contains(msg, "wraps must include") ||
+		strings.Contains(msg, "not a chat member") ||
+		strings.Contains(msg, "too large") ||
+		strings.Contains(msg, "too many") ||
+		strings.Contains(msg, "duplicate")
+}
+
 func (h *ChatHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	tokenUser, ok := service.TokenUserFromContext(r.Context())
 	if !ok {
