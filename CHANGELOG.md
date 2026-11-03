@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Server
+
+- `/sitemap.xml` includes built-in public pages that an older `config.json` left out, so `/encryption` is listed without editing the file on the server. `/robots.txt` already allows the site and points at that sitemap.
+
 ## [0.5.4](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-01
 
 ### Fixed

@@ -60,8 +60,11 @@ func (s SitemapConfig) CanonicalHost() string {
 }
 
 // DefaultSitemap is used when config.json omits the sitemap object, so an
-// existing file keeps serving the built-in public names. The same values are
-// written in server/config.example.json and maintenance/ec2/config/config.example.json.
+// existing file keeps serving the built-in public names. Paths from this list
+// are also added when an older sitemap.paths does not name them yet, so a new
+// public page reaches /sitemap.xml without editing the file on the server.
+// The same values are written in server/config.example.json and
+// maintenance/ec2/config/config.example.json.
 func DefaultSitemap() SitemapConfig {
 	return SitemapConfig{
 		Hosts: []string{"e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org", "dev.e2eetext.com"},
@@ -332,6 +335,15 @@ func normalizeSitemap(file *fileSitemap) (SitemapConfig, error) {
 		}
 		if _, ok := seenPaths[path]; ok {
 			return SitemapConfig{}, fmt.Errorf("sitemap.paths contains duplicate %q", path)
+		}
+		seenPaths[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	// An on-box config.json is a copy of an older example. Keep the pages it
+	// names, then add any built-in page it does not already have.
+	for _, path := range DefaultSitemap().Paths {
+		if _, ok := seenPaths[path]; ok {
+			continue
 		}
 		seenPaths[path] = struct{}{}
 		paths = append(paths, path)
