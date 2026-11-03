@@ -11,11 +11,17 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+## [0.5.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-02
+
 ### Fixed
 
 #### Server
 
 - `/sitemap.xml` includes built-in public pages that an older `config.json` left out, so `/encryption` is listed without editing the file on the server. `/robots.txt` already allows the site and points at that sitemap.
+
+#### Tooling & deployment
+
+- Dig and prod deployed version pins are `v0.5.5`
 
 ## [0.5.4](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-01
 
