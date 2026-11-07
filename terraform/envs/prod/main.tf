@@ -51,7 +51,6 @@ module "ec2" {
   subnet_id     = var.ec2_subnet_id != "" ? var.ec2_subnet_id : module.network.subnet_ids[0]
   vpc_id        = module.network.vpc_id
 
-  alb_security_group_id = var.alb_security_group_id
   admin_ssh_cidr_blocks = var.admin_ssh_cidr_blocks
   key_name              = var.key_name
 
@@ -73,34 +72,10 @@ module "ec2" {
   tags = var.tags
 }
 
-module "alb" {
-  source = "../../modules/alb"
-
-  name       = var.alb_name != "" ? var.alb_name : var.name_prefix
-  vpc_id     = module.network.vpc_id
-  subnet_ids = length(var.alb_subnet_ids) > 0 ? var.alb_subnet_ids : module.network.subnet_ids
-
-  security_group_ids  = [var.alb_security_group_id]
-  instance_id         = module.ec2.instance_id
-  acm_certificate_arn = local.prod_acm_certificate_arn
-
-  server_target_group_name = var.server_target_group_name
-  client_target_group_name = var.client_target_group_name
-  idle_timeout             = var.alb_idle_timeout
-  https_default_action     = var.https_default_action
-  api_rule_priority        = var.api_rule_priority
-  api_path_patterns        = var.api_path_patterns
-  create_health_rule       = var.create_health_rule
-  additional_https_rules   = var.additional_https_rules
-
-  health_check_healthy_threshold   = var.health_check_healthy_threshold
-  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold
-  server_health_check_port         = var.server_health_check_port
-  client_health_check_port         = var.client_health_check_port
-  client_health_check_path         = var.client_health_check_path
-
-  tags = var.tags
-}
+# module.alb is gone. The next apply destroys the prod load balancer, its
+# target groups, listeners, and rules. Its security group is not managed
+# here and stays in the account. The us-east-2 certificate in acm.tf stays
+# too; CloudFront uses the us-east-1 certificate.
 
 # --- RDS (Phase 3 of #27) ---
 # Same "live status not yet confirmed" treatment as the ec2/alb modules

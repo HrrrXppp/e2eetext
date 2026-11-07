@@ -1,6 +1,8 @@
-# Phase 2 of #27: the EC2 instance running docker-compose.yml (the server
-# container). deploy.sh references that file. The client is served from
-# S3 and CloudFront, so this module provisions one instance, not two.
+# The EC2 instance running the server container. The client is served from
+# S3 and CloudFront. CloudFront also connects to this instance on port 8081
+# for the API, WebSocket, /sitemap.xml and /robots.txt. A dedicated security
+# group allows that port only from the CloudFront origin-facing prefix list,
+# so the rule's size does not have to fit in the instance's existing group.
 #
 # A dev instance already exists (confirmed by the repo owner on #27) — this
 # module's job is to describe it precisely enough for `terraform import`,
@@ -14,10 +16,11 @@
 locals {
   # When the caller passes pre-existing security group IDs (the live dev
   # instance runs with hand-made SGs — "launch-wizard-2" + "ec2-rds-1" —
-  # not one this module created), don't create a new SG at all: attaching a
-  # module-made SG in their place would change the live firewall (and
-  # ec2-rds-1's own description warns that detaching it can cut RDS
-  # connectivity).
+  # not one this module created), don't create aws_security_group.this:
+  # attaching a module-made SG in their place would change the live firewall
+  # (and ec2-rds-1's own description warns that detaching it can cut RDS
+  # connectivity). aws_security_group.from_cloudfront is attached in
+  # addition to those groups, not instead of them.
   create_security_group = length(var.security_group_ids) == 0
   security_group_ids    = local.create_security_group ? [aws_security_group.this[0].id] : var.security_group_ids
 }
@@ -40,24 +43,38 @@ resource "aws_security_group" "this" {
     }
   }
 
-  ingress {
-    description     = "client (from ALB only)"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [var.alb_security_group_id]
+  # Port 8081 is on aws_security_group.from_cloudfront, not here. 80/443 stay
+  # closed: CloudFront is the public HTTPS endpoint.
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
+  tags = var.tags
+}
+
+# Separate group so the CloudFront prefix list (its entries count toward
+# the rules-per-group quota) is not added to launch-wizard-2 or the
+# module-created group, which already have their own rules.
+data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+resource "aws_security_group" "from_cloudfront" {
+  name        = "${var.name != "" ? var.name : var.security_group_name}-cf-origin"
+  description = "TCP 8081 from CloudFront origin-facing addresses only"
+  vpc_id      = var.vpc_id
+
   ingress {
-    description     = "server (from ALB only)"
+    description     = "server from CloudFront"
     from_port       = 8081
     to_port         = 8081
     protocol        = "tcp"
-    security_groups = [var.alb_security_group_id]
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront_origin.id]
   }
 
-  # No 80/443 here by design — the README explicitly calls out that the ALB
-  # handles public HTTP(S), not the instance.
   egress {
     from_port   = 0
     to_port     = 0
@@ -146,7 +163,7 @@ resource "aws_instance" "this" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = local.security_group_ids
+  vpc_security_group_ids = concat(local.security_group_ids, [aws_security_group.from_cloudfront.id])
   iam_instance_profile   = var.create_iam_instance_profile ? aws_iam_instance_profile.this[0].name : null
   key_name               = var.key_name != "" ? var.key_name : null
 

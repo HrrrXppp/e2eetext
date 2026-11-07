@@ -26,27 +26,6 @@ module "network" {
   subnet_ids = var.subnet_ids
 }
 
-# --- Live-stack lookups ---
-# The dev ALB's security group and ACM certificate are pre-existing inputs,
-# not resources this config manages. Rather than requiring their IDs/ARNs
-# in a tfvars file (the account-specific ARN can't be committed here), look
-# them up from the live ALB by its name. If the ALB doesn't exist (e.g.
-# standing dev up fresh in a new account), these lookups fail — set
-# var.alb_security_group_id / var.acm_certificate_arn explicitly instead.
-
-data "aws_lb" "live" {
-  count = var.alb_security_group_id == "" || var.acm_certificate_arn == "" ? 1 : 0
-
-  name = var.alb_name
-}
-
-data "aws_lb_listener" "live_https" {
-  count = var.acm_certificate_arn == "" ? 1 : 0
-
-  load_balancer_arn = data.aws_lb.live[0].arn
-  port              = 443
-}
-
 # The live dev instance runs with hand-made security groups (by name:
 # "launch-wizard-2" and "ec2-rds-1" — audited 2026-07-26), not one this
 # config creates. Resolve their names to IDs so the IDs themselves stay out
@@ -59,9 +38,6 @@ data "aws_security_group" "ec2" {
 }
 
 locals {
-  alb_security_group_id = var.alb_security_group_id != "" ? var.alb_security_group_id : tolist(data.aws_lb.live[0].security_groups)[0]
-  acm_certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : data.aws_lb_listener.live_https[0].certificate_arn
-
   ec2_security_group_ids = length(var.ec2_security_group_ids) > 0 ? var.ec2_security_group_ids : [
     for name in var.ec2_security_group_names : data.aws_security_group.ec2[name].id
   ]
@@ -76,7 +52,6 @@ module "ec2" {
   subnet_id     = var.ec2_subnet_id != "" ? var.ec2_subnet_id : module.network.subnet_ids[0]
   vpc_id        = module.network.vpc_id
 
-  alb_security_group_id = local.alb_security_group_id
   admin_ssh_cidr_blocks = var.admin_ssh_cidr_blocks
   key_name              = var.key_name
 
@@ -100,37 +75,9 @@ module "ec2" {
   tags = var.tags
 }
 
-module "alb" {
-  source = "../../modules/alb"
-
-  name       = var.alb_name
-  vpc_id     = module.network.vpc_id
-  subnet_ids = length(var.alb_subnet_ids) > 0 ? var.alb_subnet_ids : module.network.subnet_ids
-
-  security_group_ids  = [local.alb_security_group_id]
-  instance_id         = module.ec2.instance_id
-  acm_certificate_arn = local.acm_certificate_arn
-
-  # The live dev ALB diverges from create-alb.example.sh (the module's
-  # defaults) in all of the following, audited 2026-07-26 — these values
-  # describe what's actually live:
-  server_target_group_name = var.server_target_group_name # live: "dev-server"
-  client_target_group_name = var.client_target_group_name # live: "dev-client"
-  idle_timeout             = var.alb_idle_timeout         # live: 60, not 3600
-  https_default_action     = var.https_default_action     # live: fixed 404, not forward-to-client
-  api_rule_priority        = var.api_rule_priority        # live: 100, not 10
-  api_path_patterns        = var.api_path_patterns        # live: ["/api/*"], not ["/api*"]
-  create_health_rule       = var.create_health_rule       # live: no /health rule
-  additional_https_rules   = var.additional_https_rules   # live: SPA rules 10–14
-
-  health_check_healthy_threshold   = var.health_check_healthy_threshold   # live: 5, not 3
-  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold # live: 2, not 3
-  server_health_check_port         = var.server_health_check_port         # live: "8081", not "traffic-port"
-  client_health_check_port         = var.client_health_check_port         # live: "traffic-port"
-  client_health_check_path         = var.client_health_check_path         # live: "/"
-
-  tags = var.tags
-}
+# module.alb is gone. The next apply destroys dev-e2eetext, its target
+# groups, listeners, and rules. The pre-existing ALB security group is not
+# managed here and stays in the account.
 
 # --- RDS (Phase 3 of #27) ---
 # UNLIKE network/ec2/alb above, this section's variables have NO

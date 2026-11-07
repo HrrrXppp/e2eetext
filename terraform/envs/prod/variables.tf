@@ -55,8 +55,9 @@ variable "ec2_subnet_id" {
 }
 
 variable "alb_security_group_id" {
-  description = "Security group ID of the prod ALB (pre-existing, not created by Terraform — see modules/alb)."
+  description = "Unused. Kept so an existing terraform.tfvars that still sets the old load balancer security group continues to plan."
   type        = string
+  default     = ""
 }
 
 variable "admin_ssh_cidr_blocks" {
@@ -130,12 +131,11 @@ variable "ec2_boot_deploy_start_now" {
   default     = true
 }
 
-# --- ALB ---
-# Overrides default to the create-alb.example.sh-shaped topology (the
-# modules' defaults). If a live prod ALB exists, audit it first and set
-# these to its real names/values — the dev audit (2026-07-26) found the
-# live stack diverged on every one of them, and the TG/ALB names are
-# ForceNew (a mismatch is a replace, i.e. downtime), so don't assume.
+# --- Former ALB inputs ---
+# The load balancer is no longer created. api_path_patterns,
+# additional_https_rules and create_health_rule still choose which CloudFront
+# behaviors go to the instance. The other variables stay so an existing
+# terraform.tfvars that sets them continues to plan.
 
 variable "alb_name" {
   description = "Name of the prod ALB. Leave empty to use name_prefix. ForceNew — must match a live ALB's real name exactly for a zero-diff import."
@@ -279,8 +279,8 @@ variable "tags" {
 # Live status not yet confirmed (see main.tf's rds module header) — audit
 # first, then either import real values or apply fresh with deliberate,
 # reviewed choices. Required variables below have no default for the same
-# reason ami_id/instance_type/alb_security_group_id
-# don't: a wrong guess for an import target risks a forced replace, and for
+# reason ami_id/instance_type don't: a wrong guess for an import target
+# risks a forced replace, and for
 # a fresh apply these should be deliberate choices, not defaults.
 
 variable "rds_identifier" {

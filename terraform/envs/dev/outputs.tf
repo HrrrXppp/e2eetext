@@ -1,6 +1,6 @@
-output "alb_dns_name" {
-  description = "DNS name of the dev ALB — point your dev domain's Route 53 alias/CNAME here."
-  value       = module.alb.alb_dns_name
+output "server_origin_domain" {
+  description = "Public DNS name CloudFront uses for the API origin. Browsers use static_site_domain_name, not this name."
+  value       = module.ec2.public_dns
 }
 
 output "instance_id" {

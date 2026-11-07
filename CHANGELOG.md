@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Changed
+
+#### Tooling & deployment
+
+- CloudFront sends the API, WebSocket, `/health`, `/sitemap.xml`, and `/robots.txt` straight to the EC2 instance on port 8081. Applying dig or prod deletes that environment's Application Load Balancer. Visitors already reach the site through CloudFront; the apply still interrupts the API for a few minutes while the origin switches.
+
 ## [0.5.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-02
 
 ### Fixed

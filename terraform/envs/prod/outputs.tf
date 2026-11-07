@@ -1,5 +1,5 @@
 output "acm_certificate_arn" {
-  description = "ACM certificate ARN on the prod HTTPS listener."
+  description = "us-east-2 ACM certificate ARN. Nothing attaches it after the load balancer is removed; CloudFront uses the us-east-1 certificate. Left in place so its validation records stay."
   value       = local.prod_acm_certificate_arn
 }
 
@@ -15,9 +15,9 @@ output "acm_dns_validation" {
   ], [])
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the prod ALB — point your production domain's Route 53 alias/CNAME here."
-  value       = module.alb.alb_dns_name
+output "server_origin_domain" {
+  description = "Public DNS name CloudFront uses for the API origin. Browsers use static_site_domain_name, not this name."
+  value       = module.ec2.public_dns
 }
 
 output "instance_id" {

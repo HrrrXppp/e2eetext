@@ -1,12 +1,12 @@
-# Static client hosting for #28: the built SPA (client/dist) lives in a
-# private S3 bucket and CloudFront is the single public entry point. The
-# API, WebSocket, /health, /sitemap.xml and /robots.txt paths are forwarded
-# to the ALB (caching off, every header, cookie and query string forwarded)
-# so the browser keeps talking to one host: no CORS or cookie changes.
+# Static client hosting: the built SPA (client/dist) lives in a private S3
+# bucket and CloudFront is the single public entry point. The API, WebSocket,
+# /health, /sitemap.xml and /robots.txt paths are forwarded to the EC2
+# instance on HTTP (caching off, every header, cookie and query string
+# forwarded) so the browser keeps talking to one host.
 
 locals {
-  s3_origin_id  = "s3-client"
-  alb_origin_id = "alb-server"
+  s3_origin_id     = "s3-client"
+  server_origin_id = "ec2-server"
 
   certificate_arn = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate_validation.this[0].certificate_arn
 
@@ -198,7 +198,7 @@ resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
   http_version        = "http2and3"
-  comment             = "${var.name} client (S3) and server (ALB)"
+  comment             = "${var.name} client (S3) and server (EC2)"
   aliases             = var.aliases
   default_root_object = "index.html"
   price_class         = var.price_class
@@ -211,13 +211,21 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   origin {
-    origin_id   = local.alb_origin_id
-    domain_name = var.alb_dns_name
+    origin_id   = local.server_origin_id
+    domain_name = var.server_origin_domain
+
+    # The origin hop is HTTP, so the instance sees no TLS. OAuth builds its
+    # redirect from X-Forwarded-Proto. This value wins over a viewer-supplied
+    # header of the same name. Viewers still use HTTPS to CloudFront.
+    custom_header {
+      name  = "X-Forwarded-Proto"
+      value = "https"
+    }
 
     custom_origin_config {
-      http_port                = 80
+      http_port                = var.server_origin_http_port
       https_port               = 443
-      origin_protocol_policy   = "https-only"
+      origin_protocol_policy   = "http-only"
       origin_ssl_protocols     = ["TLSv1.2"]
       origin_read_timeout      = 60
       origin_keepalive_timeout = 60
@@ -252,16 +260,15 @@ resource "aws_cloudfront_distribution" "this" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.static.id
   }
 
-  # API, WebSocket, /health, /sitemap.xml, /robots.txt -> ALB. Caching is
+  # API, WebSocket, /health, /sitemap.xml, /robots.txt -> EC2. Caching is
   # off and the viewer's Host header is forwarded, so the server sees the
-  # public hostname (the sitemap is generated per host) and the ALB
-  # certificate is validated against it.
+  # public hostname (the sitemap is generated per host).
   dynamic "ordered_cache_behavior" {
-    for_each = var.alb_path_patterns
+    for_each = var.server_path_patterns
 
     content {
       path_pattern             = ordered_cache_behavior.value
-      target_origin_id         = local.alb_origin_id
+      target_origin_id         = local.server_origin_id
       viewer_protocol_policy   = "redirect-to-https"
       allowed_methods          = local.alb_methods
       cached_methods           = ["GET", "HEAD"]

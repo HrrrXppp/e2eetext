@@ -1,10 +1,6 @@
-# #28: the built client is served from a private S3 bucket through
-# CloudFront, which also fronts the ALB for the API, WebSocket, /health,
-# /sitemap.xml and /robots.txt paths. Staged cutover: this adds the
-# distribution next to the existing ALB client rules and EC2 client
-# container. DNS keeps pointing at the ALB until the owner switches it to
-# output static_site_domain_name. A follow-up change then removes the client
-# target group, rules and container.
+# The built client is served from a private S3 bucket through CloudFront.
+# The same distribution forwards the API, WebSocket, /health, /sitemap.xml
+# and /robots.txt to the EC2 instance on port 8081.
 
 # CloudFront only accepts ACM certificates from us-east-1.
 provider "aws" {
@@ -13,8 +9,8 @@ provider "aws" {
 }
 
 locals {
-  # Everything the server owns, from the same inputs as the ALB rules.
-  static_site_alb_path_patterns = concat(
+  # Paths CloudFront forwards to the instance. Client paths stay on S3.
+  static_site_server_path_patterns = concat(
     var.api_path_patterns,
     var.create_health_rule ? ["/health"] : [],
     flatten([for r in var.additional_https_rules : r.path_patterns if r.target == "server"]),
@@ -33,10 +29,12 @@ module "static_site" {
   bucket_name = var.static_site_bucket_name
   aliases     = var.static_site_aliases
 
-  client_version    = local.deployed_version # pinned in version.tf
-  certificate_arn   = var.static_site_certificate_arn
-  alb_dns_name      = module.alb.alb_dns_name
-  alb_path_patterns = local.static_site_alb_path_patterns
+  client_version       = local.deployed_version # pinned in version.tf
+  certificate_arn      = var.static_site_certificate_arn
+  server_origin_domain = module.ec2.public_dns
+  server_path_patterns = local.static_site_server_path_patterns
+
+  depends_on = [module.ec2]
 
   tags = var.tags
 }
