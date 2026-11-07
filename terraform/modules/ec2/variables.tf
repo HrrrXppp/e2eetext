@@ -30,11 +30,6 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "alb_security_group_id" {
-  description = "Security group ID of the ALB — the only source allowed to reach ports 8080/8081 on this instance."
-  type        = string
-}
-
 variable "admin_ssh_cidr_blocks" {
   description = "CIDR blocks allowed to SSH (port 22) to the instance. Leave empty to omit the SSH ingress rule entirely (e.g. if access is via SSM Session Manager instead)."
   type        = list(string)
@@ -51,7 +46,8 @@ variable "security_group_ids" {
   description = <<-EOT
     Pre-existing security group IDs to attach to the instance instead of
     creating one. Leave empty (default) to have this module create its own
-    SG (named var.security_group_name, allowing 8080/8081 from the ALB).
+    SG (named var.security_group_name, SSH only). Port 8081 is a second
+    group this module always creates, allowing CloudFront only.
     Set to the instance's real, live security groups when importing an
     instance whose SGs were made by hand — swapping them for a module-made
     SG is an in-place update but a real firewall change (e.g. detaching a

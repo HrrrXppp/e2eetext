@@ -1,6 +1,11 @@
 output "instance_id" {
-  description = "EC2 instance ID — register this in the ALB's target groups."
+  description = "EC2 instance ID."
   value       = aws_instance.this.id
+}
+
+output "public_dns" {
+  description = "Public DNS name CloudFront uses as the server origin. Empty when the instance has no public IPv4 address. Changes if the instance is stopped and started without an Elastic IP."
+  value       = aws_instance.this.public_dns
 }
 
 output "security_group_id" {

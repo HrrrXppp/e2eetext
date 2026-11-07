@@ -35,7 +35,7 @@ messenger/
 └── docker-compose.yml     # local PostgreSQL
 ├── maintenance/
 │   ├── ecr/               # build + push images to AWS ECR
-│   ├── alb/               # ALB setup example (AWS CLI)
+│   ├── alb/               # old load-balancer example; the live path does not use it
 │   ├── ec2/               # single-EC2 production compose
 │   └── claude-runner/     # containerized Claude ticket-processing runner
 └── terraform/
@@ -460,20 +460,18 @@ Vite proxies `/api` and `/health` to `http://localhost:8080`, so the browser use
 
 If port 5432 is already in use, change the mapping in `docker-compose.yml` and update `DATABASE_URL` accordingly.
 
-## Production on AWS (single EC2 + ALB)
+## Production on AWS (single EC2 + CloudFront)
 
-Run the app on **one EC2 instance** with **PostgreSQL outside the instance** (recommended: [Amazon RDS](https://aws.amazon.com/rds/postgresql/)). An **Application Load Balancer** terminates HTTPS and routes API traffic to the server and everything else to the client SPA.
+Run the app on **one EC2 instance** with **PostgreSQL outside the instance** (recommended: [Amazon RDS](https://aws.amazon.com/rds/postgresql/)). **CloudFront** terminates HTTPS. The client files come from S3. The API, WebSocket, `/sitemap.xml`, and `/robots.txt` go from CloudFront to the instance on port 8081. See [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront).
 
 ```
-Internet → ALB (:443, ACM certificate)
-              ├─ /api*, /health → EC2:8081 → server container
-              └─ /, /chats, …   → EC2:8080 → client container
-           RDS PostgreSQL (private subnet)
+Browser → CloudFront (HTTPS)
+              ├─ /api/*, /sitemap.xml, /robots.txt → EC2:8081 → server
+              └─ everything else                   → S3
+           RDS PostgreSQL
 ```
 
-The client can also be served from S3 behind CloudFront, which then fronts this ALB too and removes the client container from the serving path. See [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront).
-
-The server reads `X-Forwarded-Host` and `X-Forwarded-Proto` from the ALB for OAuth redirects.
+CloudFront sets `X-Forwarded-Proto: https` on the origin request. The server uses that header and the forwarded `Host` for OAuth redirects. The hop from CloudFront to the instance is HTTP, and port 8081 accepts traffic only from CloudFront's origin-facing addresses.
 
 ### 1. Create RDS PostgreSQL
 
@@ -537,7 +535,7 @@ Use the **same client image** on prod and dev. The dev banner is controlled at *
 
 The client fetches `/instance.json` at runtime.
 
-ALB cannot inject HTML into the SPA; this belongs in the client with deploy-time config (same idea as server `config.json`).
+Nothing in front of the SPA injects that file; it belongs in the client with deploy-time config (same idea as server `config.json`).
 
 ### 4. Create EC2
 
@@ -545,35 +543,16 @@ ALB cannot inject HTML into the SPA; this belongs in the client with deploy-time
 - Instance type: `t3.small` or larger
 - IAM role: attach **AmazonEC2ContainerRegistryReadOnly** (so EC2 can pull from ECR). For Terraform-managed boot deploy (below), also **AmazonSSMManagedInstanceCore**.
 - Security group inbound:
-  - **22** — SSH (your IP only)
-  - **8080** — client (from ALB security group only)
-  - **8081** — server (from ALB security group only)
+  - **22** — SSH (your IP only), if you use SSH
+  - **8081** — server, from the CloudFront origin-facing prefix list only
 
-Do **not** expose 80/443 on the EC2 instance — the ALB handles public HTTP(S).
+Do **not** expose 80/443 or 8081 to the internet. CloudFront is the public HTTPS endpoint. Terraform adds a separate security group for port 8081 (`<name>-cf-origin`). The CloudFront prefix list's entries count toward the security-group rules quota; if apply reports `RulesPerSecurityGroupLimitExceeded`, raise that quota and apply again.
 
-### 5. Create Application Load Balancer
+### 5. Publish the client and point CloudFront at the instance
 
-1. Request an **ACM certificate** for your domain (e.g. `app.example.com`) in the same region as the ALB.
-2. Create two **target groups** (type: instance, protocol: HTTP):
-   - **server** — port **8081**, health check path `/health`
-   - **client** — port **8080**, health check path `/health`
-3. Register your EC2 instance in **both** target groups (same instance, different ports).
-4. Create an **internet-facing ALB** in public subnets with an ALB security group allowing **80** and **443** from the internet.
-5. Set ALB **idle timeout** to **3600** seconds (WebSocket support on `/ws`).
-6. Add an **HTTPS (443)** listener with your ACM certificate. Default action: forward to the **client** target group.
-7. Add **listener rules** (lower priority number = evaluated first):
+Request the CloudFront certificate in **us-east-1** (see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). `terraform apply` in `terraform/envs/dev` or `terraform/envs/prod` creates the distribution, allows CloudFront to reach port 8081, and **deletes that environment's Application Load Balancer**. Do that apply when a few minutes of API errors are acceptable: CloudFront switches origin while the load balancer is removed.
 
-| Priority | Path pattern | Target |
-|----------|--------------|--------|
-| 10 | `/api*` | server |
-| 20 | `/health` (exact) | server |
-| default | `/*` | client |
-
-`/oauth/callback` is a client SPA route and is served by the default listener rule (not under `/api*`).
-
-8. Add an **HTTP (80)** listener that redirects to HTTPS.
-
-An example AWS CLI script with these steps is in `maintenance/alb/create-alb.example.sh`.
+`maintenance/alb/create-alb.example.sh` is the old load-balancer setup. Nothing in the current stack uses it.
 
 ### 6. Deploy on EC2
 
@@ -647,11 +626,11 @@ On first launch (and on the SSM association, which runs the same script), the in
 
 Emergency/manual fallback (not the normal path): `sudo IMAGE_TAG=v0.5.5 bash maintenance/ec2/install-boot-service.sh`.
 
-Point DNS `app.example.com` to the ALB (Route 53 alias record or CNAME to the ALB DNS name).
+Point DNS `app.example.com` at the CloudFront distribution (`static_site_domain_name`), not at the instance.
 
 ### AdSense and SEO static files
 
-The client serves `/privacy` and `/terms` (draft policy pages; review them legally before relying on them), `/roadmap` (four planned milestones with quarter and status badges, edited in `client/src/app/RoadmapPage.tsx`), and `/encryption` (plain-language description of the E2EE design with a technical appendix, `client/src/app/EncryptionPage.tsx`; keep its parameters in step with the section below), and a footer linking them plus a Contact link (GitHub issues). `client/public/ads.txt` authorizes Google (`pub-8559868695202171`) to sell ads on this site. The AdSense script is added when the home, privacy, or terms page mounts and removed when it unmounts, so the chat app, the roadmap and the encryption page do not carry it. The server generates `/sitemap.xml` and `/robots.txt` from the request `Host`, so those two files are not in the client image. Which hosts and pages are listed comes from `sitemap` in the JSON file at `CONFIG_PATH` (`sitemap.hosts`, `sitemap.paths`; the first host is used when the request host is not in the list). `server/config.example.json` and `maintenance/ec2/config/config.example.json` set `e2eetext.com`, `e2eetext.io`, `e2eetext.net`, `e2eetext.org`, and `dev.e2eetext.com`, and the paths `/`, `/privacy`, `/terms`, `/roadmap`, and `/encryption`. Omitting `sitemap` uses that same built-in list, so an existing `config.json` still starts. Each response lists only the host that was requested. A sitemap that names a different host is rejected by search consoles. Because the dev and prod HTTPS listeners default to a fixed 404, `terraform/envs/dev` and `terraform/envs/prod` add ALB rules at priority 15 (`/privacy`, `/terms`, `/roadmap`, `/encryption` → client), 16 (`/ads.txt` → client), and 17 (`/robots.txt`, `/sitemap.xml` → server). Deploy a server image that includes those routes before applying priority 17. Until that rule is in place, a request still forwarded to the client has no file to serve and falls through to the SPA page. A cookie-consent mechanism is still needed once ads are actually served.
+The client serves `/privacy` and `/terms` (draft policy pages; review them legally before relying on them), `/roadmap` (four planned milestones with quarter and status badges, edited in `client/src/app/RoadmapPage.tsx`), and `/encryption` (plain-language description of the E2EE design with a technical appendix, `client/src/app/EncryptionPage.tsx`; keep its parameters in step with the section below), and a footer linking them plus a Contact link (GitHub issues). `client/public/ads.txt` authorizes Google (`pub-8559868695202171`) to sell ads on this site. The AdSense script is added when the home, privacy, or terms page mounts and removed when it unmounts, so the chat app, the roadmap and the encryption page do not carry it. The server generates `/sitemap.xml` and `/robots.txt` from the request `Host`, so those two files are not in the client image. Which hosts and pages are listed comes from `sitemap` in the JSON file at `CONFIG_PATH` (`sitemap.hosts`, `sitemap.paths`; the first host is used when the request host is not in the list). `server/config.example.json` and `maintenance/ec2/config/config.example.json` set `e2eetext.com`, `e2eetext.io`, `e2eetext.net`, `e2eetext.org`, and `dev.e2eetext.com`, and the paths `/`, `/privacy`, `/terms`, `/roadmap`, and `/encryption`. Omitting `sitemap` uses that same built-in list, so an existing `config.json` still starts. Each response lists only the host that was requested. A sitemap that names a different host is rejected by search consoles. CloudFront serves `/privacy`, `/terms`, `/roadmap`, `/encryption`, and `/ads.txt` from S3, and forwards `/robots.txt` and `/sitemap.xml` to the server. A cookie-consent mechanism is still needed once ads are actually served.
 
 ### 7. Google OAuth
 
@@ -685,7 +664,7 @@ The first query should list `purge-expired-messages` as active. The second shoul
 | `maintenance/ecr/.env.example` | AWS account, region, image tag |
 | `maintenance/ecr/create-repos.sh` | Create ECR repositories |
 | `maintenance/ecr/build-and-push.sh` | Build locally and push to ECR |
-| `maintenance/alb/create-alb.example.sh` | Example ALB + listener rules (AWS CLI) |
+| `maintenance/alb/create-alb.example.sh` | Old load-balancer setup. The live path does not use it |
 | `maintenance/ec2/docker-compose.yml` | Pull ECR images; expose 8080/8081 for ALB |
 | `maintenance/ec2/deploy.sh` | ECR login, pull, and start on EC2 |
 | `maintenance/ec2/e2eetext.service` | systemd unit template (boot pull + start) |
@@ -724,12 +703,12 @@ The client is plain static files, so it does not need a running container. [#28]
 Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
               ├─ /assets/*                    → S3 <version>/assets/ (hashed files, cached one year)
               ├─ /api/*, /health, /sitemap.xml,
-              │  /robots.txt                  → ALB → EC2:8081 → server (no cache, Host header and all cookies/query strings forwarded)
+              │  /robots.txt                  → EC2:8081 → server (HTTP, no cache, Host and cookies forwarded)
               └─ everything else              → S3 <version>/ (index.html, ads.txt, instance.json)
 ```
 
-- **SPA routes.** A CloudFront Function rewrites extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `/index.html`. Paths with a file extension are not rewritten, and the ALB paths never run the function, so an unknown API path still returns the server's own 404.
-- **One host.** The browser keeps talking to one hostname, so there are no CORS or cookie changes. WebSocket upgrades on `/api/v1/ws` work through CloudFront. The viewer `Host` is forwarded to the ALB, so the server still builds the sitemap for the requested host and the ALB certificate must cover the public hostnames (it already does).
+- **SPA routes.** A CloudFront Function rewrites extension-less paths (`/chats`, `/roadmap`, `/oauth/callback`) to `/index.html`. Paths with a file extension are not rewritten, and the server paths never run the function, so an unknown API path still returns the server's own 404.
+- **One host.** The browser keeps talking to one hostname, so there are no CORS or cookie changes. WebSocket upgrades on `/api/v1/ws` work through CloudFront. The viewer `Host` is forwarded to the instance, so the server still builds the sitemap for the requested host. CloudFront sets `X-Forwarded-Proto: https` because the origin hop is HTTP. The chat client sends a heartbeat every 30 seconds, inside CloudFront's 60-second origin timeout.
 - **Versioned directories.** Each release is uploaded to its own directory in the bucket, named like the server image tag: `vX.Y.Z` when published from `main`, the short commit otherwise. CloudFront serves that directory through the S3 origin path. The path and the server image are the same `deployed_version` in `terraform/envs/{dev,prod}/version.tf`. Publishing a release does not change what visitors get: set that local and `terraform apply` to switch (and to roll back). That apply also pulls the server image of the same name. Old directories are not deleted automatically; remove them from the bucket by hand once they are no longer needed.
 - **Caching.** `/assets/*` is uploaded with `max-age=31536000, immutable`. `index.html`, `ads.txt` and `instance.json` are uploaded with `no-cache`, so the files that keep their name are always revalidated.
 - **`instance.json`** (the dev banner) is an S3 object written at publish time from `maintenance/ec2/config/instance.development.example.json` (dev) or `instance.production.example.json` (prod). No bind mount is involved.
@@ -746,17 +725,17 @@ Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
 
 The change is staged so nothing breaks while it is rolled out:
 
-1. Apply `envs/shared`, then `envs/dev` / `envs/prod`. The distribution is created next to the existing ALB client rules and EC2 client container, and DNS still points at the ALB.
-2. Run the publish workflow, set `deployed_version` in that env's `version.tf` to the directory it printed and apply, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. API and WebSocket paths through that name fail certificate validation at the ALB because the `Host` is the `cloudfront.net` name, so test them on the real hostname after step 3 (or `curl --resolve`). The same apply pulls the server image of that name.
-3. Switch each public hostname's DNS (CNAME / ALIAS) to `static_site_domain_name` at the DNS host. Check `/sitemap.xml` and `/robots.txt` on every hostname, a WebSocket connection, and the dev banner.
-4. The EC2 client service and `maintenance/ec2/docker-compose.frontend.yml` are removed. A follow-up still removes the client target group, its ALB rules and attachment, `client/Dockerfile`, and the client ECR repository. Until that lands, those pieces stay for an ALB rollback (point DNS back at the ALB). The instance no longer runs a client container, so that rollback also needs a client image and the compose service again.
+1. Apply `envs/shared`, then `envs/dev` / `envs/prod`. The distribution serves the client from S3 and the API from the instance. That apply deletes the environment's load balancer, so do it when a few minutes of API errors are acceptable. Public hostnames that already point at CloudFront stay pointed there.
+2. Run the publish workflow, set `deployed_version` in that env's `version.tf` to the directory it printed and apply, then check the distribution on its `*.cloudfront.net` name (output `static_site_domain_name`): `/`, `/chats`, `/roadmap` and `/oauth/callback` return the SPA, `/assets/<file>` returns the file, `/instance.json` shows the right environment. The same apply pulls the server image of that name.
+3. Switch each public hostname's DNS (CNAME / ALIAS) to `static_site_domain_name` at the DNS host if it is not already. Check `/sitemap.xml` and `/robots.txt` on every hostname, a WebSocket connection, and the dev banner.
+4. There is no load balancer to point DNS back at. The instance no longer runs a client container.
 
 ## Infrastructure as code (Terraform)
 
 AWS infrastructure is being migrated from the manual/scripted setup above to Terraform, in phases tracked by [#27](https://github.com/HrrrXppp/e2eetext/issues/27):
 
 - **Phase 1 (done):** `terraform/envs/shared` — the two ECR repositories and the GitHub Actions OIDC role/policy, all account-wide with no dev/prod split.
-- **Phase 2 (done):** `terraform/envs/{dev,prod}` — networking, ALB, and EC2, which are genuinely per-environment.
+- **Phase 2 (done):** `terraform/envs/{dev,prod}` — networking and EC2, which are genuinely per-environment. The Application Load Balancer that phase imported is removed by the next apply.
 - **Phase 3 (module built, not yet imported):** `terraform/modules/rds` and `terraform/envs/{dev,prod}` — RDS PostgreSQL, its subnet group, security group, and a parameter group carrying the `pg_cron` settings from [#20](https://github.com/HrrrXppp/e2eetext/issues/20)'s plan (`shared_preload_libraries=pg_cron`, `cron.database_name`). Unlike Phases 1/2, this phase was implemented with **no AWS credentials available**, so none of the live RDS instance's real config (engine version, instance class, storage, subnet/parameter group names, ...) could be audited or verified. Every identifying RDS variable in `terraform/envs/{dev,prod}` is therefore required with no default — see [Phase 3 — RDS: not yet imported](#phase-3--rds-not-yet-imported) below for what's needed before the first `terraform import`/`apply`.
 
 This repo is the last phase tracked by #27 — once Phase 3's import is confirmed zero-diff and merged, #27 closes.
@@ -767,17 +746,16 @@ terraform/
 │   ├── ecr/            # the e2eetext-server / e2eetext-client repos
 │   ├── github-oidc/    # OIDC provider + IAM role/policy for build-images.yml
 │   ├── network/         # data-source lookup of the VPC/subnets to deploy into
-│   ├── alb/              # ALB + target groups + listener rules (matches create-alb.example.sh)
-│   ├── ec2/              # instance + security group + IAM instance profile
-│   ├── static-site/      # S3 bucket + CloudFront for the client, ALB for the API (#28)
+│   ├── ec2/              # instance + security groups + IAM instance profile
+│   ├── static-site/      # S3 bucket + CloudFront for the client and the API origin
 │   └── rds/              # DB instance + subnet group + security group + pg_cron parameter group
 └── envs/
     ├── shared/          # root config instantiating ecr + github-oidc (Phase 1)
-    ├── dev/              # root config instantiating network + alb + ec2 + rds + static-site for dev (Phase 2/3, #28)
+    ├── dev/              # root config instantiating network + ec2 + rds + static-site for dev (Phase 2/3, #28)
     └── prod/             # same, for prod (Phase 2/3, #28)
 ```
 
-`terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/alb` also does not create the ALB's own security group; like `create-alb.example.sh`, it takes an existing security group ID as input. The `alb` and `ec2` modules default to the topology `create-alb.example.sh` describes, but expose overrides (target-group names, idle timeout, listener default action, rule priority/patterns, pre-existing instance SGs, optional IAM instance profile) because the live, hand-made dev stack diverges from the script on all of those — `terraform/envs/dev`'s defaults record the audited live values. `terraform/modules/rds` has no such audited defaults for identifying attributes (engine version, instance class, storage, subnet/parameter group names, master username, ...) — every one is a required variable, the same "describe reality, don't guess" pattern `modules/ec2` uses for `ami_id`/`instance_type`, because no live RDS audit was possible while writing it.
+`terraform/modules/network` is deliberately data-source-only (it never creates/modifies/destroys a VPC or subnets) — it looks up the account's default VPC and subnets unless overridden, since nothing in this repo's scripts or docs ever creates a custom VPC. `terraform/modules/ec2` keeps pre-existing instance security groups when they are passed in, and always adds one more group that allows port 8081 from CloudFront only. `terraform/modules/rds` has no audited defaults for identifying attributes (engine version, instance class, storage, subnet/parameter group names, master username, ...) — every one is a required variable, the same "describe reality, don't guess" pattern `modules/ec2` uses for `ami_id`/`instance_type`, because no live RDS audit was possible while writing it.
 
 ### One-time backend bootstrap
 
@@ -836,7 +814,7 @@ Replace `<AWS_ACCOUNT_ID>` with the real account (`aws sts get-caller-identity`)
 
 ### One-time import bootstrap (`envs/dev` — Phase 2)
 
-A live dev EC2/ALB/VPC stack already exists (confirmed by the repo owner on [#27](https://github.com/HrrrXppp/e2eetext/issues/27)) — it was created by hand, and an audit against the AWS API (2026-07-26) showed it diverges from `maintenance/alb/create-alb.example.sh` in nearly every detail: the ALB is named `dev-e2eetext` (not `e2eetext-dev`), the target groups are named `dev-server` and `client`, the idle timeout is 60 (not the script's 3600), the HTTPS listener's default action is a fixed 404 (client routing lives in hand-made path rules at priorities 10–14, plus Terraform-added 15–16 for `/privacy`, `/terms`, `/roadmap`, `/encryption` and the static SEO files, instead of a catch-all forward), the `/api/*` rule sits at priority 100, there is no `/health` listener rule, the instance runs with **no IAM instance profile** and with hand-made security groups (`launch-wizard-2` + `ec2-rds-1`), and nothing is tagged. `terraform/envs/dev`'s variable defaults record all of those audited values, so it describes what is actually live with **no `terraform.tfvars` needed** — `terraform plan` works out of the box (it looks the ALB security group and ACM certificate ARN up from the live ALB by name, so no account-specific IDs are committed to the repo).
+A live dev EC2/VPC stack already exists (confirmed by the repo owner on [#27](https://github.com/HrrrXppp/e2eetext/issues/27)). The instance uses hand-made security groups (`launch-wizard-2` + `ec2-rds-1`). The load balancer `dev-e2eetext` is still in Terraform state from the earlier import; the next apply deletes it. `terraform/envs/dev` resolves those security groups by name, so no account-specific IDs are committed.
 
 As with Phase 1, Terraform must **import** the live resources, not create them:
 
@@ -850,31 +828,16 @@ terraform init
 echo 'ec2_subnet_id = "<DEV_INSTANCE_SUBNET_ID>"' > terraform.tfvars
 
 # VPC/subnets are data-sourced, not managed resources — nothing to import
-# there. Same for the instance's SGs and the ALB's SG (pre-existing,
-# looked up by name). The live instance historically had no IAM instance
-# profile — Terraform creates/attaches one (plus the boot-deploy SSM unit)
-# on the first apply after import; do not import a missing profile.
+# there. Same for the instance's pre-existing SGs (resolved by name).
+# The live instance historically had no IAM instance profile — Terraform
+# creates/attaches one (plus the boot-deploy SSM unit) on the first apply
+# after import; do not import a missing profile.
 
 # EC2 instance
 terraform import module.ec2.aws_instance.this <DEV_INSTANCE_ID>
-
-# ALB, its two target groups, and its listeners/rules
-terraform import module.alb.aws_lb.this <DEV_ALB_ARN>
-terraform import module.alb.aws_lb_target_group.server <DEV_SERVER_TG_ARN>
-terraform import module.alb.aws_lb_target_group.client <DEV_CLIENT_TG_ARN>
-terraform import module.alb.aws_lb_listener.https <DEV_HTTPS_LISTENER_ARN>
-terraform import module.alb.aws_lb_listener.http_redirect <DEV_HTTP_LISTENER_ARN>
-terraform import module.alb.aws_lb_listener_rule.api <DEV_API_RULE_ARN>   # priority-100 /api/*
-# Client SPA rules (priorities 10–14 → client TG; 15–16 are new and created by apply). Look up ARNs with
-# `aws elbv2 describe-rules --listener-arn <HTTPS_LISTENER_ARN>`.
-terraform import 'module.alb.aws_lb_listener_rule.extra["10"]' <RULE_ARN_PRIO_10>   # /
-terraform import 'module.alb.aws_lb_listener_rule.extra["11"]' <RULE_ARN_PRIO_11>   # /assets/*
-terraform import 'module.alb.aws_lb_listener_rule.extra["12"]' <RULE_ARN_PRIO_12>   # /oauth/*
-terraform import 'module.alb.aws_lb_listener_rule.extra["13"]' <RULE_ARN_PRIO_13>   # /chats
-terraform import 'module.alb.aws_lb_listener_rule.extra["14"]' <RULE_ARN_PRIO_14>   # /instance.json
 ```
 
-Look up the ARNs with `aws elbv2 describe-load-balancers --names dev-e2eetext`, `describe-target-groups`, `describe-listeners`, and `describe-rules` (rule ARNs are full ARNs, usable directly as the import ID). After importing ALB/EC2/RDS, also import target-group attachments (AWS provider ≥ 6.34) with `terraform import module.alb.aws_lb_target_group_attachment.client '<tg-arn>,<instance-id>,8080'` and the same for `.server` with port `8081`. Imported resources must be diff-free aside from the deliberate first-apply adds for IAM instance profile + boot-deploy SSM (see "Boot-time pull + start"). If plan shows unexpected churn on imported resources, fix the `.tf`/`.tfvars` to match reality rather than accepting the diff.
+The load balancer is no longer in this configuration. If it is still in state, apply destroys it; do not import it again. Imported resources must be diff-free aside from the deliberate adds (the CloudFront origin security group, IAM instance profile, and boot-deploy SSM). If plan shows unexpected churn on imported resources, fix the `.tf`/`.tfvars` to match reality rather than accepting the diff.
 
 Known follow-ups: other tags default to `{}` (only the EC2 `Name` tag is set via `name_prefix`, default `dev-ec2`). IAM instance profile and boot-time deploy are Terraform-managed by default for dig and prod (see "Boot-time pull + start" above).
 
@@ -890,7 +853,7 @@ aws elbv2 describe-load-balancers --names e2eetext-prod
 ```
 
 - **If real resources come back:** follow the same import bootstrap as dev above, substituting prod's real identifiers.
-- **If nothing comes back:** `terraform apply` can create the stack fresh. Leave `acm_certificate_arn` empty: prod requests a us-east-2 certificate for `e2eetext.com`, `e2eetext.org`, `e2eetext.net`, and `e2eetext.io`. This account has no Route 53 hosted zones, so while apply waits (up to 45 minutes) add the CNAME records from the pending certificate (ACM console, or output `acm_dns_validation` once the certificate resource is in state). The HTTPS listener uses that certificate after it is issued. Do not reuse the dig certificate. Boot deploy on the new instance installs Docker, git, and the AWS CLI and clones the repo; `.env` and the JSON config files are still copied on by hand.
+- **If nothing comes back:** `terraform apply` can create the stack fresh. Leave `acm_certificate_arn` empty: prod still requests a us-east-2 certificate for `e2eetext.com`, `e2eetext.org`, `e2eetext.net`, and `e2eetext.io`, which is kept even though no listener attaches it. CloudFront uses the separate us-east-1 certificate (`static_site_certificate_arn`). This account has no Route 53 hosted zones, so while apply waits (up to 45 minutes) add the CNAME records from the pending certificate (ACM console, or output `acm_dns_validation` once the certificate resource is in state). Do not reuse the dig certificate. Boot deploy on the new instance installs Docker, git, and the AWS CLI and clones the repo; `.env` and the JSON config files are still copied on by hand.
 
 ### Phase 3 — RDS: not yet imported
 
@@ -1106,4 +1069,4 @@ Claude Code needs to run non-interactively (no "may I run this?" prompt blocking
 - `entrypoint.sh` runs `claude -p` with `--permission-mode dontAsk` **by default**, which relies on that allowlist rather than disabling the permission system. `CLAUDE_PERMISSION_MODE=bypassPermissions` (`--dangerously-skip-permissions`) is available as an explicit, owner-chosen opt-in escape hatch via the `.env` file if the allowlist ever proves too narrow for some new ticket shape — it is never the container's default.
 - That allowlist only applies once the workspace is marked trusted, which normally requires clicking through an interactive one-time dialog recorded in `~/.claude.json`. The unattended loop never runs `claude` interactively, so `entrypoint.sh` pre-seeds `hasTrustDialogAccepted: true` for `/workspace/e2eetext` in `~/.claude.json` before starting the loop (and before handing off to `interactive` mode, so `permissions.allow` isn't silently ignored there either, and a human running `interactive` isn't stopped by the trust dialog).
 
-`envs/dev`'s network/ec2/alb variables still default to the audited live values, and it looks up the ALB security group / ACM cert from the live ALB by name — but as of Phase 3, its `rds_*` variables (`rds_identifier`, `rds_engine_version`, `rds_instance_class`, ...) are required with no default, the same as `envs/prod`'s `ami_id`/`instance_type`/`alb_security_group_id` (plus prod's own `rds_*` set) — deliberately not defaulted, since neither environment's live RDS status was confirmed while writing Phase 3, and a wrong guess for an import target risks a forced replace on live resources. Prod's `acm_certificate_arn` defaults to empty, which creates a DNS-validated us-east-2 certificate instead of requiring an ARN in tfvars. Both environments now need their tfvars supplied for `terraform plan` to run at all: the plan job reads them from the optional `DEV_TFVARS` / `PROD_TFVARS` secrets (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning); until the relevant secret is populated — which for dev's `rds_*` values requires first auditing the live dev RDS instance, and for prod requires first confirming prod's real, live resource identifiers, per the sections above — that environment's `terraform plan` step is skipped, the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case is — and, per the CI section above, the job now fails rather than reporting green in that case.
+`envs/dev`'s network and EC2 variables still default to the audited live values. As of Phase 3, its `rds_*` variables (`rds_identifier`, `rds_engine_version`, `rds_instance_class`, ...) are required with no default, the same as `envs/prod`'s `ami_id`/`instance_type` (plus prod's own `rds_*` set) — deliberately not defaulted, since neither environment's live RDS status was confirmed while writing Phase 3, and a wrong guess for an import target risks a forced replace on live resources. Prod's `acm_certificate_arn` defaults to empty, which creates a DNS-validated us-east-2 certificate instead of requiring an ARN in tfvars. Both environments now need their tfvars supplied for `terraform plan` to run at all: the plan job reads them from the optional `DEV_TFVARS` / `PROD_TFVARS` secrets (full `.tfvars`-file contents, written to a gitignored `ci.auto.tfvars` before planning); until the relevant secret is populated — which for dev's `rds_*` values requires first auditing the live dev RDS instance, and for prod requires first confirming prod's real, live resource identifiers, per the sections above — that environment's `terraform plan` step is skipped, the same way the unconfigured-`AWS_TERRAFORM_PLAN_ROLE_ARN` case is — and, per the CI section above, the job now fails rather than reporting green in that case.

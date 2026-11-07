@@ -151,12 +151,11 @@ variable "ec2_boot_deploy_start_now" {
   default     = true
 }
 
-# --- ALB ---
-# The live dev ALB was built by hand and diverges from
-# create-alb.example.sh in name, target-group names, idle timeout, default
-# action, and rule layout. All defaults below are the confirmed live values
-# (2026-07-26) so plan/import converge on reality; see modules/alb for what
-# the script-shaped defaults would be.
+# --- Former ALB inputs ---
+# The load balancer is no longer created. api_path_patterns,
+# additional_https_rules and create_health_rule still choose which CloudFront
+# behaviors go to the instance. The other variables stay so an existing
+# terraform.tfvars that sets them continues to plan.
 
 variable "alb_name" {
   description = "Name of the live dev ALB (confirmed live: \"dev-e2eetext\", not \"e2eetext-dev\"). Also the lookup key for the ALB SG / ACM cert data sources in main.tf. ForceNew on the ALB."
@@ -202,11 +201,9 @@ variable "api_path_patterns" {
 
 variable "additional_https_rules" {
   description = <<-EOT
-    Extra HTTPS listener rules managed by Terraform. Confirmed live on
-    2026-07-26 / README: priorities 10–16 forward SPA paths and ads.txt to the client
-    TG, and priority 17 forwards /robots.txt and /sitemap.xml to the server
-    (default listener action is fixed-404). Import each as
-    module.alb.aws_lb_listener_rule.extra["<priority>"].
+    Path lists that used to be load-balancer listener rules. Entries with
+    target "server" are forwarded by CloudFront to the instance. Entries
+    with target "client" stay on S3.
   EOT
   type = list(object({
     priority      = number

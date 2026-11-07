@@ -7,9 +7,11 @@ locals {
   )
 }
 
-# Prod HTTPS certificate in the ALB's region. A us-east-1 certificate cannot
-# be attached to a us-east-2 listener, and the issued us-east-2 certificate
-# used by dig covers only the dig hostnames.
+# us-east-2 certificate kept after the load balancer was removed, so its
+# validation records are not dropped. CloudFront uses the us-east-1
+# certificate from the static-site module. A us-east-1 certificate cannot
+# be created in this region, and the dig certificate covers only the dig
+# hostnames.
 #
 # This account has no Route 53 hosted zones, so Terraform cannot publish the
 # validation CNAMEs. aws_acm_certificate_validation waits until the

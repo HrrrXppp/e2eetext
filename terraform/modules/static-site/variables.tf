@@ -30,13 +30,24 @@ variable "certificate_arn" {
   default     = ""
 }
 
-variable "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer. CloudFront forwards the API, WebSocket, /health, /sitemap.xml and /robots.txt paths to it over HTTPS."
+variable "server_origin_domain" {
+  description = "Public DNS name of the EC2 instance. CloudFront forwards the API, WebSocket, /health, /sitemap.xml and /robots.txt paths to it over HTTP. Not a browser DNS target."
   type        = string
+
+  validation {
+    condition     = var.server_origin_domain != ""
+    error_message = "server_origin_domain must be the instance public DNS name."
+  }
 }
 
-variable "alb_path_patterns" {
-  description = "CloudFront path patterns forwarded to the ALB with caching disabled (for example /api/*, /health, /sitemap.xml, /robots.txt). Every other path is served from S3."
+variable "server_origin_http_port" {
+  description = "HTTP port on the instance that serves the API. CloudFront connects here with origin_protocol_policy http-only."
+  type        = number
+  default     = 8081
+}
+
+variable "server_path_patterns" {
+  description = "CloudFront path patterns forwarded to the EC2 origin with caching disabled (for example /api/*, /health, /sitemap.xml, /robots.txt). Every other path is served from S3."
   type        = list(string)
 }
 
