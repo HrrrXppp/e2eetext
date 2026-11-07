@@ -1,6 +1,6 @@
 # The built client is served from a private S3 bucket through CloudFront.
-# The same distribution forwards the API, WebSocket, /health, /sitemap.xml
-# and /robots.txt to the EC2 instance on port 8081.
+# The same distribution forwards the API, WebSocket, /sitemap.xml and
+# /robots.txt to the EC2 instance on port 8081.
 
 # CloudFront only accepts ACM certificates from us-east-1.
 provider "aws" {
@@ -12,7 +12,6 @@ locals {
   # Paths CloudFront forwards to the instance. Client paths stay on S3.
   static_site_server_path_patterns = concat(
     var.api_path_patterns,
-    var.create_health_rule ? ["/health"] : [],
     flatten([for r in var.additional_https_rules : r.path_patterns if r.target == "server"]),
   )
 }

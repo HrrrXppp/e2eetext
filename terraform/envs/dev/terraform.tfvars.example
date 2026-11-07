@@ -22,7 +22,6 @@
 # https_default_action     = "fixed-404"
 # api_rule_priority        = 100
 # api_path_patterns        = ["/api/*"]
-# create_health_rule       = false
 # ec2_security_group_names = ["launch-wizard-2", "ec2-rds-1"]
 
 # Boot deploy is on by default (IAM instance profile + SSM unit). The

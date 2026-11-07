@@ -153,7 +153,7 @@ variable "ec2_boot_deploy_start_now" {
 
 # --- Former ALB inputs ---
 # The load balancer is no longer created. api_path_patterns,
-# additional_https_rules and create_health_rule still choose which CloudFront
+# and additional_https_rules still choose which CloudFront
 # behaviors go to the instance. The other variables stay so an existing
 # terraform.tfvars that sets them continues to plan.
 
@@ -250,12 +250,6 @@ variable "client_health_check_path" {
   description = "Client TG health-check path (confirmed live: \"/\", not \"/health\")."
   type        = string
   default     = "/"
-}
-
-variable "create_health_rule" {
-  description = "Whether to add the script's /health -> server listener rule (confirmed live: absent on dev; target-group health checks hit /health directly and need no rule)."
-  type        = bool
-  default     = false
 }
 
 variable "alb_security_group_id" {
