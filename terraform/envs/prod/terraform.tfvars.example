@@ -58,7 +58,6 @@ instance_type = "t3.small"
 # additional_https_rules   = []
 # api_rule_priority        = 10
 # api_path_patterns        = ["/api*"]
-# create_health_rule       = true
 # alb_idle_timeout         = 3600
 # client_health_check_path = "/health"
 # ec2_security_group_ids   = ["sg-xxxxxxxx"]  # live instance's real SGs

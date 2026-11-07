@@ -35,7 +35,6 @@ messenger/
 └── docker-compose.yml     # local PostgreSQL
 ├── maintenance/
 │   ├── ecr/               # build + push images to AWS ECR
-│   ├── alb/               # old load-balancer example; the live path does not use it
 │   ├── ec2/               # single-EC2 production compose
 │   └── claude-runner/     # containerized Claude ticket-processing runner
 └── terraform/
@@ -546,13 +545,11 @@ Nothing in front of the SPA injects that file; it belongs in the client with dep
   - **22** — SSH (your IP only), if you use SSH
   - **8081** — server, from the CloudFront origin-facing prefix list only
 
-Do **not** expose 80/443 or 8081 to the internet. CloudFront is the public HTTPS endpoint. Terraform adds a separate security group for port 8081 (`<name>-cf-origin`). The CloudFront prefix list's entries count toward the security-group rules quota; if apply reports `RulesPerSecurityGroupLimitExceeded`, raise that quota and apply again.
+Do **not** expose 80/443 or 8081 to the internet. `/health` is not routed through CloudFront (the public site returns the SPA page there); it answers only on the instance and inside the VPC. CloudFront is the public HTTPS endpoint. Terraform adds a separate security group for port 8081 (`<name>-cf-origin`). The CloudFront prefix list's entries count toward the security-group rules quota; if apply reports `RulesPerSecurityGroupLimitExceeded`, raise that quota and apply again.
 
 ### 5. Publish the client and point CloudFront at the instance
 
 Request the CloudFront certificate in **us-east-1** (see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). `terraform apply` in `terraform/envs/dev` or `terraform/envs/prod` creates the distribution, allows CloudFront to reach port 8081, and **deletes that environment's Application Load Balancer**. Do that apply when a few minutes of API errors are acceptable: CloudFront switches origin while the load balancer is removed.
-
-`maintenance/alb/create-alb.example.sh` is the old load-balancer setup. Nothing in the current stack uses it.
 
 ### 6. Deploy on EC2
 
@@ -643,7 +640,7 @@ In [Google Cloud Console](https://console.cloud.google.com/) → Credentials, ad
 ### 8. Verify
 
 ```bash
-curl https://app.example.com/health
+curl https://app.example.com/api/v1/auth/providers
 ```
 
 Open `https://app.example.com` in the browser and sign in.
@@ -664,7 +661,6 @@ The first query should list `purge-expired-messages` as active. The second shoul
 | `maintenance/ecr/.env.example` | AWS account, region, image tag |
 | `maintenance/ecr/create-repos.sh` | Create ECR repositories |
 | `maintenance/ecr/build-and-push.sh` | Build locally and push to ECR |
-| `maintenance/alb/create-alb.example.sh` | Old load-balancer setup. The live path does not use it |
 | `maintenance/ec2/docker-compose.yml` | Pull ECR images; expose 8080/8081 for ALB |
 | `maintenance/ec2/deploy.sh` | ECR login, pull, and start on EC2 |
 | `maintenance/ec2/e2eetext.service` | systemd unit template (boot pull + start) |
@@ -702,7 +698,7 @@ The client is plain static files, so it does not need a running container. [#28]
 ```
 Browser → CloudFront (your hostnames, us-east-1 ACM certificate)
               ├─ /assets/*                    → S3 <version>/assets/ (hashed files, cached one year)
-              ├─ /api/*, /health, /sitemap.xml,
+              ├─ /api/*, /sitemap.xml,
               │  /robots.txt                  → EC2:8081 → server (HTTP, no cache, Host and cookies forwarded)
               └─ everything else              → S3 <version>/ (index.html, ads.txt, instance.json)
 ```
