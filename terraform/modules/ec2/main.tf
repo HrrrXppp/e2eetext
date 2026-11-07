@@ -58,8 +58,15 @@ resource "aws_security_group" "this" {
 # Separate group so the CloudFront prefix list (its entries count toward
 # the rules-per-group quota) is not added to launch-wizard-2 or the
 # module-created group, which already have their own rules.
-data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
+#
+# The plural data source only calls DescribeManagedPrefixLists, which the
+# plan role's ec2:Describe* covers. The singular data source also calls
+# GetManagedPrefixListEntries, and that action is not in the plan policy.
+data "aws_ec2_managed_prefix_lists" "cloudfront_origin" {
+  filter {
+    name   = "prefix-list-name"
+    values = ["com.amazonaws.global.cloudfront.origin-facing"]
+  }
 }
 
 resource "aws_security_group" "from_cloudfront" {
@@ -72,7 +79,7 @@ resource "aws_security_group" "from_cloudfront" {
     from_port       = 8081
     to_port         = 8081
     protocol        = "tcp"
-    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront_origin.id]
+    prefix_list_ids = [one(data.aws_ec2_managed_prefix_lists.cloudfront_origin.ids)]
   }
 
   egress {
