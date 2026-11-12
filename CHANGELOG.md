@@ -15,7 +15,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 #### Tooling & deployment
 
-- `www.e2eetext.com` is a prod CloudFront name and redirects to `https://e2eetext.com`. Cloudflare was connecting with that name, and CloudFront rejected the TLS handshake because the certificate did not include it, so visitors got HTTP 525.
+- Each public hostname's `www` name is added to that environment's CloudFront certificate and redirects to the hostname without the prefix (`www.e2eetext.com` to `https://e2eetext.com`, and the same for `.org`, `.net`, `.io`, and `dev.e2eetext.com`). Cloudflare was connecting as `www.e2eetext.com`, and CloudFront rejected the TLS handshake because that name was not on the certificate, so visitors got HTTP 525.
 
 ### Changed
 

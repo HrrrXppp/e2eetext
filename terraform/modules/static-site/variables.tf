@@ -9,7 +9,7 @@ variable "bucket_name" {
 }
 
 variable "aliases" {
-  description = "Public hostnames served by the distribution. The first one is the primary name on the certificate, the rest are subject alternative names."
+  description = "Public hostnames served by the distribution. The first one is the primary name on the certificate. Each name also gets a www name on that certificate, and requests for the www name redirect to the name without the prefix."
   type        = list(string)
 
   validation {
@@ -49,20 +49,6 @@ variable "server_origin_http_port" {
 variable "server_path_patterns" {
   description = "CloudFront path patterns forwarded to the EC2 origin with caching disabled (for example /api/*, /health, /sitemap.xml, /robots.txt). Every other path is served from S3."
   type        = list(string)
-}
-
-variable "apex_redirect_host" {
-  description = "Hostname on this distribution that redirects to the first alias. Empty disables the redirect. It must also be listed in aliases so CloudFront can finish TLS for it; otherwise a proxy in front (Cloudflare) reports 525."
-  type        = string
-  default     = ""
-
-  validation {
-    condition = (
-      var.apex_redirect_host == "" ||
-      (contains(var.aliases, var.apex_redirect_host) && var.apex_redirect_host != var.aliases[0])
-    )
-    error_message = "apex_redirect_host must be one of aliases, and not the first (canonical) name."
-  }
 }
 
 variable "client_version" {

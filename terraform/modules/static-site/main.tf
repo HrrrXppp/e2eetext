@@ -8,17 +8,27 @@ locals {
   s3_origin_id     = "s3-client"
   server_origin_id = "ec2-server"
 
-  # Shared by the default behavior (which also rewrites the SPA) and by the
-  # asset and API behaviors (which only redirect). One viewer-request
+  # Each public name also gets a www name on the certificate. A request for
+  # www.example.com redirects to https://example.com. One viewer-request
   # function is allowed per behavior, so the SPA function inlines this too.
-  apex_redirect_js = var.apex_redirect_host == "" ? "" : <<-EOT
+  www_aliases          = [for host in var.aliases : "www.${host}" if !startswith(host, "www.")]
+  distribution_aliases = concat(var.aliases, local.www_aliases)
+
+  apex_redirect_js = length(local.www_aliases) == 0 ? "" : <<-EOT
     function canonicalRedirect(request) {
       var hostHeader = request.headers.host;
       var host = hostHeader && hostHeader.value ? hostHeader.value.toLowerCase() : "";
-      if (host !== "${var.apex_redirect_host}") {
+      if (host.substring(0, 4) !== "www.") {
         return null;
       }
-      var loc = "https://${var.aliases[0]}" + request.uri;
+      var apex = host.substring(4);
+      var known = {
+        ${join("\n", [for host in var.aliases : "        \"${host}\": 1," if !startswith(host, "www.")])}
+      };
+      if (!known[apex]) {
+        return null;
+      }
+      var loc = "https://" + apex + request.uri;
       var parts = [];
       var qs = request.querystring;
       if (qs) {
@@ -46,7 +56,7 @@ locals {
     }
   EOT
 
-  apex_redirect_call = var.apex_redirect_host == "" ? "" : <<-EOT
+  apex_redirect_call = length(local.www_aliases) == 0 ? "" : <<-EOT
       var redirected = canonicalRedirect(request);
       if (redirected) {
         return redirected;
@@ -68,8 +78,8 @@ resource "aws_acm_certificate" "this" {
   provider = aws.us_east_1
   count    = var.certificate_arn == "" ? 1 : 0
 
-  domain_name               = var.aliases[0]
-  subject_alternative_names = slice(var.aliases, 1, length(var.aliases))
+  domain_name               = local.distribution_aliases[0]
+  subject_alternative_names = slice(local.distribution_aliases, 1, length(local.distribution_aliases))
   validation_method         = "DNS"
 
   lifecycle {
@@ -168,8 +178,8 @@ resource "aws_cloudfront_origin_access_control" "this" {
 # is rewritten to /index.html. Paths with a file extension are left alone,
 # so a missing asset stays an error instead of becoming HTML. Server
 # behaviors do not run this function, so unknown API paths still return the
-# server's own 404. When apex_redirect_host is set, this function redirects
-# that host first; it is the only viewer-request function the default
+# server's own 404. A www host redirects to the same name without that
+# prefix first; this is the only viewer-request function the default
 # behavior can run.
 resource "aws_cloudfront_function" "spa_fallback" {
   name    = "${var.name}-spa-fallback"
@@ -195,11 +205,11 @@ resource "aws_cloudfront_function" "spa_fallback" {
 # Asset and API behaviors use this alone. The default behavior cannot take
 # a second viewer-request function, so the same redirect is inlined above.
 resource "aws_cloudfront_function" "apex_redirect" {
-  count = var.apex_redirect_host == "" ? 0 : 1
+  count = length(local.www_aliases) == 0 ? 0 : 1
 
   name    = "${var.name}-apex-redirect"
   runtime = "cloudfront-js-2.0"
-  comment = "Redirect ${var.apex_redirect_host} to ${var.aliases[0]}"
+  comment = "Redirect a www host to the same name without the prefix"
   publish = true
 
   code = <<-EOT
@@ -270,7 +280,7 @@ resource "aws_cloudfront_distribution" "this" {
   is_ipv6_enabled     = true
   http_version        = "http2and3"
   comment             = "${var.name} client (S3) and server (EC2)"
-  aliases             = var.aliases
+  aliases             = local.distribution_aliases
   default_root_object = "index.html"
   price_class         = var.price_class
 
