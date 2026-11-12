@@ -51,6 +51,20 @@ variable "server_path_patterns" {
   type        = list(string)
 }
 
+variable "apex_redirect_host" {
+  description = "Hostname on this distribution that redirects to the first alias. Empty disables the redirect. It must also be listed in aliases so CloudFront can finish TLS for it; otherwise a proxy in front (Cloudflare) reports 525."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = (
+      var.apex_redirect_host == "" ||
+      (contains(var.aliases, var.apex_redirect_host) && var.apex_redirect_host != var.aliases[0])
+    )
+    error_message = "apex_redirect_host must be one of aliases, and not the first (canonical) name."
+  }
+}
+
 variable "client_version" {
   description = "Directory in the bucket that CloudFront serves the client from (the image-style tag, for example \"v0.4.1\"), set as the S3 origin path. deploy-client.yml uploads each release to its own directory; change this to the new tag and apply to switch releases. Empty serves the bucket root."
   type        = string

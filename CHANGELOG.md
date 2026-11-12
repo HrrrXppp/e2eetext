@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- `www.e2eetext.com` is a prod CloudFront name and redirects to `https://e2eetext.com`. Cloudflare was connecting with that name, and CloudFront rejected the TLS handshake because the certificate did not include it, so visitors got HTTP 525.
+
 ### Changed
 
 #### Tooling & deployment
