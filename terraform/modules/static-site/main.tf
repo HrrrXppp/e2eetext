@@ -8,6 +8,51 @@ locals {
   s3_origin_id     = "s3-client"
   server_origin_id = "ec2-server"
 
+  # Shared by the default behavior (which also rewrites the SPA) and by the
+  # asset and API behaviors (which only redirect). One viewer-request
+  # function is allowed per behavior, so the SPA function inlines this too.
+  apex_redirect_js = var.apex_redirect_host == "" ? "" : <<-EOT
+    function canonicalRedirect(request) {
+      var hostHeader = request.headers.host;
+      var host = hostHeader && hostHeader.value ? hostHeader.value.toLowerCase() : "";
+      if (host !== "${var.apex_redirect_host}") {
+        return null;
+      }
+      var loc = "https://${var.aliases[0]}" + request.uri;
+      var parts = [];
+      var qs = request.querystring;
+      if (qs) {
+        for (var key in qs) {
+          var entry = qs[key];
+          if (entry.multiValue) {
+            for (var i = 0; i < entry.multiValue.length; i++) {
+              parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(entry.multiValue[i].value));
+            }
+          } else if (entry.value) {
+            parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(entry.value));
+          } else {
+            parts.push(encodeURIComponent(key));
+          }
+        }
+      }
+      if (parts.length > 0) {
+        loc += "?" + parts.join("&");
+      }
+      return {
+        statusCode: 301,
+        statusDescription: "Moved Permanently",
+        headers: { location: { value: loc } }
+      };
+    }
+  EOT
+
+  apex_redirect_call = var.apex_redirect_host == "" ? "" : <<-EOT
+      var redirected = canonicalRedirect(request);
+      if (redirected) {
+        return redirected;
+      }
+  EOT
+
   certificate_arn = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate_validation.this[0].certificate_arn
 
   # AWS managed policies (stable IDs).
@@ -121,9 +166,11 @@ resource "aws_cloudfront_origin_access_control" "this" {
 
 # SPA fallback: any extension-less path (/chats, /roadmap, /oauth/callback)
 # is rewritten to /index.html. Paths with a file extension are left alone,
-# so a missing asset stays an error instead of becoming HTML. The ALB
+# so a missing asset stays an error instead of becoming HTML. Server
 # behaviors do not run this function, so unknown API paths still return the
-# server's own 404.
+# server's own 404. When apex_redirect_host is set, this function redirects
+# that host first; it is the only viewer-request function the default
+# behavior can run.
 resource "aws_cloudfront_function" "spa_fallback" {
   name    = "${var.name}-spa-fallback"
   runtime = "cloudfront-js-2.0"
@@ -131,14 +178,38 @@ resource "aws_cloudfront_function" "spa_fallback" {
   publish = true
 
   code = <<-EOT
+    ${local.apex_redirect_js}
     function handler(event) {
       var request = event.request;
+      ${local.apex_redirect_call}
       var uri = request.uri;
       var last = uri.substring(uri.lastIndexOf('/') + 1);
       if (uri === '/' || last.indexOf('.') === -1) {
         request.uri = '/index.html';
       }
       return request;
+    }
+  EOT
+}
+
+# Asset and API behaviors use this alone. The default behavior cannot take
+# a second viewer-request function, so the same redirect is inlined above.
+resource "aws_cloudfront_function" "apex_redirect" {
+  count = var.apex_redirect_host == "" ? 0 : 1
+
+  name    = "${var.name}-apex-redirect"
+  runtime = "cloudfront-js-2.0"
+  comment = "Redirect ${var.apex_redirect_host} to ${var.aliases[0]}"
+  publish = true
+
+  code = <<-EOT
+    ${local.apex_redirect_js}
+    function handler(event) {
+      var redirected = canonicalRedirect(event.request);
+      if (redirected) {
+        return redirected;
+      }
+      return event.request;
     }
   EOT
 }
@@ -258,9 +329,17 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = true
     cache_policy_id            = aws_cloudfront_cache_policy.static.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.static.id
+
+    dynamic "function_association" {
+      for_each = aws_cloudfront_function.apex_redirect
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value.arn
+      }
+    }
   }
 
-  # API, WebSocket, /health, /sitemap.xml, /robots.txt -> EC2. Caching is
+  # API, WebSocket, /sitemap.xml, /robots.txt -> EC2. Caching is
   # off and the viewer's Host header is forwarded, so the server sees the
   # public hostname (the sitemap is generated per host).
   dynamic "ordered_cache_behavior" {
@@ -275,6 +354,14 @@ resource "aws_cloudfront_distribution" "this" {
       compress                 = false
       cache_policy_id          = local.cache_policy_disabled
       origin_request_policy_id = local.origin_request_policy_all
+
+      dynamic "function_association" {
+        for_each = aws_cloudfront_function.apex_redirect
+        content {
+          event_type   = "viewer-request"
+          function_arn = function_association.value.arn
+        }
+      }
     }
   }
 

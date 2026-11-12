@@ -602,7 +602,7 @@ variable "static_site_bucket_name" {
 variable "static_site_aliases" {
   description = "Public hostnames the prod CloudFront distribution serves. The first is the primary name on its us-east-1 certificate."
   type        = list(string)
-  default     = ["e2eetext.com", "e2eetext.org", "e2eetext.net", "e2eetext.io"]
+  default     = ["e2eetext.com", "www.e2eetext.com", "e2eetext.org", "e2eetext.net", "e2eetext.io"]
 }
 
 variable "static_site_certificate_arn" {
