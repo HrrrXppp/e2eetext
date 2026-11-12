@@ -24,10 +24,9 @@ module "static_site" {
     aws.us_east_1 = aws.us_east_1
   }
 
-  name               = var.name_prefix
-  bucket_name        = var.static_site_bucket_name
-  aliases            = var.static_site_aliases
-  apex_redirect_host = "www.e2eetext.com"
+  name        = var.name_prefix
+  bucket_name = var.static_site_bucket_name
+  aliases     = var.static_site_aliases
 
   client_version       = local.deployed_version # pinned in version.tf
   certificate_arn      = var.static_site_certificate_arn
