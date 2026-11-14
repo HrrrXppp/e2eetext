@@ -2,6 +2,9 @@ import { OAUTH_CALLBACK_PATH } from "@/lib/api";
 import { AuthCallback } from "@/app/AuthCallback";
 import { ChatsPage } from "@/app/ChatsPage";
 import { EncryptionPage } from "@/app/EncryptionPage";
+import { GuidePage } from "@/app/GuidePage";
+import { guideByPath } from "@/app/guides";
+import { GuidesPage } from "@/app/GuidesPage";
 import { LandingPage } from "@/app/LandingPage";
 import { PrivacyPolicyPage } from "@/app/PrivacyPolicyPage";
 import { RoadmapPage } from "@/app/RoadmapPage";
@@ -32,6 +35,15 @@ export function App() {
 
   if (pathname === "/encryption") {
     return <EncryptionPage />;
+  }
+
+  if (pathname === "/guides") {
+    return <GuidesPage />;
+  }
+
+  const guide = guideByPath(pathname);
+  if (guide) {
+    return <GuidePage guide={guide} />;
   }
 
   return <LandingPage />;

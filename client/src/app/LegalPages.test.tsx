@@ -13,6 +13,7 @@ describe("legal pages", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Privacy Policy" })).toBeInTheDocument();
     expect(screen.getByText(/never plaintext/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+    expect(document.querySelector('script[src*="adsbygoogle.js"]')).toBeNull();
   });
 
   it("renders the terms of service with footer links", () => {

@@ -15,7 +15,7 @@ export function Footer() {
           <strong>donations</strong>
         </a>
       </p>
-      <nav className="site-foot__nav" aria-label="Legal, roadmap, encryption and contact">
+      <nav className="site-foot__nav" aria-label="Legal, roadmap, encryption, guides and contact">
         <a className="site-foot__link" href="/privacy">
           Privacy Policy
         </a>
@@ -27,6 +27,9 @@ export function Footer() {
         </a>
         <a className="site-foot__link" href="/encryption">
           Encryption
+        </a>
+        <a className="site-foot__link" href="/guides">
+          Guides
         </a>
         <a
           className="site-foot__link"

@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { AdSenseScript } from "@/components/ads/AdSenseScript";
 import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
@@ -88,7 +87,6 @@ function FeatureIcon({ name }: { name: (typeof features)[number]["icon"] }) {
 export function LandingPage() {
   return (
     <>
-      <AdSenseScript />
       <SiteHeader />
       <div className="landing">
         <div className="landing__backdrop" aria-hidden="true">
@@ -120,7 +118,7 @@ export function LandingPage() {
           <ul className="landing__highlights">
             <li className="landing__highlight">
               <span className="landing__highlight-icon" aria-hidden="true">✓</span>
-              We don&apos;t keep any user data
+              The server cannot read your messages
             </li>
             <li className="landing__highlight">
               <span className="landing__highlight-icon" aria-hidden="true">✓</span>
@@ -131,7 +129,7 @@ export function LandingPage() {
             Sign in from this page. A message is encrypted in your browser
             before it is sent, and the server stores only ciphertext, so it
             cannot read the conversation. Each chat disappears its messages
-            after 60 days unless you choose a different time.
+            60 days after they are sent.
           </p>
         </section>
 

@@ -11,6 +11,16 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+#### Client
+
+- Public guides at `/guides`, linked from the footer. Each guide answers one question: what the server can and cannot read, chat keys and key versions, how disappearing messages are timed and deleted, what identity backup does and does not protect, and how to confirm who you are talking to. `/encryption` stays the overview and parameter list. The AdSense script loads on `/encryption` and the individual guides only.
+
+#### Server
+
+- `/sitemap.xml` lists the guide paths. An older `sitemap.paths` that does not name them yet still gains them.
+
 ### Fixed
 
 #### Tooling & deployment

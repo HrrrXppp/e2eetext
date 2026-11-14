@@ -359,7 +359,14 @@ func TestLoadReadsSitemap(t *testing.T) {
 	if cfg.Sitemap.CanonicalHost() != "example.com" {
 		t.Fatalf("CanonicalHost = %q", cfg.Sitemap.CanonicalHost())
 	}
-	if !sameStrings(cfg.Sitemap.Paths, []string{"/", "/privacy", "/terms", "/roadmap", "/encryption"}) {
+	if !sameStrings(cfg.Sitemap.Paths, []string{
+		"/", "/privacy", "/terms", "/roadmap", "/encryption", "/guides",
+		"/guides/what-the-server-can-see",
+		"/guides/chat-keys",
+		"/guides/disappearing-messages",
+		"/guides/identity-backup",
+		"/guides/who-you-are-talking-to",
+	}) {
 		t.Fatalf("Paths = %#v", cfg.Sitemap.Paths)
 	}
 }

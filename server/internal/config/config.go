@@ -68,7 +68,19 @@ func (s SitemapConfig) CanonicalHost() string {
 func DefaultSitemap() SitemapConfig {
 	return SitemapConfig{
 		Hosts: []string{"e2eetext.com", "e2eetext.io", "e2eetext.net", "e2eetext.org", "dev.e2eetext.com"},
-		Paths: []string{"/", "/privacy", "/terms", "/roadmap", "/encryption"},
+		Paths: []string{
+			"/",
+			"/privacy",
+			"/terms",
+			"/roadmap",
+			"/encryption",
+			"/guides",
+			"/guides/what-the-server-can-see",
+			"/guides/chat-keys",
+			"/guides/disappearing-messages",
+			"/guides/identity-backup",
+			"/guides/who-you-are-talking-to",
+		},
 	}
 }
 

@@ -18,6 +18,8 @@ describe("LandingPage news", () => {
     expect(screen.getByText(/encrypted in your browser/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Roadmap published" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View the roadmap" })).toHaveAttribute("href", "/roadmap");
+    expect(screen.queryByRole("heading", { name: "Guides" })).not.toBeInTheDocument();
+    expect(document.querySelector('script[src*="adsbygoogle.js"]')).toBeNull();
     const list = screen.getByRole("list", { name: "News items" });
     expect(list).toHaveAttribute("tabindex", "0");
     expect(list).toHaveClass("landing__news-list");
