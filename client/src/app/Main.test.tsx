@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { LandingPage } from "@/app/LandingPage";
+import { Main } from "@/app/Main";
 
 vi.mock("@/components/layout/SiteHeader", () => ({
   SiteHeader: () => <div>Site header</div>,
@@ -9,9 +9,9 @@ vi.mock("@/components/layout/Footer", () => ({
   Footer: () => <div>Footer</div>,
 }));
 
-describe("LandingPage news", () => {
+describe("Main news", () => {
   it("announces the roadmap in a keyboard-focusable scrollable list", () => {
-    render(<LandingPage />);
+    render(<Main />);
     expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
     expect(screen.queryByText("Available now")).not.toBeInTheDocument();
     expect(screen.getByText("October 18, 2026")).toHaveAttribute("datetime", "2026-10-18");
@@ -22,11 +22,11 @@ describe("LandingPage news", () => {
     expect(document.querySelector('script[src*="adsbygoogle.js"]')).toBeNull();
     const list = screen.getByRole("list", { name: "News items" });
     expect(list).toHaveAttribute("tabindex", "0");
-    expect(list).toHaveClass("landing__news-list");
+    expect(list).toHaveClass("main__news-list");
   });
 
   it("lists the production launch first, above the project start entry", () => {
-    render(<LandingPage />);
+    render(<Main />);
     const titles = screen
       .getAllByRole("heading", { level: 3 })
       .map((h) => h.textContent)
