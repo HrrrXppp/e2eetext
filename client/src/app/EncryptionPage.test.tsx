@@ -21,6 +21,7 @@ describe("EncryptionPage", () => {
       "Limits and honest caveats",
       "Technical appendix",
     ]);
+    expect(screen.queryByRole("link", { name: /What the server can and cannot read/ })).not.toBeInTheDocument();
   });
 
   it("shows the send and receive flow", () => {

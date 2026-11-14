@@ -1,3 +1,4 @@
+import { AdSenseScript } from "@/components/ads/AdSenseScript";
 import { Footer } from "@/components/layout/Footer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
@@ -30,6 +31,7 @@ const parameters: ReadonlyArray<[string, string]> = [
 export function EncryptionPage() {
   return (
     <>
+      <AdSenseScript />
       <SiteHeader />
       <main className="legal encryption">
         <h1 className="legal__title">How encryption works</h1>

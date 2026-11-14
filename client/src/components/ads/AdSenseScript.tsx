@@ -2,10 +2,11 @@ import { useEffect } from "react";
 
 const ADSENSE_CLIENT = "ca-pub-8559868695202171";
 
-// Mounted only by the public pages (home, privacy, terms). The script is added
-// when such a page mounts and removed when it unmounts, so the chat app and the
-// roadmap never carry it. AdSense rejected the site for ads on pages that have
-// no content of their own.
+// Mounted only by /encryption and the individual guide articles. The script is
+// added when such a page mounts and removed when it unmounts, so the home
+// page, the /guides index, the legal pages, the chat app, and the roadmap
+// never carry it. AdSense rejected the site for ads on screens without
+// publisher content.
 export function AdSenseScript() {
   useEffect(() => {
     const script = document.createElement("script");

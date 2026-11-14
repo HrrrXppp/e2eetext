@@ -1655,6 +1655,43 @@ body.has-dev-instance-banner .site-head {
   color: var(--accent-bright);
 }
 
+.guide__crumb {
+  margin: 0 0 0.75rem;
+}
+
+.guide-index {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.guide-index a {
+  display: block;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+  border-radius: 0.5rem;
+  text-decoration: none;
+}
+
+.guide-index a strong {
+  display: block;
+  color: var(--text-soft);
+}
+
+.guide-index a span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.guide-index a:hover strong,
+.guide-index a:focus-visible strong {
+  color: var(--accent-bright);
+}
+
 .encryption__flow {
   list-style: none;
   margin: 1.25rem 0;
