@@ -9,7 +9,7 @@ vi.mock("@/app/ChatsPage", () => ({
   ChatsPage: () => <div>Chats page</div>,
 }));
 vi.mock("@/app/LandingPage", () => ({
-  LandingPage: () => <div>Landing page</div>,
+  LandingPage: () => <div>Home page</div>,
 }));
 
 vi.mock("@/app/PrivacyPolicyPage", () => ({
@@ -45,10 +45,10 @@ describe("App", () => {
     expect(screen.getByText("Chats page")).toBeInTheDocument();
   });
 
-  it("routes landing page for other paths", () => {
+  it("routes the home page for other paths", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/" });
     render(<App />);
-    expect(screen.getByText("Landing page")).toBeInTheDocument();
+    expect(screen.getByText("Home page")).toBeInTheDocument();
   });
 
   it("routes privacy and terms paths", () => {
@@ -79,13 +79,13 @@ describe("App", () => {
     expect(screen.getByText("Guides page")).toBeInTheDocument();
   });
 
-  it("routes a guide path and leaves an unknown guide on the landing page", () => {
+  it("routes a guide path and leaves an unknown guide on the home page", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/guides/chat-keys" });
     const { unmount } = render(<App />);
     expect(screen.getByText("Guide: How a chat key and a new key version work")).toBeInTheDocument();
     unmount();
     vi.stubGlobal("location", { ...window.location, pathname: "/guides/not-a-guide" });
     render(<App />);
-    expect(screen.getByText("Landing page")).toBeInTheDocument();
+    expect(screen.getByText("Home page")).toBeInTheDocument();
   });
 });
