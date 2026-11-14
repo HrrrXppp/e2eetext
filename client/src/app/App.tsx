@@ -5,7 +5,7 @@ import { EncryptionPage } from "@/app/EncryptionPage";
 import { GuidePage } from "@/app/GuidePage";
 import { guideByPath } from "@/app/guides";
 import { GuidesPage } from "@/app/GuidesPage";
-import { LandingPage } from "@/app/LandingPage";
+import { Main } from "@/app/Main";
 import { PrivacyPolicyPage } from "@/app/PrivacyPolicyPage";
 import { RoadmapPage } from "@/app/RoadmapPage";
 import { TermsPage } from "@/app/TermsPage";
@@ -46,5 +46,5 @@ export function App() {
     return <GuidePage guide={guide} />;
   }
 
-  return <LandingPage />;
+  return <Main />;
 }

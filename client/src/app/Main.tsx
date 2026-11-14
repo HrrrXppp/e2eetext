@@ -44,14 +44,14 @@ const news = [
     dateTime: "2026-05-31",
     title: "E2EE Text project started",
     body:
-      "We have officially kicked off E2EE Text — End-To-End Encryption Text. The landing page is live while we build a web-based messenger with end-to-end encryption and post-quantum cryptography. Stay tuned for updates as development progresses.",
+      "We have officially kicked off E2EE Text — End-To-End Encryption Text. The main page is live while we build a web-based messenger with end-to-end encryption and post-quantum cryptography. Stay tuned for updates as development progresses.",
   },
 ] as const;
 
 function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <h2 id={id} className="landing__section-title">
-      <span className="landing__section-line" aria-hidden="true" />
+    <h2 id={id} className="main__section-title">
+      <span className="main__section-line" aria-hidden="true" />
       {children}
     </h2>
   );
@@ -84,48 +84,48 @@ function FeatureIcon({ name }: { name: (typeof features)[number]["icon"] }) {
   );
 }
 
-export function LandingPage() {
+export function Main() {
   return (
     <>
       <SiteHeader />
-      <div className="landing">
-        <div className="landing__backdrop" aria-hidden="true">
-          <div className="landing__orb landing__orb--1" />
-          <div className="landing__orb landing__orb--2" />
-          <div className="landing__grid" />
+      <div className="main">
+        <div className="main__backdrop" aria-hidden="true">
+          <div className="main__orb main__orb--1" />
+          <div className="main__orb main__orb--2" />
+          <div className="main__grid" />
         </div>
 
-        <div className="landing__hero">
-          <h1 className="landing__title">
-            <span className="landing__title-accent">E2EE</span> Text
+        <div className="main__hero">
+          <h1 className="main__title">
+            <span className="main__title-accent">E2EE</span> Text
           </h1>
-          <p className="landing__tagline">End-To-End Encryption Text</p>
-          <p className="landing__lead">
+          <p className="main__tagline">End-To-End Encryption Text</p>
+          <p className="main__lead">
             A secure, web-based messenger designed for private conversations in an
             uncertain future.
           </p>
         </div>
 
-        <section className="landing__panel landing__about" aria-labelledby="about-heading">
+        <section className="main__panel main__about" aria-labelledby="about-heading">
           <SectionHeading id="about-heading">What is E2EE Text?</SectionHeading>
-          <p className="landing__description">
+          <p className="main__description">
             E2EE Text (End-To-End Encryption Text) is a web-based chat platform
             that protects every message with end-to-end encryption and
             post-quantum cryptographic methods. Your conversations stay between
             you and your contacts—private by design, resilient against
             tomorrow&apos;s threats.
           </p>
-          <ul className="landing__highlights">
-            <li className="landing__highlight">
-              <span className="landing__highlight-icon" aria-hidden="true">✓</span>
+          <ul className="main__highlights">
+            <li className="main__highlight">
+              <span className="main__highlight-icon" aria-hidden="true">✓</span>
               The server cannot read your messages
             </li>
-            <li className="landing__highlight">
-              <span className="landing__highlight-icon" aria-hidden="true">✓</span>
+            <li className="main__highlight">
+              <span className="main__highlight-icon" aria-hidden="true">✓</span>
               Disappearing messages by design
             </li>
           </ul>
-          <p className="landing__description">
+          <p className="main__description">
             Sign in from this page. A message is encrypted in your browser
             before it is sent, and the server stores only ciphertext, so it
             cannot read the conversation. Each chat disappears its messages
@@ -133,22 +133,22 @@ export function LandingPage() {
           </p>
         </section>
 
-        <section className="landing__panel landing__news" aria-labelledby="news-heading">
+        <section className="main__panel main__news" aria-labelledby="news-heading">
           <SectionHeading id="news-heading">News</SectionHeading>
           <ul
-            className="landing__news-list"
+            className="main__news-list"
             tabIndex={0}
             aria-label="News items"
           >
             {news.map((item) => (
-              <li key={item.title} className="landing__news-item">
-                <time className="landing__news-date" dateTime={item.dateTime}>
+              <li key={item.title} className="main__news-item">
+                <time className="main__news-date" dateTime={item.dateTime}>
                   {item.date}
                 </time>
-                <h3 className="landing__news-title">{item.title}</h3>
-                <p className="landing__news-body">{item.body}</p>
+                <h3 className="main__news-title">{item.title}</h3>
+                <p className="main__news-body">{item.body}</p>
                 {"link" in item && (
-                  <a className="landing__news-link" href={item.link.href}>
+                  <a className="main__news-link" href={item.link.href}>
                     {item.link.label}
                   </a>
                 )}
@@ -157,15 +157,15 @@ export function LandingPage() {
           </ul>
         </section>
 
-        <section className="landing__features" aria-labelledby="features-heading">
-          <h2 id="features-heading" className="landing__section-title landing__section-title--center">
-            <span className="landing__section-line" aria-hidden="true" />
+        <section className="main__features" aria-labelledby="features-heading">
+          <h2 id="features-heading" className="main__section-title main__section-title--center">
+            <span className="main__section-line" aria-hidden="true" />
             Built for real privacy
-            <span className="landing__section-line" aria-hidden="true" />
+            <span className="main__section-line" aria-hidden="true" />
           </h2>
-          <ul className="landing__feature-list">
+          <ul className="main__feature-list">
             {features.map((feature) => (
-              <li key={feature.title} className="landing__feature">
+              <li key={feature.title} className="main__feature">
                 <FeatureIcon name={feature.icon} />
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>

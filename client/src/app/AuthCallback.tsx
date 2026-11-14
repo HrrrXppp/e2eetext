@@ -38,7 +38,7 @@ export function AuthCallback() {
   }, []);
 
   return (
-    <main className="landing">
+    <main className="main">
       <p>{error ?? "Signing you in..."}</p>
     </main>
   );

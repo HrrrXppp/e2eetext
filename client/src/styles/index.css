@@ -1229,7 +1229,7 @@ body.has-dev-instance-banner .site-head {
   flex-shrink: 0;
 }
 
-.landing {
+.main {
   position: relative;
   max-width: 56rem;
   margin: 0 auto;
@@ -1237,7 +1237,7 @@ body.has-dev-instance-banner .site-head {
   overflow-x: clip;
 }
 
-.landing__backdrop {
+.main__backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
@@ -1245,13 +1245,13 @@ body.has-dev-instance-banner .site-head {
   overflow: hidden;
 }
 
-.landing__orb {
+.main__orb {
   position: absolute;
   border-radius: 50%;
   filter: blur(80px);
 }
 
-.landing__orb--1 {
+.main__orb--1 {
   top: -12rem;
   left: 50%;
   width: 36rem;
@@ -1260,7 +1260,7 @@ body.has-dev-instance-banner .site-head {
   background: radial-gradient(circle, rgba(61, 214, 198, 0.14) 0%, transparent 65%);
 }
 
-.landing__orb--2 {
+.main__orb--2 {
   bottom: 10%;
   right: -8rem;
   width: 24rem;
@@ -1268,7 +1268,7 @@ body.has-dev-instance-banner .site-head {
   background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
 }
 
-.landing__grid {
+.main__grid {
   position: absolute;
   inset: 0;
   background-image:
@@ -1279,14 +1279,14 @@ body.has-dev-instance-banner .site-head {
   opacity: 0.4;
 }
 
-.landing__hero {
+.main__hero {
   position: relative;
   text-align: center;
   margin-bottom: 3.5rem;
   padding: 1rem 0 0.5rem;
 }
 
-.landing__title {
+.main__title {
   margin: 0 0 0.5rem;
   font-size: clamp(2.5rem, 8vw, 3.75rem);
   font-weight: 700;
@@ -1294,14 +1294,14 @@ body.has-dev-instance-banner .site-head {
   line-height: 1.1;
 }
 
-.landing__title-accent {
+.main__title-accent {
   background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 50%, #38bdf8 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.landing__tagline {
+.main__tagline {
   margin: 0 0 1.25rem;
   font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
   font-size: clamp(0.8125rem, 2.5vw, 0.9375rem);
@@ -1310,7 +1310,7 @@ body.has-dev-instance-banner .site-head {
   letter-spacing: 0.04em;
 }
 
-.landing__lead {
+.main__lead {
   margin: 0 auto;
   max-width: 34rem;
   font-size: 1.125rem;
@@ -1318,7 +1318,7 @@ body.has-dev-instance-banner .site-head {
   line-height: 1.65;
 }
 
-.landing__section-title {
+.main__section-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1329,12 +1329,12 @@ body.has-dev-instance-banner .site-head {
   letter-spacing: -0.01em;
 }
 
-.landing__section-title--center {
+.main__section-title--center {
   justify-content: center;
   margin-bottom: 1.75rem;
 }
 
-.landing__section-line {
+.main__section-line {
   display: block;
   width: 2rem;
   height: 2px;
@@ -1343,15 +1343,15 @@ body.has-dev-instance-banner .site-head {
   flex-shrink: 0;
 }
 
-.landing__section-title--center .landing__section-line:first-child {
+.main__section-title--center .main__section-line:first-child {
   background: linear-gradient(90deg, transparent, var(--accent));
 }
 
-.landing__section-title--center .landing__section-line:last-child {
+.main__section-title--center .main__section-line:last-child {
   background: linear-gradient(90deg, var(--accent), transparent);
 }
 
-.landing__panel {
+.main__panel {
   margin-bottom: 3rem;
   padding: 1.75rem 1.5rem;
   border-radius: 1rem;
@@ -1361,19 +1361,19 @@ body.has-dev-instance-banner .site-head {
 }
 
 @media (min-width: 640px) {
-  .landing__panel {
+  .main__panel {
     padding: 2rem 2.25rem;
   }
 }
 
-.landing__description {
+.main__description {
   margin: 0 0 1.25rem;
   font-size: 1.0625rem;
   color: var(--text-soft);
   line-height: 1.7;
 }
 
-.landing__highlights {
+.main__highlights {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
@@ -1382,11 +1382,11 @@ body.has-dev-instance-banner .site-head {
   list-style: none;
 }
 
-.landing__highlights + .landing__description {
+.main__highlights + .main__description {
   margin-top: 1.5rem;
 }
 
-.landing__highlight {
+.main__highlight {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -1400,7 +1400,7 @@ body.has-dev-instance-banner .site-head {
   border-radius: 0.625rem;
 }
 
-.landing__highlight-icon {
+.main__highlight-icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1413,7 +1413,7 @@ body.has-dev-instance-banner .site-head {
   color: var(--accent);
 }
 
-.landing__news-list {
+.main__news-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1424,25 +1424,25 @@ body.has-dev-instance-banner .site-head {
   overscroll-behavior: contain;
 }
 
-.landing__news-link {
+.main__news-link {
   display: inline-block;
   margin-top: 0.625rem;
   font-size: 0.9375rem;
   color: var(--accent-bright);
 }
 
-.landing__news-item {
+.main__news-item {
   padding: 1.25rem 0 1.25rem 1rem;
   border-left: 3px solid var(--accent);
   border-top: 1px solid var(--border);
 }
 
-.landing__news-item:first-child {
+.main__news-item:first-child {
   padding-top: 0;
   border-top: none;
 }
 
-.landing__news-date {
+.main__news-date {
   display: block;
   margin-bottom: 0.5rem;
   font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
@@ -1452,21 +1452,21 @@ body.has-dev-instance-banner .site-head {
   letter-spacing: 0.03em;
 }
 
-.landing__news-title {
+.main__news-title {
   margin: 0 0 0.625rem;
   font-size: 1.0625rem;
   font-weight: 600;
   color: var(--text-soft);
 }
 
-.landing__news-body {
+.main__news-body {
   margin: 0;
   font-size: 0.9375rem;
   color: var(--muted);
   line-height: 1.65;
 }
 
-.landing__feature-list {
+.main__feature-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1475,13 +1475,13 @@ body.has-dev-instance-banner .site-head {
 }
 
 @media (min-width: 640px) {
-  .landing__feature-list {
+  .main__feature-list {
     grid-template-columns: repeat(3, 1fr);
     gap: 1.25rem;
   }
 }
 
-.landing__feature {
+.main__feature {
   position: relative;
   padding: 1.5rem 1.25rem 1.5rem;
   border-radius: 0.875rem;
@@ -1493,7 +1493,7 @@ body.has-dev-instance-banner .site-head {
     box-shadow 0.2s ease;
 }
 
-.landing__feature::before {
+.main__feature::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1504,13 +1504,13 @@ body.has-dev-instance-banner .site-head {
   pointer-events: none;
 }
 
-.landing__feature:hover {
+.main__feature:hover {
   border-color: var(--border-bright);
   transform: translateY(-2px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
 }
 
-.landing__feature:hover::before {
+.main__feature:hover::before {
   opacity: 1;
 }
 
@@ -1532,14 +1532,14 @@ body.has-dev-instance-banner .site-head {
   height: 1.25rem;
 }
 
-.landing__feature h3 {
+.main__feature h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-soft);
 }
 
-.landing__feature p {
+.main__feature p {
   margin: 0;
   font-size: 0.9375rem;
   color: var(--muted);
@@ -1560,7 +1560,7 @@ body.has-dev-instance-banner .site-head {
 /* Landing keeps its original card-style footer spacing; the app shell (e.g.
    .chats-shell) gets the compact, non-scrolling variant above so the footer
    doesn't eat into the height-locked chat layout. */
-.landing .site-foot {
+.main .site-foot {
   margin-top: 3.5rem;
   padding: 1.5rem 1.25rem;
   border-radius: 0.875rem;
