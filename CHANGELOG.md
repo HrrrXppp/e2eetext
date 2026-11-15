@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- The server image push omits the Docker provenance attestation. GitHub's Ubuntu 26 runners attach one by default, and ECR rejects that manifest.
+
 ### Added
 
 - Client `/contact` page with mailto links and copy buttons for `help@e2eetext.com` and `marketing@e2eetext.com`, plus the GitHub issues link with a note not to post private data. The footer Contact link opens it instead of GitHub (#162)
