@@ -28,6 +28,10 @@ vi.mock("@/app/GuidesPage", () => ({
 vi.mock("@/app/GuidePage", () => ({
   GuidePage: ({ guide }: { guide: { title: string } }) => <div>Guide: {guide.title}</div>,
 }));
+vi.mock("@/app/ContactPage", () => ({
+  ContactPage: () => <div>Contact page</div>,
+}));
+
 vi.mock("@/app/RoadmapPage", () => ({
   RoadmapPage: () => <div>Roadmap page</div>,
 }));
@@ -65,6 +69,12 @@ describe("App", () => {
     vi.stubGlobal("location", { ...window.location, pathname: "/roadmap" });
     render(<App />);
     expect(screen.getByText("Roadmap page")).toBeInTheDocument();
+  });
+
+  it("routes contact path", () => {
+    vi.stubGlobal("location", { ...window.location, pathname: "/contact" });
+    render(<App />);
+    expect(screen.getByText("Contact page")).toBeInTheDocument();
   });
 
   it("routes encryption path", () => {

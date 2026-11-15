@@ -1655,6 +1655,18 @@ body.has-dev-instance-banner .site-head {
   color: var(--accent-bright);
 }
 
+.contact__copy {
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.625rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
 .guide__crumb {
   margin: 0 0 0.75rem;
 }
