@@ -12,6 +12,12 @@ BUILD_ARGS=()
 if [[ -n "$DOCKER_PLATFORM" ]]; then
   BUILD_ARGS=(--platform "$DOCKER_PLATFORM")
 fi
+# Ubuntu 26 GitHub runners ship Docker 29. Its default provenance attestation
+# makes ECR reject the push. Older Docker ignores the variable and has no flag.
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+if docker build --help 2>/dev/null | grep -q -- '--provenance'; then
+  BUILD_ARGS+=(--provenance=false)
+fi
 
 echo "Logging in to ECR: $ECR_REGISTRY"
 aws ecr get-login-password --region "$AWS_REGION" \
