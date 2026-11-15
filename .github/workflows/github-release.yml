@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
     paths: [VERSION]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,11 +30,19 @@ jobs:
         id: version
         run: |
           current="$(tr -d '[:space:]' < VERSION)"
-          previous="$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
-          if [ "$current" = "$previous" ]; then
-            echo "VERSION unchanged ($current); nothing to release."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Compare with the commit main pointed at before this push.
+            # HEAD^ misses a version bump that is not the tip of the push.
+            before="${{ github.event.before }}"
+            previous=""
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              previous="$(git show "$before:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+            fi
+            if [ "$current" = "$previous" ]; then
+              echo "VERSION unchanged ($current); nothing to release."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "VERSION=$current" >> "$GITHUB_ENV"

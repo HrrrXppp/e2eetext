@@ -33,7 +33,15 @@ jobs:
         run: |
           current="$(tr -d '[:space:]' < VERSION)"
           if [ "${{ github.event_name }}" = "push" ]; then
-            previous="$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+            # Compare with the commit main pointed at before this push.
+            # HEAD^ is the previous tip commit, so a version bump followed
+            # by another commit in the same push looks unchanged and the
+            # image is never built.
+            before="${{ github.event.before }}"
+            previous=""
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              previous="$(git show "$before:VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+            fi
             if [ "$current" = "$previous" ]; then
               echo "VERSION unchanged ($current); nothing to build."
               echo "build=false" >> "$GITHUB_OUTPUT"
