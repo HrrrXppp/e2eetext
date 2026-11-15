@@ -1,0 +1,76 @@
+name: Publish GitHub release
+
+# A version bump merged to main creates or updates the GitHub Release vX.Y.Z.
+# The notes are that version's section in CHANGELOG.md. This does not change
+# what visitors get; deployed_version in version.tf does.
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+
+permissions:
+  contents: write
+
+# Queue (never cancel) so two quick version bumps publish in order.
+concurrency:
+  group: github-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check whether VERSION changed
+        id: version
+        run: |
+          current="$(tr -d '[:space:]' < VERSION)"
+          previous="$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+          if [ "$current" = "$previous" ]; then
+            echo "VERSION unchanged ($current); nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$current" >> "$GITHUB_ENV"
+
+      - name: Extract changelog notes
+        if: steps.version.outputs.release == 'true'
+        run: |
+          python3 << 'PY'
+          import pathlib, sys
+          version = pathlib.Path("VERSION").read_text().strip()
+          lines = pathlib.Path("CHANGELOG.md").read_text().splitlines()
+          start = None
+          for i, line in enumerate(lines):
+              if line.startswith(f"## [{version}]"):
+                  start = i + 1
+                  break
+          if start is None:
+              sys.exit(f"CHANGELOG.md has no section for {version}")
+          end = len(lines)
+          for j in range(start, len(lines)):
+              if lines[j].startswith("## ["):
+                  end = j
+                  break
+          body = "\n".join(lines[start:end]).strip()
+          if not body:
+              sys.exit(f"CHANGELOG.md section for {version} is empty")
+          pathlib.Path("release-notes.md").write_text(body + "\n")
+          PY
+
+      - name: Create or update the GitHub release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$tag" --notes-file release-notes.md
+          else
+            gh release create "$tag" --title "$tag" --notes-file release-notes.md --target "$GITHUB_SHA"
+          fi
