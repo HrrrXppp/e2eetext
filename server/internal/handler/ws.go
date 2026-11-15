@@ -60,16 +60,16 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.serveConn(conn, tokenUser, userID)
+	go h.serveConn(conn, userID)
 }
 
-func (h *WSHandler) serveConn(conn *websocket.Conn, user service.TokenUser, userID string) {
+func (h *WSHandler) serveConn(conn *websocket.Conn, userID string) {
 	defer conn.Close()
 
 	h.hub.Register(userID, conn)
 	defer h.hub.Unregister(userID, conn)
 
-	h.logger.Info("websocket connected", "user_id", userID, "subject", user.Subject, "provider", user.Provider)
+	h.logger.Info("websocket connected", "user_id", userID)
 
 	for {
 		_, payload, err := conn.ReadMessage()
@@ -92,5 +92,5 @@ func (h *WSHandler) serveConn(conn *websocket.Conn, user service.TokenUser, user
 		}
 	}
 
-	h.logger.Info("websocket disconnected", "user_id", userID, "subject", user.Subject, "provider", user.Provider)
+	h.logger.Info("websocket disconnected", "user_id", userID)
 }

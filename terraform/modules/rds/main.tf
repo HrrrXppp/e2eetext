@@ -170,6 +170,17 @@ resource "aws_db_parameter_group" "this" {
   }
 }
 
+# #94: RDS creates /aws/rds/instance/<id>/<type> itself on first export, with
+# no retention. Creating the groups here first keeps retention bounded.
+resource "aws_cloudwatch_log_group" "export" {
+  for_each = toset(var.enabled_cloudwatch_logs_exports)
+
+  name              = "/aws/rds/instance/${var.identifier}/${each.value}"
+  retention_in_days = var.cloudwatch_logs_retention_days
+
+  tags = var.tags
+}
+
 resource "aws_db_instance" "this" {
   identifier = var.identifier
 
@@ -226,6 +237,8 @@ resource "aws_db_instance" "this" {
   performance_insights_retention_period = var.performance_insights_enabled ? var.performance_insights_retention_period : null
 
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
+
+  depends_on = [aws_cloudwatch_log_group.export]
 
   skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : local.final_snapshot_identifier

@@ -1,0 +1,21 @@
+# Optional overlay (#94): ship the server container's stdout (structured JSON
+# logs) to CloudWatch Logs with Docker's awslogs driver. deploy.sh adds this
+# file only when CLOUDWATCH_LOGS_GROUP is set (from .env or
+# /etc/e2eetext/deploy.env, which Terraform writes). The log group is created
+# by Terraform, so awslogs-create-group stays false and the instance role only
+# needs logs:CreateLogStream and logs:PutLogEvents on that group.
+#
+# non-blocking: a CloudWatch outage drops buffered lines instead of stalling
+# the server.
+
+services:
+  server:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOGS_GROUP}
+        awslogs-create-group: "false"
+        tag: "{{.Name}}/{{.ID}}"
+        mode: non-blocking
+        max-buffer-size: 4m

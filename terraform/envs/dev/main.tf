@@ -43,6 +43,30 @@ locals {
   ]
 }
 
+# --- Server logs in CloudWatch (#94) ---
+# Log group, retention, error metric filter, alarm and SNS topic. The EC2
+# module gets the group name and its instance role is allowed to write to it.
+locals {
+  server_log_group_name = var.server_logs_enabled ? "/e2eetext/dev/server" : ""
+}
+
+module "server_logs" {
+  source = "../../modules/server-logs"
+  count  = var.server_logs_enabled ? 1 : 0
+
+  name              = var.name_prefix
+  environment       = "dev"
+  log_group_name    = local.server_log_group_name
+  retention_in_days = var.server_logs_retention_days
+  kms_key_id        = var.server_logs_kms_key_id
+  metrics_namespace = var.metrics_namespace
+
+  alarm_enabled = var.server_logs_alarm_enabled
+  alarm_email   = var.server_logs_alarm_email
+
+  tags = var.tags
+}
+
 module "ec2" {
   source = "../../modules/ec2"
 
@@ -71,6 +95,9 @@ module "ec2" {
 
   # #37: lets the server publish WebSocketConnections to CloudWatch.
   metrics_namespace = var.metrics_namespace
+
+  # #94: ship the server container logs to CloudWatch Logs.
+  log_group_name = local.server_log_group_name
 
   tags = var.tags
 }

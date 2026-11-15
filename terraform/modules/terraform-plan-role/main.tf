@@ -131,7 +131,22 @@ data "aws_iam_policy_document" "plan" {
     effect = "Allow"
     actions = [
       "logs:DescribeLogGroups",
+      "logs:DescribeMetricFilters",
       "logs:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  # Refresh of the server-logs module (#94): error alarm and its SNS topic.
+  statement {
+    sid    = "ServerLogsAlarmRead"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:ListTagsForResource",
+      "sns:GetTopicAttributes",
+      "sns:ListTagsForResource",
+      "sns:ListSubscriptionsByTopic",
     ]
     resources = ["*"]
   }
