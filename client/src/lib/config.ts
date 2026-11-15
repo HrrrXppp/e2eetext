@@ -6,3 +6,6 @@ export const donateUrl: string =
   import.meta.env.VITE_DONATE_URL || DEFAULT_DONATE_URL;
 
 export const CONTACT_URL = "https://github.com/HrrrXppp/e2eetext/issues";
+
+export const HELP_EMAIL = "help@e2eetext.com";
+export const MARKETING_EMAIL = "marketing@e2eetext.com";

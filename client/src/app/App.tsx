@@ -1,6 +1,7 @@
 import { OAUTH_CALLBACK_PATH } from "@/lib/api";
 import { AuthCallback } from "@/app/AuthCallback";
 import { ChatsPage } from "@/app/ChatsPage";
+import { ContactPage } from "@/app/ContactPage";
 import { EncryptionPage } from "@/app/EncryptionPage";
 import { GuidePage } from "@/app/GuidePage";
 import { guideByPath } from "@/app/guides";
@@ -31,6 +32,10 @@ export function App() {
 
   if (pathname === "/roadmap") {
     return <RoadmapPage />;
+  }
+
+  if (pathname === "/contact") {
+    return <ContactPage />;
   }
 
   if (pathname === "/encryption") {

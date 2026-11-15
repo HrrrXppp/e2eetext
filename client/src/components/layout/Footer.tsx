@@ -1,4 +1,4 @@
-import { CONTACT_URL, donateUrl } from "@/lib/config";
+import { donateUrl } from "@/lib/config";
 
 export function Footer() {
   return (
@@ -31,12 +31,7 @@ export function Footer() {
         <a className="site-foot__link" href="/guides">
           Guides
         </a>
-        <a
-          className="site-foot__link"
-          href={CONTACT_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a className="site-foot__link" href="/contact">
           Contact
         </a>
       </nav>

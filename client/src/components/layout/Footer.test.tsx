@@ -26,10 +26,7 @@ describe("Footer", () => {
     expect(screen.getByRole("link", { name: "Roadmap" })).toHaveAttribute("href", "/roadmap");
     expect(screen.getByRole("link", { name: "Encryption" })).toHaveAttribute("href", "/encryption");
     expect(screen.getByRole("link", { name: "Guides" })).toHaveAttribute("href", "/guides");
-    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
-      "href",
-      "https://github.com/HrrrXppp/e2eetext/issues",
-    );
+    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "/contact");
     expect(screen.getByText(/2026 e2eetext/)).toBeInTheDocument();
   });
 });
