@@ -81,6 +81,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, db *sql.DB
 	mux.Handle("GET /api/v1/chat", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.List))))
 	mux.Handle("POST /api/v1/chat", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.Create))))
 	mux.Handle("GET /api/v1/chat/{nodeId}/{localId}/members", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.ListMembers))))
+	mux.Handle("POST /api/v1/chat/{nodeId}/{localId}/members", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.AddMembers))))
 	mux.Handle("DELETE /api/v1/chat/{nodeId}/{localId}/members/{userNodeId}/{userLocalId}", requireAuth(defaultLimit(http.HandlerFunc(chatHandler.RemoveMember))))
 
 	e2eeHandler := handler.NewE2EEHandler(e2eeService, nodeRegistry)
