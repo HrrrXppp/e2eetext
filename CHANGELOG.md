@@ -11,6 +11,12 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Fixed
+
+#### Tooling & deployment
+
+- A version bump that is not the tip commit of a push to `main` still builds the server image and publishes the GitHub Release. The 0.5.6 image and release were skipped because the check compared only the tip commit, which did not change `VERSION`.
+
 ## [0.5.6](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-14
 
 ### Added
