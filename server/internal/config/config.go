@@ -80,6 +80,7 @@ func DefaultSitemap() SitemapConfig {
 			"/guides/disappearing-messages",
 			"/guides/identity-backup",
 			"/guides/who-you-are-talking-to",
+			"/contact",
 		},
 	}
 }

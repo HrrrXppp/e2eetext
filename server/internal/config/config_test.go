@@ -366,6 +366,7 @@ func TestLoadReadsSitemap(t *testing.T) {
 		"/guides/disappearing-messages",
 		"/guides/identity-backup",
 		"/guides/who-you-are-talking-to",
+		"/contact",
 	}) {
 		t.Fatalf("Paths = %#v", cfg.Sitemap.Paths)
 	}

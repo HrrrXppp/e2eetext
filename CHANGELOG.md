@@ -14,6 +14,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 ### Added
 
 - Client `/contact` page with mailto links and copy buttons for `help@e2eetext.com` and `marketing@e2eetext.com`, plus the GitHub issues link with a note not to post private data. The footer Contact link opens it instead of GitHub (#162)
+- `/contact` is listed in `/sitemap.xml`: added to the built-in sitemap paths and both `config.example.json` files (#162)
 
 ## [0.5.7](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-14
 
