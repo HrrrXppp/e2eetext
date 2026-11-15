@@ -175,6 +175,8 @@ Keep `client/package.json` `version` in sync with `VERSION` for npm metadata. Re
 
 **Image builds on bump:** a push to `main` that changes `VERSION` triggers `.github/workflows/build-images.yml`, which builds and pushes the `e2eetext-server` image tagged `vX.Y.Z` (the client is no longer built as an image there: it is published as static files, see [Static client on S3 + CloudFront](#static-client-on-s3--cloudfront)). It fails if `client/package.json` doesn't match `VERSION` (the `terraform/envs/{dev,prod}/version.tf` pins are deliberately not checked: a new version can be built without changing deployed versions), and skips (never overwrites) if the server image already exists in ECR. Builds are serialized by a `concurrency` group. Manual runs (`workflow_dispatch`) remain available; on `main` the `force` input overwrites an existing tag.
 
+**GitHub Release on bump:** the same push runs `.github/workflows/github-release.yml`. It creates the GitHub Release `vX.Y.Z` from that version's section in `CHANGELOG.md`, or updates the notes if that release already exists. The release does not change what visitors get.
+
 ## API
 
 All JSON and WebSocket endpoints are versioned under `/api/v1`. `/health` is unversioned.

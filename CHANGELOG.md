@@ -35,6 +35,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - CloudFront sends the API, WebSocket, `/sitemap.xml`, and `/robots.txt` straight to the EC2 instance on port 8081. `/health` is not forwarded, so it is not reachable from outside AWS; the `create_health_rule` variable is removed. The old `maintenance/alb` load-balancer example script is deleted. Applying dig or prod deletes that environment's Application Load Balancer. Visitors already reach the site through CloudFront; the apply still interrupts the API for a few minutes while the origin switches.
 - Dig and prod deployed version pins are `v0.5.6`
+- A version bump merged to `main` publishes the GitHub Release `vX.Y.Z`. The notes are that version's section in this file; publishing the same version again updates those notes.
 
 ## [0.5.5](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-02
 
