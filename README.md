@@ -526,7 +526,7 @@ bash maintenance/ecr/build-and-push.sh
 
 This builds the `server` Docker image and pushes it to ECR. The client is not an image any more: it is published as static files (see Publishing the client). Set `IMAGE_TAG` in `maintenance/ecr/.env` to version releases (default: `latest`). On Apple Silicon Macs, `DOCKER_PLATFORM=linux/amd64` is set by default for EC2.
 
-Requires IAM permissions: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`. The CI role additionally needs `ecr:DescribeImages` (used by `build-images.yml` to skip existing tags).
+Requires IAM permissions: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:BatchGetImage`, `ecr:GetDownloadUrlForLayer`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`. Docker 29 checks the manifest with HEAD before uploading it, and ECR returns 403 without `BatchGetImage` and `GetDownloadUrlForLayer`. The CI role additionally needs `ecr:DescribeImages` (used by `build-images.yml` to skip existing tags).
 
 Use the **same client image** on prod and dev. The dev banner is controlled at **deploy time**, not build time:
 
