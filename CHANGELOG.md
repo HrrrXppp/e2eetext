@@ -17,6 +17,7 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 - The server image push omits the Docker provenance attestation that GitHub's Ubuntu 26 runners attach by default.
 - The GitHub Actions ECR role can `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer`. Docker 29 checks the manifest with HEAD before the push, and ECR answers 403 without those actions.
+- The image build turns off Docker's containerd image store before it pushes. That store is what makes the HEAD request, so the push works with the role that is already deployed.
 
 ### Added
 
