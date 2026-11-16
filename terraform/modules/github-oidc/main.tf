@@ -74,6 +74,10 @@ data "aws_iam_policy_document" "ecr_push" {
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
+      # Docker 29 HEADs the manifest and layers before uploading them.
+      # ECR returns 403 for that request without these two actions.
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
       # Lets build-images.yml skip the push when a release tag already exists.
       "ecr:DescribeImages",
     ]
