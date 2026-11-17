@@ -11,6 +11,21 @@ On branches that are not yet merged to `main`, use `NEXT RELEASE` as the changel
 
 ## [NEXT RELEASE]
 
+### Added
+
+#### Tooling & deployment
+
+- Production server logs go to CloudWatch Logs (`/e2eetext/<env>/server`, 30 days retention) through Docker's `awslogs` driver, enabled by `CLOUDWATCH_LOGS_GROUP` and written by the Terraform boot deploy. Prod is on by default. Dev is opt-in (`server_logs_enabled`).
+- An alarm on error-level server log lines notifies an SNS topic, with an optional email subscriber (`server_logs_alarm_email`).
+- Prod exports the RDS `postgresql` and `upgrade` logs to CloudWatch with 30 days retention. Apply this as its own reviewed change, since it modifies the live instance.
+- The Terraform plan role may read CloudWatch alarms, metric filters, and SNS topics. Apply `envs/shared` to pick this up.
+
+### Changed
+
+#### Server
+
+- WebSocket connect and disconnect log lines no longer include the OIDC subject and provider, only the internal user ID.
+
 ## [0.5.8](https://github.com/HrrrXppp/e2eetext/compare/main...HEAD) - 2026-11-15
 
 ### Fixed

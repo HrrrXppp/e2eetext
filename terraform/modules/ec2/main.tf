@@ -158,6 +158,31 @@ resource "aws_iam_role_policy" "put_metrics" {
   policy = data.aws_iam_policy_document.put_metrics[0].json
 }
 
+# #94: the Docker awslogs driver on the box writes the server logs to a log
+# group Terraform pre-creates, so only stream creation and event writes are
+# granted, on that group alone (no logs:CreateLogGroup).
+data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "put_logs" {
+  count = var.create_iam_instance_profile && var.log_group_name != "" ? 1 : 0
+
+  statement {
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:${var.log_group_name}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "put_logs" {
+  count = var.create_iam_instance_profile && var.log_group_name != "" ? 1 : 0
+
+  name   = "put-logs"
+  role   = aws_iam_role.this[0].id
+  policy = data.aws_iam_policy_document.put_logs[0].json
+}
+
 resource "aws_iam_instance_profile" "this" {
   count = var.create_iam_instance_profile ? 1 : 0
 

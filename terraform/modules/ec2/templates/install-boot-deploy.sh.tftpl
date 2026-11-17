@@ -13,6 +13,9 @@ DEPLOY_ENV_FILE="$DEPLOY_ENV_DIR/deploy.env"
 # Association parameter. SSM substitutes this before the shell runs.
 IMAGE_TAG='{{ ImageTag }}'
 START_NOW='${start_now}'
+# CloudWatch Logs group for the server container (#94). Empty keeps the
+# default json-file log driver.
+LOG_GROUP='${log_group_name}'
 
 install_host_packages() {
   if [ -f /etc/os-release ]; then
@@ -125,6 +128,15 @@ if [ -n "$IMAGE_TAG" ]; then
   fi
 fi
 
+# deploy.sh adds docker-compose.cloudwatch.yml only when this key is present.
+if [ -f "$DEPLOY_ENV_FILE" ]; then
+  sed -i '/^CLOUDWATCH_LOGS_GROUP=/d' "$DEPLOY_ENV_FILE"
+fi
+if [ -n "$LOG_GROUP" ]; then
+  printf 'CLOUDWATCH_LOGS_GROUP=%s\n' "$LOG_GROUP" >>"$DEPLOY_ENV_FILE"
+  chmod 0644 "$DEPLOY_ENV_FILE"
+fi
+
 systemctl daemon-reload
 systemctl enable e2eetext.service
 
@@ -133,9 +145,14 @@ if [ "$START_NOW" = "true" ]; then
   # deploy.sh on an older checkout does not pass --remove-orphans, so the
   # client container would keep running after its service was removed.
   if [ -f "$COMPOSE" ] && [ -f "$REPO_ROOT/maintenance/ec2/.env" ]; then
+    COMPOSE_ARGS="-f $COMPOSE"
+    if [ -n "$LOG_GROUP" ] && [ -f "$REPO_ROOT/maintenance/ec2/docker-compose.cloudwatch.yml" ]; then
+      COMPOSE_ARGS="$COMPOSE_ARGS -f $REPO_ROOT/maintenance/ec2/docker-compose.cloudwatch.yml"
+    fi
+    # shellcheck disable=SC2086
     docker compose \
       --env-file "$REPO_ROOT/maintenance/ec2/.env" \
       --env-file "$DEPLOY_ENV_FILE" \
-      -f "$COMPOSE" up -d --remove-orphans
+      $COMPOSE_ARGS up -d --remove-orphans
   fi
 fi

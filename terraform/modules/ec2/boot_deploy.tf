@@ -16,6 +16,8 @@ locals {
     repo_url    = var.boot_deploy_repo_url
     repo_branch = var.boot_deploy_repo_branch
     start_now   = var.boot_deploy_start_now ? "true" : "false"
+    # #94: written to deploy.env so deploy.sh adds the awslogs overlay.
+    log_group_name = var.log_group_name
   }) : ""
   # Separate template + base64 avoids nested-heredoc collisions with the
   # install script body (and keeps the ternary parseable).

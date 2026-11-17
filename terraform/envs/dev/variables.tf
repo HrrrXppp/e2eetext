@@ -553,6 +553,38 @@ variable "rds_enabled_cloudwatch_logs_exports" {
   default     = []
 }
 
+# --- Server logs in CloudWatch (#94) ---
+
+variable "server_logs_enabled" {
+  description = "Ship the server container logs to a CloudWatch Logs group (needs the EC2 instance profile and boot deploy). Off by default in dev; set true to opt in."
+  type        = bool
+  default     = false
+}
+
+variable "server_logs_retention_days" {
+  description = "Retention of the server log group in days. Short on purpose: the app is end-to-end encrypted."
+  type        = number
+  default     = 30
+}
+
+variable "server_logs_kms_key_id" {
+  description = "Optional KMS key ARN to encrypt the server log group. Empty uses the CloudWatch Logs default."
+  type        = string
+  default     = ""
+}
+
+variable "server_logs_alarm_enabled" {
+  description = "Create the alarm (and SNS topic) on error-level server log lines."
+  type        = bool
+  default     = true
+}
+
+variable "server_logs_alarm_email" {
+  description = "Optional email subscribed to the error alarm topic. AWS sends a confirmation message that must be accepted. Empty leaves the topic without a subscriber."
+  type        = string
+  default     = ""
+}
+
 # --- Metrics (#37) ---
 
 variable "metrics_namespace" {

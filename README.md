@@ -325,7 +325,20 @@ Metrics go to **Amazon CloudWatch**, namespace `E2EEText/Messenger`, at 1 minute
 - **WebSocketConnections** is per-process state, so each server node publishes its own count (dimension `NodeId` = the node's ID) using the EC2 instance role. In CloudWatch the cluster total is `SUM` across `NodeId`. Publishing is off unless `AWS_REGION` and `METRICS_CLOUDWATCH_NAMESPACE` are set, so local dev and tests are unaffected. The instance role needs `cloudwatch:PutMetricData` for the namespace (`terraform/modules/ec2`, `metrics_namespace`; requires the module to manage the IAM role).
 - **Viewing:** CloudWatch console, Metrics, All metrics, namespace `E2EEText/Messenger`.
 - **Deploying the Lambda:** build the package with `lambdas/metrics/build.sh` (writes `lambdas/metrics/build/metrics.zip`; CI builds it too), create a Secrets Manager secret whose string value is the environment's `DATABASE_URL`, then set `metrics_database_url_secret_arn` in the env's tfvars and apply. `metrics_enabled` defaults to `true`, but an empty ARN skips the Lambda instead of planning an IAM policy with `Resource = ""`. Set `metrics_enabled = false` to skip it explicitly (`terraform/modules/metrics`). Dig creates the `monitoring` and `secretsmanager` interface VPC endpoints and allows TCP 443 from the Lambda and from every security group on the EC2 instance (private DNS sends `PutMetricData` to the monitoring endpoint). Prod does not create a second pair (`metrics_create_vpc_endpoints` defaults to false there): AWS allows one private-DNS endpoint per service per VPC. Prod opens the existing group `dev-ec2-metrics-endpoints` instead. The module also opens RDS port 5432 to the Lambda's security group. The RDS module keeps the app and CloudShell rules as standalone rules, not inline on the security group, so that Lambda permission is not revoked on the next apply. Prod keeps the CloudShell self-rule (`rds_ingress_allow_self`, default true).
-- Alarms and a dashboard are not part of this change.
+- A dashboard is not part of this change. The server-error alarm is under [Logs in CloudWatch](#logs-in-cloudwatch).
+
+## Logs in CloudWatch
+
+Production logs are kept in **Amazon CloudWatch Logs**. The server writes structured JSON (`log/slog`) to stdout. On EC2, Docker's `awslogs` driver ships that output to a log group, so the server code has no AWS dependency for logging.
+
+- **Server log group:** `/e2eetext/<env>/server` (for example `/e2eetext/prod/server`), created by `terraform/modules/server-logs` with 30 days of retention (`server_logs_retention_days`) and an optional KMS key (`server_logs_kms_key_id`). Each container writes its own stream, named `<container name>/<container id>`.
+- **How it is switched on:** `maintenance/ec2/deploy.sh` adds the overlay `maintenance/ec2/docker-compose.cloudwatch.yml` only when `CLOUDWATCH_LOGS_GROUP` is set. On Terraform-managed instances the boot deploy writes that variable into `/etc/e2eetext/deploy.env` (`log_group_name` on `terraform/modules/ec2`). For a hand-managed instance, set it in `maintenance/ec2/.env`. Without it, Docker keeps the default `json-file` driver. The overlay uses `mode: non-blocking` with a 4 MB buffer, so a CloudWatch outage drops buffered lines instead of stalling the server. `docker logs` and `docker compose logs` keep working on the box.
+- **Permissions:** the instance role gets `logs:CreateLogStream` and `logs:PutLogEvents` on that one log group only. The group is pre-created, so `logs:CreateLogGroup` is not granted.
+- **Dev:** off by default. Set `server_logs_enabled = true` in `terraform/envs/dev` to opt in (group `/e2eetext/dev/server`). Prod defaults to on.
+- **Database logs:** prod exports the RDS `postgresql` and `upgrade` logs (`rds_enabled_cloudwatch_logs_exports`, set to `[]` to turn off). The groups `/aws/rds/instance/<identifier>/<type>` are managed by `terraform/modules/rds` with `rds_cloudwatch_logs_retention_days` (default 30) so RDS does not create them with no expiry. Enabling exports modifies the live instance: apply it as a separate, reviewed `terraform apply`. If a group already exists, import it first (`terraform import 'module.rds.aws_cloudwatch_log_group.export["postgresql"]' /aws/rds/instance/<identifier>/postgresql`).
+- **Error alarm:** a metric filter on `{ $.level = "ERROR" }` publishes `ServerErrorLogs-<env>` (namespace `E2EEText/Messenger`). The alarm `<name_prefix>-server-errors` fires at 1 or more error lines in 5 minutes (`alarm_threshold`, `alarm_period_seconds` in the module) and notifies the SNS topic `<name_prefix>-server-errors`. Set `server_logs_alarm_email` to subscribe an address (AWS emails a confirmation that must be accepted), or subscribe to the topic out of band. `server_logs_alarm_enabled = false` skips the filter, alarm, and topic.
+- **Privacy:** the app is end-to-end encrypted, so logs must not hold message content, tokens, or keys. The server logs only request method, path (no query string), status, duration, node ID, and the internal user ID on WebSocket connect and disconnect. The OIDC subject and provider are no longer logged. Keep that rule when adding log lines.
+- **Viewing:** CloudWatch console, Logs, Log groups, or Logs Insights, for example `fields @timestamp, msg | filter level = "ERROR" | sort @timestamp desc`.
 
 ## Authentication flow
 
@@ -580,6 +593,7 @@ Edit `maintenance/ec2/.env`:
 | `IMAGE_TAG` | `latest` (or the tag you pushed) |
 | `METRICS_CLOUDWATCH_NAMESPACE` | optional, e.g. `E2EEText/Messenger` — enables [CloudWatch metrics](#metrics) |
 | `METRICS_ENVIRONMENT` | optional, `dev` or `prod` |
+| `CLOUDWATCH_LOGS_GROUP` | optional, e.g. `/e2eetext/prod/server` — ships server logs to [CloudWatch Logs](#logs-in-cloudwatch) |
 
 Edit `maintenance/ec2/config/config.json` with Google OAuth `client_id` and `client_secret`. `sitemap.hosts` and `sitemap.paths` in that file are the public names and pages written into `/sitemap.xml`; copy them from `config.example.json` when the file was created before that object existed. Omitting `sitemap` keeps the built-in list (`e2eetext.com`, `.io`, `.net`, `.org`, `dev.e2eetext.com`, and `/`, `/privacy`, `/terms`, `/roadmap`, `/encryption`, plus the `/guides/` pages and `/contact`). An older `sitemap.paths` that stops at `/roadmap` still gains `/encryption`, `/contact`, and any guide path it does not already name. `/robots.txt` allows the whole site and names that sitemap.
 
@@ -664,6 +678,7 @@ The first query should list `purge-expired-messages` as active. The second shoul
 | `maintenance/ecr/create-repos.sh` | Create ECR repositories |
 | `maintenance/ecr/build-and-push.sh` | Build locally and push to ECR |
 | `maintenance/ec2/docker-compose.yml` | Pull ECR images; expose 8080/8081 for ALB |
+| `maintenance/ec2/docker-compose.cloudwatch.yml` | Optional overlay: ship server logs to CloudWatch ([Logs in CloudWatch](#logs-in-cloudwatch)) |
 | `maintenance/ec2/deploy.sh` | ECR login, pull, and start on EC2 |
 | `maintenance/ec2/e2eetext.service` | systemd unit template (boot pull + start) |
 | `maintenance/ec2/install-boot-service.sh` | Install/enable the boot unit on the instance |
@@ -746,6 +761,7 @@ terraform/
 │   ├── network/         # data-source lookup of the VPC/subnets to deploy into
 │   ├── ec2/              # instance + security groups + IAM instance profile
 │   ├── static-site/      # S3 bucket + CloudFront for the client and the API origin
+│   ├── server-logs/      # server CloudWatch log group, error metric filter, alarm, SNS topic
 │   └── rds/              # DB instance + subnet group + security group + pg_cron parameter group
 └── envs/
     ├── shared/          # root config instantiating ecr + github-oidc (Phase 1)
@@ -893,7 +909,7 @@ aws rds describe-db-subnet-groups
 
 The live RDS master password is intentionally **not** part of `DEV_TFVARS`/`PROD_TFVARS` (each `rds_password` variable's own description already says never put it in a `.tfvars` file) — it's sourced from its own dedicated `DEV_RDS_PASSWORD` / `PROD_RDS_PASSWORD` secret instead, exported as `TF_VAR_rds_password` only for the `terraform plan` step. This keeps the full tfvars-blob secret shareable/rotatable without also carrying the database password.
 
-CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role is managed in `terraform/modules/terraform-plan-role` (wired from `envs/shared`); this is the policy document that module applies (state reads for every `envs/*` key; ECR/IAM reads for Phase 1 OIDC plus dig/prod EC2 instance profiles and the metrics Lambda roles; EC2/ELBv2/ACM describes for Phase 2; RDS describes for Phase 3; SSM document/association reads for boot deploy; Lambda, CloudWatch Logs, and EventBridge reads for the metrics module). Apply `envs/shared` after changing this policy — CI keeps using the live role until that apply.
+CI plans run with `-lock=false`: the job never writes state, but Terraform's native S3 locking (`use_lockfile`) wants to `PutObject` a `.tflock` object even for a plan, which a read-only role must not be allowed to do (this surfaced as `Error acquiring the state lock` / `s3:PutObject AccessDenied` the first time the plan job ran with real credentials). Skipping the lock is safe precisely because CI never applies. The plan role is managed in `terraform/modules/terraform-plan-role` (wired from `envs/shared`); this is the policy document that module applies (state reads for every `envs/*` key; ECR/IAM reads for Phase 1 OIDC plus dig/prod EC2 instance profiles and the metrics Lambda roles; EC2/ELBv2/ACM describes for Phase 2; RDS describes for Phase 3; SSM document/association reads for boot deploy; Lambda, CloudWatch Logs, and EventBridge reads for the metrics module; CloudWatch alarm, metric filter, and SNS reads for the server-logs module). Apply `envs/shared` after changing this policy — CI keeps using the live role until that apply.
 
 ```json
 {
@@ -959,7 +975,19 @@ CI plans run with `-lock=false`: the job never writes state, but Terraform's nat
     {
       "Sid": "MetricsLogsRead",
       "Effect": "Allow",
-      "Action": ["logs:DescribeLogGroups", "logs:ListTagsForResource"],
+      "Action": ["logs:DescribeLogGroups", "logs:DescribeMetricFilters", "logs:ListTagsForResource"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ServerLogsAlarmRead",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:ListTagsForResource",
+        "sns:GetTopicAttributes",
+        "sns:ListTagsForResource",
+        "sns:ListSubscriptionsByTopic"
+      ],
       "Resource": "*"
     },
     {

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/maintenance/ec2/.env}"
 COMPOSE_FILE="$ROOT_DIR/maintenance/ec2/docker-compose.yml"
+COMPOSE_CLOUDWATCH_FILE="$ROOT_DIR/maintenance/ec2/docker-compose.cloudwatch.yml"
 CONFIG_FILE="$ROOT_DIR/maintenance/ec2/config/config.json"
 INSTANCE_CONFIG_FILE="$ROOT_DIR/maintenance/ec2/config/instance.json"
 LEGACY_CONFIG="$ROOT_DIR/server/config.json"
@@ -20,8 +21,13 @@ compose() {
     # Later --env-file wins for duplicate keys (Compose v2).
     env_files+=(--env-file "$DEPLOY_ENV_OVERRIDE")
   fi
+  local -a compose_files=(-f "$COMPOSE_FILE")
+  # #94: ship server logs to CloudWatch Logs only when a log group is set.
+  if [[ -n "${CLOUDWATCH_LOGS_GROUP:-}" && -f "$COMPOSE_CLOUDWATCH_FILE" ]]; then
+    compose_files+=(-f "$COMPOSE_CLOUDWATCH_FILE")
+  fi
   # -u IMAGE_TAG: do not let a stale exported shell value override env-files.
-  env -u IMAGE_TAG docker compose "${env_files[@]}" -f "$COMPOSE_FILE" "$@"
+  env -u IMAGE_TAG docker compose "${env_files[@]}" "${compose_files[@]}" "$@"
 }
 
 require_env() {

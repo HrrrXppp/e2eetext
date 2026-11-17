@@ -91,6 +91,12 @@ variable "metrics_namespace" {
   default     = ""
 }
 
+variable "log_group_name" {
+  description = "CloudWatch Logs group the server container ships its logs to (#94). When non-empty, boot deploy writes CLOUDWATCH_LOGS_GROUP into /etc/e2eetext/deploy.env so deploy.sh adds the awslogs compose overlay. Leave empty to keep Docker's default json-file driver. The group itself is created by the server-logs module. When the module also creates the IAM role, the role gets logs:CreateLogStream and logs:PutLogEvents on this group only."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to the instance, security group, and IAM role/instance profile."
   type        = map(string)

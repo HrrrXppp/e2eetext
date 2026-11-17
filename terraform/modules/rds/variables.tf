@@ -390,6 +390,12 @@ variable "enabled_cloudwatch_logs_exports" {
   default     = []
 }
 
+variable "cloudwatch_logs_retention_days" {
+  description = "Retention in days for the log groups RDS writes enabled_cloudwatch_logs_exports to (/aws/rds/instance/<identifier>/<type>). Terraform creates these groups before the instance exports so retention is set instead of RDS creating them with no expiry. When a group already exists in the account, import it first: terraform import 'module.rds.aws_cloudwatch_log_group.export[\"postgresql\"]' /aws/rds/instance/<identifier>/postgresql."
+  type        = number
+  default     = 30
+}
+
 variable "tags" {
   description = "Tags applied to the DB instance, subnet group, security group (if created), and parameter group (if created)."
   type        = map(string)
